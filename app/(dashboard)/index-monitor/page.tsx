@@ -200,7 +200,7 @@ export default function IndexMonitorPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={60} tickFormatter={(v) => v >= 10000 ? (v / 10000).toFixed(1) + 'w' : v} />
-                    <Tooltip formatter={(v: number) => v.toLocaleString()} />
+                    <Tooltip formatter={(v) => typeof v === 'number' ? v.toLocaleString() : v} />
                     <Line type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
