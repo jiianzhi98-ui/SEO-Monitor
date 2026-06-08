@@ -8,6 +8,19 @@ import {
   fetchBaiduSuggestion,
 } from '@/lib/crawler'
 
+interface SiteRecord {
+  id: string
+  domain: string
+  crawl_type: 'sitemap' | 'html' | 'rss'
+  crawl_frequency: 'daily' | 'every3days' | 'weekly'
+  list_url: string | null
+  title_selector: string | null
+  date_selector: string | null
+  enable_version_clean: boolean
+  version_suffixes: string[]
+  created_at: string
+}
+
 function shouldCrawlToday(frequency: string, createdAt: string): boolean {
   const today = new Date()
   const dayOfWeek = today.getDay() // 0=Sun
@@ -41,10 +54,11 @@ export async function GET(request: Request) {
     // 1. Fetch enabled sites (optionally filtered by domain)
     let query = supabase.from('sites').select('*').eq('is_enabled', true)
     if (siteFilter) query = query.eq('domain', siteFilter)
-    const { data: sites, error: sitesErr } = await query
+    const { data: sitesRaw, error: sitesErr } = await query
     if (sitesErr) throw sitesErr
+    const sites = (sitesRaw || []) as SiteRecord[]
 
-    for (const site of sites || []) {
+    for (const site of sites) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
 
       try {
