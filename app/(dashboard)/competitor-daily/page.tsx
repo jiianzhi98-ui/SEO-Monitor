@@ -13,6 +13,12 @@ interface CompetitorRow {
   status: 'normal' | 'warning' | 'danger'
 }
 
+interface SiteRow {
+  id: string
+  domain: string
+  name: string
+}
+
 interface StatRow {
   site_id: string
   stat_date: string
@@ -52,10 +58,11 @@ export default function CompetitorDailyPage() {
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
       const d7ago = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
-      const [{ data: sites }, { data: statsRaw }] = await Promise.all([
+      const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
       ])
+      const sites = (sitesRaw || []) as SiteRow[]
       const stats = (statsRaw || []) as StatRow[]
 
       const result: CompetitorRow[] = (sites || []).map((site) => {
