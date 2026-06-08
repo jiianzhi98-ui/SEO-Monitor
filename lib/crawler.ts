@@ -119,7 +119,7 @@ export async function fetchRss(url: string): Promise<PageEntry[]> {
   const itemArr = Array.isArray(items) ? items : [items]
 
   return itemArr.map((item: Record<string, unknown>) => ({
-    title: String(item.title || '').replace(/<!\[CDATA\[(.*?)\]\]>/s, '$1').trim(),
+    title: String(item.title || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/, '$1').trim(),
     date: String(item.pubDate || item.updated || item['dc:date'] || '').trim() || undefined,
     url: String(item.link || item.id || '').trim(),
   }))
