@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
-import type { Database } from '@/lib/supabase'
-
-type SiteUpdate = Database['public']['Tables']['sites']['Update']
-type SiteInsert = Database['public']['Tables']['sites']['Insert']
 
 export async function GET() {
   try {
@@ -26,9 +22,7 @@ export async function POST(request: Request) {
     void id; void created_at
 
     const supabase = createServiceClient()
-    const { data, error } = await supabase
-      .from('sites')
-      .insert(insertData as SiteInsert)
+    const { data, error } = await (supabase.from('sites') as any).insert(insertData)
       .select()
       .single()
     if (error) throw error
@@ -46,12 +40,7 @@ export async function PUT(request: Request) {
     void created_at
 
     const supabase = createServiceClient()
-    const { data, error } = await supabase
-      .from('sites')
-      .update(updateData as SiteUpdate)
-      .eq('id', id)
-      .select()
-      .single()
+    const { data, error } = await (supabase.from('sites') as any).update(updateData).eq('id', id).select().single()
     if (error) throw error
     return NextResponse.json({ site: data })
   } catch (err: unknown) {
