@@ -100,7 +100,7 @@ export async function GET(request: Request) {
           .eq('site_id', site.id)
           .gte('discovered_at', new Date(Date.now() - 7 * 86400000).toISOString())
 
-        const existingSet = new Set((existing || []).map((e) => e.keyword))
+        const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
         const newKeywords = validKeywords.filter((k) => !existingSet.has(k))
 
         if (newKeywords.length === 0) {
@@ -161,12 +161,14 @@ async function aggregateHotKeywords(
 
   if (!todayKws || todayKws.length === 0) return
 
+  type KwRow = { keyword: string; site_id: string; sites: { domain: string } | null }
+  const rows = todayKws as unknown as KwRow[]
+
   // Group by keyword
   const kwMap = new Map<string, Set<string>>()
-  for (const row of todayKws) {
+  for (const row of rows) {
     if (!kwMap.has(row.keyword)) kwMap.set(row.keyword, new Set())
-    const site = row.sites as unknown as { domain: string } | null
-    if (site?.domain) kwMap.get(row.keyword)!.add(site.domain)
+    if (row.sites?.domain) kwMap.get(row.keyword)!.add(row.sites.domain)
   }
 
   // Only keep keywords appearing on 2+ sites
