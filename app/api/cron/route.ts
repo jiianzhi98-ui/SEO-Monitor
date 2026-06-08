@@ -109,7 +109,8 @@ export async function GET(request: Request) {
         }
 
         // 6. Insert new raw_keywords
-        await supabase.from('raw_keywords').insert(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('raw_keywords') as any).insert(
           newKeywords.map((keyword) => ({
             keyword,
             site_id: site.id,
