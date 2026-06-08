@@ -157,6 +157,28 @@ export function filterDownloadKeywords(keywords: string[]): string[] {
   )
 }
 
+// Fetch Baidu PC + mobile weight from aizhan.com
+export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; mobile: number }> {
+  try {
+    const res = await fetch(`https://www.aizhan.com/cha/${domain}/`, {
+      headers: {
+        ...BROWSER_HEADERS,
+        Referer: 'https://www.aizhan.com/',
+      },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) return { pc: 0, mobile: 0 }
+    const html = await res.text()
+    const $ = cheerio.load(html)
+
+    const pc = parseInt($('#baidurank_br img').attr('alt') || '0', 10)
+    const mobile = parseInt($('#baidurank_mbr img').attr('alt') || '0', 10)
+    return { pc: isNaN(pc) ? 0 : pc, mobile: isNaN(mobile) ? 0 : mobile }
+  } catch {
+    return { pc: 0, mobile: 0 }
+  }
+}
+
 // Fetch Baidu search suggestions for a keyword
 export async function fetchBaiduSuggestion(keyword: string): Promise<string[]> {
   try {

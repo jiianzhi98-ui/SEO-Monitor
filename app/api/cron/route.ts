@@ -6,6 +6,7 @@ import {
   fetchRss,
   cleanTitle,
   fetchBaiduSuggestion,
+  fetchAizhanWeight,
 } from '@/lib/crawler'
 
 interface SiteRecord {
@@ -138,7 +139,21 @@ export async function GET(request: Request) {
     // 8. Aggregate hot_keywords from today's raw_keywords across all sites
     await aggregateHotKeywords(supabase, today)
 
-    // 9. Clean up old data
+    // 9. Fetch weight data from aizhan.com for all enabled sites
+    for (const site of sites) {
+      try {
+        const { pc, mobile } = await fetchAizhanWeight(site.domain)
+        await (supabase.from('weight_history') as any).upsert(
+          { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile },
+          { onConflict: 'site_id,record_date' }
+        )
+        await new Promise((r) => setTimeout(r, 1000)) // 1s polite delay between requests
+      } catch {
+        // ignore per-site weight errors
+      }
+    }
+
+    // 10. Clean up old data
     await supabase.rpc('delete_old_raw_keywords').maybeSingle()
     await supabase.rpc('delete_old_hot_keywords').maybeSingle()
 
