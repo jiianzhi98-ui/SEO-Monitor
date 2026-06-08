@@ -157,8 +157,8 @@ export function filterDownloadKeywords(keywords: string[]): string[] {
   )
 }
 
-// Fetch Baidu PC + mobile weight from aizhan.com
-export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; mobile: number }> {
+// Fetch Baidu PC + mobile weight AND Baidu index count from aizhan.com (single request)
+export async function fetchAizhanData(domain: string): Promise<{ pc: number; mobile: number; indexCount: number }> {
   try {
     const res = await fetch(`https://www.aizhan.com/cha/${domain}/`, {
       headers: {
@@ -167,16 +167,29 @@ export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; m
       },
       signal: AbortSignal.timeout(10000),
     })
-    if (!res.ok) return { pc: 0, mobile: 0 }
+    if (!res.ok) return { pc: 0, mobile: 0, indexCount: 0 }
     const html = await res.text()
     const $ = cheerio.load(html)
 
     const pc = parseInt($('#baidurank_br img').attr('alt') || '0', 10)
     const mobile = parseInt($('#baidurank_mbr img').attr('alt') || '0', 10)
-    return { pc: isNaN(pc) ? 0 : pc, mobile: isNaN(mobile) ? 0 : mobile }
+    const indexRaw = $('#shoulu1_baidu a').first().text().replace(/[^0-9]/g, '')
+    const indexCount = parseInt(indexRaw || '0', 10)
+
+    return {
+      pc: isNaN(pc) ? 0 : pc,
+      mobile: isNaN(mobile) ? 0 : mobile,
+      indexCount: isNaN(indexCount) ? 0 : indexCount,
+    }
   } catch {
-    return { pc: 0, mobile: 0 }
+    return { pc: 0, mobile: 0, indexCount: 0 }
   }
+}
+
+// @deprecated use fetchAizhanData instead
+export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; mobile: number }> {
+  const { pc, mobile } = await fetchAizhanData(domain)
+  return { pc, mobile }
 }
 
 // Fetch Baidu search suggestions for a keyword

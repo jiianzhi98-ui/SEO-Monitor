@@ -6,7 +6,7 @@ import {
   fetchRss,
   cleanTitle,
   fetchBaiduSuggestion,
-  fetchAizhanWeight,
+  fetchAizhanData,
 } from '@/lib/crawler'
 
 interface SiteRecord {
@@ -139,17 +139,23 @@ export async function GET(request: Request) {
     // 8. Aggregate hot_keywords from today's raw_keywords across all sites
     await aggregateHotKeywords(supabase, today)
 
-    // 9. Fetch weight data from aizhan.com for all enabled sites
+    // 9. Fetch weight + index data from aizhan.com for all enabled sites
     for (const site of sites) {
       try {
-        const { pc, mobile } = await fetchAizhanWeight(site.domain)
-        await (supabase.from('weight_history') as any).upsert(
-          { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile },
-          { onConflict: 'site_id,record_date' }
-        )
-        await new Promise((r) => setTimeout(r, 1000)) // 1s polite delay between requests
+        const { pc, mobile, indexCount } = await fetchAizhanData(site.domain)
+        await Promise.all([
+          (supabase.from('weight_history') as any).upsert(
+            { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile },
+            { onConflict: 'site_id,record_date' }
+          ),
+          (supabase.from('index_snapshots') as any).upsert(
+            { site_id: site.id, snapshot_date: today, index_count: indexCount },
+            { onConflict: 'site_id,snapshot_date' }
+          ),
+        ])
+        await new Promise((r) => setTimeout(r, 1000))
       } catch {
-        // ignore per-site weight errors
+        // ignore per-site errors
       }
     }
 
