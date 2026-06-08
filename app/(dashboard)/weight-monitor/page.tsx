@@ -16,6 +16,9 @@ interface WeightRow {
   updatedAt: string
 }
 
+interface SiteRow { id: string; domain: string; name: string }
+interface WeightHistoryRow { site_id: string; pc_weight: number; mobile_weight: number; record_date?: string }
+
 function WeightBadge({ value, change }: { value: number; change: number }) {
   const color =
     value >= 6 ? 'text-red-600 font-bold' :
@@ -55,16 +58,19 @@ export default function WeightMonitorPage() {
       const today = new Date().toISOString().slice(0, 10)
       const lastWeek = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
-      const [{ data: sites }, { data: weightToday }, { data: weightLastWeek }] = await Promise.all([
+      const [{ data: sitesRaw }, { data: weightTodayRaw }, { data: weightLastWeekRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
         supabase.from('weight_history').select('site_id, pc_weight, mobile_weight, record_date').eq('record_date', today),
         supabase.from('weight_history').select('site_id, pc_weight, mobile_weight').eq('record_date', lastWeek),
       ])
+      const sites = (sitesRaw || []) as SiteRow[]
+      const weightToday = (weightTodayRaw || []) as WeightHistoryRow[]
+      const weightLastWeek = (weightLastWeekRaw || []) as WeightHistoryRow[]
 
-      const todayMap = Object.fromEntries((weightToday || []).map((w) => [w.site_id, w]))
-      const lastWeekMap = Object.fromEntries((weightLastWeek || []).map((w) => [w.site_id, w]))
+      const todayMap = Object.fromEntries(weightToday.map((w) => [w.site_id, w]))
+      const lastWeekMap = Object.fromEntries(weightLastWeek.map((w) => [w.site_id, w]))
 
-      const result: WeightRow[] = (sites || []).map((site) => {
+      const result: WeightRow[] = sites.map((site) => {
         const t = todayMap[site.id]
         const lw = lastWeekMap[site.id]
         return {

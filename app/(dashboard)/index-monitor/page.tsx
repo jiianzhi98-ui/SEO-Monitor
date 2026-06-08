@@ -14,6 +14,9 @@ interface IndexRow {
   status: 'normal' | 'warning' | 'danger'
 }
 
+interface SiteRow { id: string; domain: string; name: string }
+interface SnapRow { site_id: string; index_count: number }
+
 const statusConfig = {
   normal: { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '警告', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
@@ -37,16 +40,19 @@ export default function IndexMonitorPage() {
       const today = new Date().toISOString().slice(0, 10)
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
 
-      const [{ data: sites }, { data: snapToday }, { data: snapYesterday }] = await Promise.all([
+      const [{ data: sitesRaw }, { data: snapTodayRaw }, { data: snapYesterdayRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
         supabase.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', today),
         supabase.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', yesterday),
       ])
+      const sites = (sitesRaw || []) as SiteRow[]
+      const snapToday = (snapTodayRaw || []) as SnapRow[]
+      const snapYesterday = (snapYesterdayRaw || []) as SnapRow[]
 
-      const todayMap = Object.fromEntries((snapToday || []).map((s) => [s.site_id, s.index_count]))
-      const yesterdayMap = Object.fromEntries((snapYesterday || []).map((s) => [s.site_id, s.index_count]))
+      const todayMap = Object.fromEntries(snapToday.map((s) => [s.site_id, s.index_count]))
+      const yesterdayMap = Object.fromEntries(snapYesterday.map((s) => [s.site_id, s.index_count]))
 
-      const result: IndexRow[] = (sites || []).map((site) => {
+      const result: IndexRow[] = sites.map((site) => {
         const todayVal = todayMap[site.id] ?? 0
         const yesterdayVal = yesterdayMap[site.id] ?? 0
         const change = todayVal - yesterdayVal
