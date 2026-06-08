@@ -20,6 +20,9 @@ interface HotKeyword {
   period_end: string
 }
 
+interface SnapRow { site_id: string; index_count: number }
+interface WeightRow { site_id: string; pc_weight: number; mobile_weight: number }
+
 const priorityLabel: Record<string, { label: string; className: string }> = {
   urgent: { label: '紧急', className: 'badge-urgent' },
   today: { label: '今日', className: 'badge-today' },
@@ -72,28 +75,34 @@ export default function DashboardPage() {
           .select('site_id, index_count')
           .eq('snapshot_date', today)
 
+        const snapsToday = (snapToday || []) as SnapRow[]
+        const snapsYesterday = (snapYesterday || []) as SnapRow[]
+
         let indexAlerts = 0
-        if (snapYesterday && snapToday) {
-          const mapYesterday = Object.fromEntries(snapYesterday.map((s) => [s.site_id, s.index_count]))
-          for (const s of snapToday) {
+        if (snapsYesterday.length && snapsToday.length) {
+          const mapYesterday = Object.fromEntries(snapsYesterday.map((s) => [s.site_id, s.index_count]))
+          for (const s of snapsToday) {
             const prev = mapYesterday[s.site_id]
             if (prev && prev > 0 && (s.index_count - prev) / prev < -0.1) indexAlerts++
           }
         }
 
         // Weight change sites
-        const { data: weightToday } = await supabase
+        const { data: weightTodayRaw } = await supabase
           .from('weight_history')
           .select('site_id, pc_weight, mobile_weight')
           .eq('record_date', today)
 
-        const { data: weightLastWeek } = await supabase
+        const { data: weightLastWeekRaw } = await supabase
           .from('weight_history')
           .select('site_id, pc_weight, mobile_weight')
           .eq('record_date', getPrevDate(7))
 
+        const weightToday = (weightTodayRaw || []) as WeightRow[]
+        const weightLastWeek = (weightLastWeekRaw || []) as WeightRow[]
+
         let weightChanges = 0
-        if (weightToday && weightLastWeek) {
+        if (weightToday.length && weightLastWeek.length) {
           const mapLastWeek = Object.fromEntries(weightLastWeek.map((w) => [w.site_id, w]))
           for (const w of weightToday) {
             const prev = mapLastWeek[w.site_id]
