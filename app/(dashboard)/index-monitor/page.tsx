@@ -37,13 +37,20 @@ export default function IndexMonitorPage() {
     setError(null)
     try {
       const supabase = getBrowserClient()
-      const today = new Date().toISOString().slice(0, 10)
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+      const now = new Date()
+      const dow = now.getDay()
+      const daysFromMon = dow === 0 ? 6 : dow - 1
+      const thisMonday = new Date(now)
+      thisMonday.setDate(now.getDate() - daysFromMon)
+      const lastMonday = new Date(thisMonday)
+      lastMonday.setDate(thisMonday.getDate() - 7)
+      const thisWeek = thisMonday.toISOString().slice(0, 10)
+      const lastWeek = lastMonday.toISOString().slice(0, 10)
 
       const [{ data: sitesRaw }, { data: snapTodayRaw }, { data: snapYesterdayRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
-        supabase.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', today),
-        supabase.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', yesterday),
+        supabase.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', thisWeek),
+        supabase.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', lastWeek),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
       const snapToday = (snapTodayRaw || []) as SnapRow[]
@@ -77,7 +84,7 @@ export default function IndexMonitorPage() {
     <div className="p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">收录监控</h1>
-        <p className="text-gray-500 text-sm mt-1">各站点Baidu/Google收录数量对比</p>
+        <p className="text-gray-500 text-sm mt-1">各站点百度每周收录数量对比</p>
       </div>
 
       <div className="card">
@@ -99,8 +106,8 @@ export default function IndexMonitorPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th className="table-th text-right">今日收录</th>
-                  <th className="table-th text-right">昨日收录</th>
+                  <th className="table-th text-right">本周收录</th>
+                  <th className="table-th text-right">上周收录</th>
                   <th className="table-th text-right">变化数</th>
                   <th className="table-th text-right">变化率</th>
                   <th className="table-th text-center">状态</th>
