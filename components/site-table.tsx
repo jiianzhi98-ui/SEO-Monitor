@@ -6,8 +6,12 @@ interface Site {
   name: string
   category: 'large' | 'medium' | 'small'
   crawl_type: 'sitemap' | 'html' | 'rss'
+  list_url: string
+  title_selector: string
+  date_selector: string
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
   enable_version_clean: boolean
+  version_suffixes: string[]
   is_enabled: boolean
   created_at: string
 }
