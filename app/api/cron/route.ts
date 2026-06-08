@@ -45,14 +45,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = createServiceClient()
-  const todayDate = new Date()
-  const today = todayDate.toISOString().slice(0, 10)
-  // Week start = most recent Monday
-  const dow = todayDate.getDay()
-  const daysFromMon = dow === 0 ? 6 : dow - 1
-  const weekStartDate = new Date(todayDate)
-  weekStartDate.setDate(todayDate.getDate() - daysFromMon)
-  const weekStart = weekStartDate.toISOString().slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
   const results: { site: string; count: number; error?: string }[] = []
 
   const { searchParams } = new URL(request.url)
@@ -156,7 +149,7 @@ export async function GET(request: Request) {
             { onConflict: 'site_id,record_date' }
           ),
           (supabase.from('index_snapshots') as any).upsert(
-            { site_id: site.id, snapshot_date: weekStart, index_count: indexCount },
+            { site_id: site.id, snapshot_date: today, index_count: indexCount },
             { onConflict: 'site_id,snapshot_date' }
           ),
         ])
