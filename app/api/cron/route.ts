@@ -119,7 +119,8 @@ export async function GET(request: Request) {
         )
 
         // 7. Upsert daily_stats
-        await supabase.from('daily_stats').upsert(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('daily_stats') as any).upsert(
           { site_id: site.id, stat_date: today, new_count: newKeywords.length },
           { onConflict: 'site_id,stat_date' }
         )
@@ -194,7 +195,8 @@ async function aggregateHotKeywords(
     const priority: 'urgent' | 'today' | 'queue' =
       siteCount >= 5 ? 'urgent' : siteCount >= 3 ? 'today' : 'queue'
 
-    await supabase.from('hot_keywords').upsert(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.from('hot_keywords') as any).upsert(
       {
         keyword,
         site_count: siteCount,
@@ -206,6 +208,6 @@ async function aggregateHotKeywords(
         period_end: today,
       },
       { onConflict: 'keyword,period_start' }
-    ).maybeSingle()
+    )
   }
 }
