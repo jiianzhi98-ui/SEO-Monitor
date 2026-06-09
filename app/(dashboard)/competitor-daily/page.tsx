@@ -94,20 +94,21 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  async function viewTodayKeywords(site: CompetitorRow) {
+  async function viewYesterdayKeywords(site: CompetitorRow) {
     setSelectedSite(site)
     setKwLoading(true)
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      const today = new Date().toISOString().slice(0, 10)
+      // Query last 24 hours — cron runs at 05~08 MY time, keywords are inserted then
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       const { data, error: err } = await supabase
         .from('raw_keywords')
         .select('keyword, source_url, discovered_at')
         .eq('site_id', site.site_id)
-        .gte('discovered_at', today + 'T00:00:00')
+        .gte('discovered_at', since)
         .order('discovered_at', { ascending: false })
-        .limit(100)
+        .limit(200)
       if (err) throw err
       setSiteKeywords(data || [])
     } catch {
@@ -174,10 +175,10 @@ export default function CompetitorDailyPage() {
                         </td>
                         <td className="table-td text-right">
                           <button
-                            onClick={() => viewTodayKeywords(row)}
+                            onClick={() => viewYesterdayKeywords(row)}
                             className="text-xs text-gray-500 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
                           >
-                            今日新词
+                            昨日新词
                           </button>
                         </td>
                       </tr>
@@ -195,7 +196,7 @@ export default function CompetitorDailyPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 今日新词</h3>
+              <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 昨日新词</h3>
               <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -212,7 +213,7 @@ export default function CompetitorDailyPage() {
                   加载中...
                 </div>
               ) : siteKeywords.length === 0 ? (
-                <p className="text-center text-gray-400 py-10 text-sm">今日暂无新词</p>
+                <p className="text-center text-gray-400 py-10 text-sm">昨日暂无新词</p>
               ) : (
                 <ul className="space-y-2">
                   {siteKeywords.map((kw, i) => (
