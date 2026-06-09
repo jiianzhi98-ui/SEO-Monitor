@@ -67,7 +67,7 @@ export async function GET(request: Request) {
         let rawTitles: string[] = []
 
         if (site.crawl_type === 'sitemap' && site.list_url) {
-          const cutoffDays = site.crawl_frequency === 'weekly' ? 8 : site.crawl_frequency === 'every3days' ? 4 : 2
+          const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
           const cutoff = new Date(Date.now() - cutoffDays * 86400000)
           const entries = await fetchSitemap(site.list_url)
           const recentEntries = entries.filter((e) => {
