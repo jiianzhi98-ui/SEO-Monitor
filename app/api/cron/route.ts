@@ -67,8 +67,15 @@ export async function GET(request: Request) {
         let rawTitles: string[] = []
 
         if (site.crawl_type === 'sitemap' && site.list_url) {
+          const cutoffDays = site.crawl_frequency === 'weekly' ? 8 : site.crawl_frequency === 'every3days' ? 4 : 2
+          const cutoff = new Date(Date.now() - cutoffDays * 86400000)
           const entries = await fetchSitemap(site.list_url)
-          rawTitles = entries.map((e) => {
+          const recentEntries = entries.filter((e) => {
+            if (!e.lastmod) return false
+            const d = new Date(e.lastmod)
+            return !isNaN(d.getTime()) && d >= cutoff
+          })
+          rawTitles = recentEntries.map((e) => {
             const parts = e.url.split('/').filter(Boolean)
             const slug = parts[parts.length - 1] || e.url
             return decodeURIComponent(slug.replace(/[-_]/g, ' ').replace(/\.\w+$/, ''))
