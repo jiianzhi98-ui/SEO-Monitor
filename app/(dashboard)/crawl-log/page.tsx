@@ -9,16 +9,7 @@ interface SiteRow {
   name: string
   crawl_type: 'sitemap' | 'html' | 'rss'
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
-  list_url: string | null
   is_enabled: boolean
-  enable_version_clean: boolean
-  created_at: string
-}
-
-interface StatRow {
-  site_id: string
-  stat_date: string
-  new_count: number
 }
 
 interface LogRow {
@@ -26,32 +17,15 @@ interface LogRow {
   domain: string
   name: string
   crawlType: string
-  frequency: string
-  listUrl: string | null
-  isEnabled: boolean
-  versionClean: boolean
-  lastCrawlDate: string | null
-  lastCrawlCount: number | null
-  totalDays: number
-  createdAt: string
+  lastContentDate: string | null
+  lastIndexDate: string | null
+  lastWeightDate: string | null
 }
 
 const crawlTypeLabel: Record<string, string> = {
   sitemap: 'Sitemap',
   html: 'HTML列表页',
   rss: 'RSS Feed',
-}
-
-const frequencyLabel: Record<string, string> = {
-  daily: '每天',
-  every3days: '每3天',
-  weekly: '每周一',
-}
-
-const frequencyDesc: Record<string, string> = {
-  daily: '每日 UTC 01:00（北京时间 09:00）自动执行',
-  every3days: '从创建日起每满3天执行一次',
-  weekly: '每周一 UTC 01:00（北京时间 09:00）执行',
 }
 
 export default function CrawlLogPage() {
@@ -67,35 +41,44 @@ export default function CrawlLogPage() {
     try {
       const supabase = getBrowserClient()
 
-      const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
-        supabase.from('sites').select('*').order('created_at', { ascending: true }),
-        supabase.from('daily_stats').select('site_id, stat_date, new_count').order('stat_date', { ascending: false }),
+      const [
+        { data: sitesRaw },
+        { data: statsRaw },
+        { data: indexRaw },
+        { data: weightRaw },
+      ] = await Promise.all([
+        supabase.from('sites').select('id, domain, name, crawl_type, crawl_frequency, is_enabled').order('created_at', { ascending: true }),
+        supabase.from('daily_stats').select('site_id, stat_date').order('stat_date', { ascending: false }),
+        supabase.from('index_snapshots').select('site_id, snapshot_date').order('snapshot_date', { ascending: false }),
+        supabase.from('weight_history').select('site_id, record_date').order('record_date', { ascending: false }),
       ])
 
       const sites = (sitesRaw || []) as SiteRow[]
-      const stats = (statsRaw || []) as StatRow[]
 
-      const result: LogRow[] = sites.map((site) => {
-        const siteStats = stats.filter((s) => s.site_id === site.id)
-        const latest = siteStats[0] ?? null
-        const totalDays = new Set(siteStats.map((s) => s.stat_date)).size
+      const latestStat = new Map<string, string>()
+      for (const r of (statsRaw || []) as { site_id: string; stat_date: string }[]) {
+        if (!latestStat.has(r.site_id)) latestStat.set(r.site_id, r.stat_date)
+      }
 
-        return {
-          id: site.id,
-          domain: site.domain,
-          name: site.name,
-          crawlType: crawlTypeLabel[site.crawl_type] ?? site.crawl_type,
-          frequency: frequencyLabel[site.crawl_frequency] ?? site.crawl_frequency,
-          frequencyKey: site.crawl_frequency,
-          listUrl: site.list_url,
-          isEnabled: site.is_enabled,
-          versionClean: site.enable_version_clean,
-          lastCrawlDate: latest?.stat_date ?? null,
-          lastCrawlCount: latest?.new_count ?? null,
-          totalDays,
-          createdAt: site.created_at.slice(0, 10),
-        } as LogRow & { frequencyKey: string }
-      })
+      const latestIndex = new Map<string, string>()
+      for (const r of (indexRaw || []) as { site_id: string; snapshot_date: string }[]) {
+        if (!latestIndex.has(r.site_id)) latestIndex.set(r.site_id, r.snapshot_date)
+      }
+
+      const latestWeight = new Map<string, string>()
+      for (const r of (weightRaw || []) as { site_id: string; record_date: string }[]) {
+        if (!latestWeight.has(r.site_id)) latestWeight.set(r.site_id, r.record_date)
+      }
+
+      const result: LogRow[] = sites.map((site) => ({
+        id: site.id,
+        domain: site.domain,
+        name: site.name,
+        crawlType: crawlTypeLabel[site.crawl_type] ?? site.crawl_type,
+        lastContentDate: latestStat.get(site.id) ?? null,
+        lastIndexDate: latestIndex.get(site.id) ?? null,
+        lastWeightDate: latestWeight.get(site.id) ?? null,
+      }))
 
       setRows(result)
     } catch (err: unknown) {
@@ -105,18 +88,22 @@ export default function CrawlLogPage() {
     }
   }
 
+  function DateCell({ date }: { date: string | null }) {
+    if (!date) return <span className="text-gray-300 text-sm">未抓取</span>
+    return <span className="text-sm text-gray-700">{date}</span>
+  }
+
   return (
     <div className="p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">抓取日志</h1>
-        <p className="text-gray-500 text-sm mt-1">各站点抓取配置、频率设置及最近执行记录</p>
+        <p className="text-gray-500 text-sm mt-1">各站点抓取方式及最近一次数据更新时间</p>
       </div>
 
-      {/* Cron schedule info */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-6 text-sm text-blue-700">
-        <span className="font-medium">Cron 调度：</span>
-        每天 UTC 01:00（北京时间 09:00）自动触发，根据各站点频率决定是否执行。Vercel Hobby 计划不支持自动 Cron，需外部服务定时调用
-        <code className="ml-1 bg-blue-100 px-1.5 py-0.5 rounded text-xs">/api/cron</code>。
+        每天 <span className="font-medium">05:00~08:00</span> 随机执行；
+        网站新增内容抓取<span className="font-medium">前一天</span>的数据，
+        收录数与权重为<span className="font-medium">当天最新快照</span>。
       </div>
 
       <div className="card">
@@ -139,91 +126,29 @@ export default function CrawlLogPage() {
                 <tr>
                   <th className="table-th">站点</th>
                   <th className="table-th">抓取方式</th>
-                  <th className="table-th">抓取频率</th>
-                  <th className="table-th">执行时间规则</th>
-                  <th className="table-th text-center">版本清洗</th>
-                  <th className="table-th text-center">状态</th>
-                  <th className="table-th text-right">最新抓取</th>
-                  <th className="table-th text-right">最新新增词</th>
-                  <th className="table-th text-right">累计抓取天数</th>
+                  <th className="table-th text-center">更新抓取时间</th>
+                  <th className="table-th text-center">收录抓取时间</th>
+                  <th className="table-th text-center">权重抓取时间</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="table-td text-center text-gray-400 py-10">暂无数据</td>
+                    <td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td>
                   </tr>
                 ) : (
-                  rows.map((row) => {
-                    const r = row as LogRow & { frequencyKey: string }
-                    return (
-                      <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="table-td">
-                          <div>
-                            <p className="font-medium text-gray-900">{row.domain}</p>
-                            <p className="text-xs text-gray-400">{row.name}</p>
-                            <p className="text-xs text-gray-300 mt-0.5">创建于 {row.createdAt}</p>
-                          </div>
-                        </td>
-                        <td className="table-td">
-                          <span className="text-sm text-gray-700">{row.crawlType}</span>
-                          {row.listUrl && (
-                            <a
-                              href={row.listUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block text-xs text-blue-500 hover:underline truncate max-w-[160px] mt-0.5"
-                            >
-                              {row.listUrl}
-                            </a>
-                          )}
-                        </td>
-                        <td className="table-td">
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                            r.frequencyKey === 'daily' ? 'bg-green-50 text-green-700' :
-                            r.frequencyKey === 'every3days' ? 'bg-yellow-50 text-yellow-700' :
-                            'bg-purple-50 text-purple-700'
-                          }`}>
-                            {row.frequency}
-                          </span>
-                        </td>
-                        <td className="table-td text-xs text-gray-500 max-w-[200px]">
-                          {frequencyDesc[r.frequencyKey]}
-                        </td>
-                        <td className="table-td text-center">
-                          {row.versionClean ? (
-                            <span className="text-green-600 text-xs font-medium">启用</span>
-                          ) : (
-                            <span className="text-gray-300 text-xs">关闭</span>
-                          )}
-                        </td>
-                        <td className="table-td text-center">
-                          {row.isEnabled ? (
-                            <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium">启用</span>
-                          ) : (
-                            <span className="text-gray-400 bg-gray-100 px-2 py-0.5 rounded text-xs font-medium">停用</span>
-                          )}
-                        </td>
-                        <td className="table-td text-right text-sm">
-                          {row.lastCrawlDate ? (
-                            <span className="text-gray-700">{row.lastCrawlDate}</span>
-                          ) : (
-                            <span className="text-gray-300">未执行</span>
-                          )}
-                        </td>
-                        <td className="table-td text-right">
-                          {row.lastCrawlCount !== null ? (
-                            <span className="font-medium text-gray-900">{row.lastCrawlCount.toLocaleString()}</span>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
-                        </td>
-                        <td className="table-td text-right">
-                          <span className="text-gray-600">{row.totalDays} 天</span>
-                        </td>
-                      </tr>
-                    )
-                  })
+                  rows.map((row) => (
+                    <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="table-td">
+                        <p className="font-medium text-gray-900">{row.domain}</p>
+                        <p className="text-xs text-gray-400">{row.name}</p>
+                      </td>
+                      <td className="table-td text-sm text-gray-700">{row.crawlType}</td>
+                      <td className="table-td text-center"><DateCell date={row.lastContentDate} /></td>
+                      <td className="table-td text-center"><DateCell date={row.lastIndexDate} /></td>
+                      <td className="table-td text-center"><DateCell date={row.lastWeightDate} /></td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>

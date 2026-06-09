@@ -22,13 +22,20 @@ interface SiteRecord {
   created_at: string
 }
 
+// Malaysia time helpers (UTC+8)
+function getMalaysiaDate(offsetDays = 0): string {
+  const ms = Date.now() + 8 * 60 * 60 * 1000 + offsetDays * 86400000
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
 function shouldCrawlToday(frequency: string, createdAt: string): boolean {
-  const today = new Date()
-  const dayOfWeek = today.getDay() // 0=Sun
+  const todayMY = getMalaysiaDate()
+  const dayOfWeek = new Date(todayMY).getDay() // 0=Sun
 
   if (frequency === 'daily') return true
   if (frequency === 'every3days') {
     const created = new Date(createdAt)
+    const today = new Date(todayMY)
     const diffDays = Math.floor((today.getTime() - created.getTime()) / 86400000)
     return diffDays % 3 === 0
   }
@@ -37,7 +44,6 @@ function shouldCrawlToday(frequency: string, createdAt: string): boolean {
 }
 
 export async function GET(request: Request) {
-  // Validate cron secret
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
@@ -45,14 +51,18 @@ export async function GET(request: Request) {
   }
 
   const supabase = createServiceClient()
-  const today = new Date().toISOString().slice(0, 10)
+
+  // All dates use Malaysia time (UTC+8)
+  const today = getMalaysiaDate()       // today's snapshot date (for weight/index)
+  const yesterday = getMalaysiaDate(-1) // yesterday's content date (for new keywords)
+  const crawlStartedAt = new Date().toISOString() // UTC timestamp for dedup
+
   const results: { site: string; count: number; error?: string }[] = []
 
   const { searchParams } = new URL(request.url)
   const siteFilter = searchParams.get('site')
 
   try {
-    // 1. Fetch enabled sites (optionally filtered by domain)
     let query = supabase.from('sites').select('*').eq('is_enabled', true)
     if (siteFilter) query = query.eq('domain', siteFilter)
     const { data: sitesRaw, error: sitesErr } = await query
@@ -63,17 +73,16 @@ export async function GET(request: Request) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
 
       try {
-        // 2. Fetch raw entries based on crawl type
         let rawTitles: string[] = []
 
         if (site.crawl_type === 'sitemap' && site.list_url) {
           const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
-          const cutoff = new Date(Date.now() - cutoffDays * 86400000)
+          // Use yesterday as cutoff for daily — capture the previous calendar day's content
+          const cutoffStr = getMalaysiaDate(-(cutoffDays - 1 + 1)) // yesterday for daily, N days ago for others
           const entries = await fetchSitemap(site.list_url)
           const recentEntries = entries.filter((e) => {
             if (!e.lastmod) return false
-            const d = new Date(e.lastmod)
-            return !isNaN(d.getTime()) && d >= cutoff
+            return e.lastmod.slice(0, 10) >= cutoffStr
           })
           rawTitles = recentEntries.map((e) => {
             const parts = e.url.split('/').filter(Boolean)
@@ -88,12 +97,9 @@ export async function GET(request: Request) {
           rawTitles = entries.map((e) => e.title)
         }
 
-        // 3. Clean titles
         const cleaned = rawTitles.map((t) =>
           cleanTitle(t, site.enable_version_clean, site.version_suffixes || [])
         )
-
-        // 4. Filter out empty titles
         const validKeywords = cleaned.filter((k) => k.length > 0)
 
         if (validKeywords.length === 0) {
@@ -101,7 +107,7 @@ export async function GET(request: Request) {
           continue
         }
 
-        // 5. Check which keywords are new (not in raw_keywords in last 7 days)
+        // Dedup against keywords found in this crawl run
         const { data: existing } = await supabase
           .from('raw_keywords')
           .select('keyword')
@@ -116,7 +122,6 @@ export async function GET(request: Request) {
           continue
         }
 
-        // 6. Insert new raw_keywords
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from('raw_keywords') as any).insert(
           newKeywords.map((keyword) => ({
@@ -126,10 +131,10 @@ export async function GET(request: Request) {
           }))
         )
 
-        // 7. Upsert daily_stats
+        // stat_date = yesterday (we're recording yesterday's new content)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from('daily_stats') as any).upsert(
-          { site_id: site.id, stat_date: today, new_count: newKeywords.length },
+          { site_id: site.id, stat_date: yesterday, new_count: newKeywords.length },
           { onConflict: 'site_id,stat_date' }
         )
 
@@ -143,13 +148,13 @@ export async function GET(request: Request) {
       }
     }
 
-    // 8. Aggregate hot_keywords from today's raw_keywords across all sites
-    await aggregateHotKeywords(supabase, today)
+    // Aggregate hot keywords from this run
+    await aggregateHotKeywords(supabase, crawlStartedAt)
 
-    // 9. Fetch weight + index data from aizhan.com for all enabled sites
+    // Fetch weight + index snapshot from aizhan (today's reading)
     for (const site of sites) {
       try {
-        const { pc, mobile, indexCount, pcIpMin, pcIpMax, pcIpAvg, mobileIpMin, mobileIpMax, mobileIpAvg } = await fetchAizhanData(site.domain)
+        const { pc, mobile, indexCount, pcIpMin, pcIpMax, mobileIpMin, mobileIpMax } = await fetchAizhanData(site.domain)
         await Promise.all([
           (supabase.from('weight_history') as any).upsert(
             { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile, pc_ip: pcIpMin, pc_ip_max: pcIpMax, mobile_ip: mobileIpMin, mobile_ip_max: mobileIpMax },
@@ -166,11 +171,10 @@ export async function GET(request: Request) {
       }
     }
 
-    // 10. Clean up old data
     await supabase.rpc('delete_old_raw_keywords').maybeSingle()
     await supabase.rpc('delete_old_hot_keywords').maybeSingle()
 
-    return NextResponse.json({ date: today, results })
+    return NextResponse.json({ date: today, yesterday, results })
   } catch (err: unknown) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : '定时任务失败' },
@@ -181,43 +185,41 @@ export async function GET(request: Request) {
 
 async function aggregateHotKeywords(
   supabase: ReturnType<typeof createServiceClient>,
-  today: string
+  since: string
 ) {
-  // Fetch all today's keywords with site info
   const { data: todayKws } = await supabase
     .from('raw_keywords')
     .select('keyword, site_id, sites(domain)')
-    .gte('discovered_at', today + 'T00:00:00')
+    .gte('discovered_at', since)
 
   if (!todayKws || todayKws.length === 0) return
 
   type KwRow = { keyword: string; site_id: string; sites: { domain: string } | null }
   const rows = todayKws as unknown as KwRow[]
 
-  // Group by keyword
   const kwMap = new Map<string, Set<string>>()
   for (const row of rows) {
     if (!kwMap.has(row.keyword)) kwMap.set(row.keyword, new Set())
     if (row.sites?.domain) kwMap.get(row.keyword)!.add(row.sites.domain)
   }
 
-  // Only keep keywords appearing on 2+ sites
   const hotEntries = Array.from(kwMap.entries())
     .filter(([, sites]) => sites.size >= 2)
     .sort(([, a], [, b]) => b.size - a.size)
     .slice(0, 200)
 
+  const today = getMalaysiaDate()
+
   for (const [keyword, siteSet] of hotEntries) {
     const siteList = Array.from(siteSet)
     const siteCount = siteList.length
 
-    // Fetch Baidu suggestions (rate-limit: one per keyword)
     let suggestions: string[] = []
     try {
       suggestions = await fetchBaiduSuggestion(keyword)
-      await new Promise((r) => setTimeout(r, 300)) // polite delay
+      await new Promise((r) => setTimeout(r, 300))
     } catch {
-      // ignore suggestion errors
+      // ignore
     }
 
     const priority: 'urgent' | 'today' | 'queue' =

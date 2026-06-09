@@ -76,8 +76,10 @@ export default function IndexMonitorPage() {
         const weeklyRate = weekAgo > 0 ? weeklyChange / weekAgo : 0
 
         let status: 'normal' | 'warning' | 'danger' = 'normal'
-        if (weeklyRate < -0.2) status = 'danger'
-        else if (weeklyRate < -0.1) status = 'warning'
+        if (siteSnaps.length >= 30) {
+          if (weeklyRate < -0.2) status = 'danger'
+          else if (weeklyRate < -0.1) status = 'warning'
+        }
 
         return { site_id: site.id, domain: site.domain, name: site.name, latest, weekAgo, weeklyChange, weeklyRate, trend, status }
       })

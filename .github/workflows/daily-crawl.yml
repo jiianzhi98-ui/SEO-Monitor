@@ -1,0 +1,25 @@
+name: Daily SEO Crawl
+
+on:
+  schedule:
+    # 21:00 UTC = 05:00 Malaysia (UTC+8), random delay pushes execution to 05:00~08:00
+    - cron: '0 21 * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Random delay (0 to 3 hours)
+        run: |
+          DELAY=$((RANDOM % 10800))
+          echo "Sleeping ${DELAY} seconds before crawl..."
+          sleep $DELAY
+
+      - name: Trigger crawl
+        run: |
+          curl -f -s \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://seo-monitor-iota.vercel.app/api/cron \
+            | jq .
