@@ -10,7 +10,9 @@ interface HistoryRow {
   pc_weight: number
   mobile_weight: number
   pc_ip: number
+  pc_ip_max: number
   mobile_ip: number
+  mobile_ip_max: number
 }
 
 interface WeightRow {
@@ -21,11 +23,17 @@ interface WeightRow {
   mobileWeight: number
   pcWeightChange: number
   mobileWeightChange: number
-  pcIp: number
-  mobileIp: number
-  pcIpChange: number
-  mobileIpChange: number
+  pcIpMin: number
+  pcIpMax: number
+  pcIpAvgChange: number
+  mobileIpMin: number
+  mobileIpMax: number
+  mobileIpAvgChange: number
   updatedAt: string
+}
+
+function fmt(n: number) {
+  return n.toLocaleString()
 }
 
 function WeightCell({ value, change }: { value: number; change: number }) {
@@ -41,18 +49,17 @@ function WeightCell({ value, change }: { value: number; change: number }) {
   )
 }
 
-function IpCell({ value, change }: { value: number; change: number }) {
-  if (value === 0) return <span className="text-gray-300 text-sm">-</span>
-  const formatted = value >= 10000 ? (value / 10000).toFixed(1) + 'w' : value.toLocaleString()
+function IpRangeCell({ min, max }: { min: number; max: number }) {
+  if (min === 0 && max === 0) return <span className="text-gray-300 text-sm">-</span>
+  return <span className="text-sm text-gray-800 tabular-nums">{fmt(min)} ~ {fmt(max)}</span>
+}
+
+function IpChangeCell({ change }: { change: number }) {
+  if (change === 0) return <span className="text-gray-300 text-sm">-</span>
   return (
-    <div className="flex items-center justify-center gap-1.5">
-      <span className="text-sm text-gray-800 tabular-nums">{formatted}</span>
-      {change !== 0 && (
-        <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
-          {change > 0 ? `+${change >= 10000 ? (change / 10000).toFixed(1) + 'w' : change.toLocaleString()}` : (change <= -10000 ? (change / 10000).toFixed(1) + 'w' : change.toLocaleString())}
-        </span>
-      )}
-    </div>
+    <span className={`text-sm font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
+      {change > 0 ? `+${fmt(change)}` : fmt(change)}
+    </span>
   )
 }
 
@@ -73,7 +80,7 @@ export default function WeightMonitorPage() {
       const [{ data: sitesRaw }, { data: historyRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
         supabase.from('weight_history')
-          .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, mobile_ip')
+          .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max')
           .gte('record_date', d14ago)
           .order('record_date', { ascending: false }),
       ])
@@ -84,7 +91,12 @@ export default function WeightMonitorPage() {
       const result: WeightRow[] = sites.map((site) => {
         const siteHistory = history.filter((h) => h.site_id === site.id)
         const latest = siteHistory[0]
-        const prev = siteHistory[siteHistory.length > 1 ? siteHistory.length - 1 : 1] ?? null
+        const prev = siteHistory.length > 1 ? siteHistory[siteHistory.length - 1] : null
+
+        const latestAvgPc = latest ? Math.round((latest.pc_ip + latest.pc_ip_max) / 2) : 0
+        const latestAvgMobile = latest ? Math.round((latest.mobile_ip + latest.mobile_ip_max) / 2) : 0
+        const prevAvgPc = prev ? Math.round((prev.pc_ip + prev.pc_ip_max) / 2) : 0
+        const prevAvgMobile = prev ? Math.round((prev.mobile_ip + prev.mobile_ip_max) / 2) : 0
 
         return {
           site_id: site.id,
@@ -94,10 +106,12 @@ export default function WeightMonitorPage() {
           mobileWeight: latest?.mobile_weight ?? 0,
           pcWeightChange: prev ? (latest?.pc_weight ?? 0) - prev.pc_weight : 0,
           mobileWeightChange: prev ? (latest?.mobile_weight ?? 0) - prev.mobile_weight : 0,
-          pcIp: latest?.pc_ip ?? 0,
-          mobileIp: latest?.mobile_ip ?? 0,
-          pcIpChange: prev ? (latest?.pc_ip ?? 0) - (prev.pc_ip ?? 0) : 0,
-          mobileIpChange: prev ? (latest?.mobile_ip ?? 0) - (prev.mobile_ip ?? 0) : 0,
+          pcIpMin: latest?.pc_ip ?? 0,
+          pcIpMax: latest?.pc_ip_max ?? 0,
+          pcIpAvgChange: prev ? latestAvgPc - prevAvgPc : 0,
+          mobileIpMin: latest?.mobile_ip ?? 0,
+          mobileIpMax: latest?.mobile_ip_max ?? 0,
+          mobileIpAvgChange: prev ? latestAvgMobile - prevAvgMobile : 0,
           updatedAt: latest?.record_date ?? '-',
         }
       })
@@ -114,7 +128,7 @@ export default function WeightMonitorPage() {
     <div className="p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">权重监控</h1>
-        <p className="text-gray-500 text-sm mt-1">各站点PC/移动端权重及来路IP，括号内为与上次记录的变化</p>
+        <p className="text-gray-500 text-sm mt-1">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
       </div>
 
       <div className="card">
@@ -138,15 +152,17 @@ export default function WeightMonitorPage() {
                   <th className="table-th">域名</th>
                   <th className="table-th text-center">PC权重</th>
                   <th className="table-th text-center">移动权重</th>
-                  <th className="table-th text-center">PC来路IP均值</th>
-                  <th className="table-th text-center">移动来路IP均值</th>
+                  <th className="table-th text-center">PC来路IP</th>
+                  <th className="table-th text-center">移动来路IP</th>
+                  <th className="table-th text-center">PC均值变化</th>
+                  <th className="table-th text-center">移动均值变化</th>
                   <th className="table-th text-center">更新时间</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
+                    <td colSpan={8} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
                   </tr>
                 ) : (
                   rows.map((row) => (
@@ -164,10 +180,16 @@ export default function WeightMonitorPage() {
                         <WeightCell value={row.mobileWeight} change={row.mobileWeightChange} />
                       </td>
                       <td className="table-td text-center">
-                        <IpCell value={row.pcIp} change={row.pcIpChange} />
+                        <IpRangeCell min={row.pcIpMin} max={row.pcIpMax} />
                       </td>
                       <td className="table-td text-center">
-                        <IpCell value={row.mobileIp} change={row.mobileIpChange} />
+                        <IpRangeCell min={row.mobileIpMin} max={row.mobileIpMax} />
+                      </td>
+                      <td className="table-td text-center">
+                        <IpChangeCell change={row.pcIpAvgChange} />
+                      </td>
+                      <td className="table-td text-center">
+                        <IpChangeCell change={row.mobileIpAvgChange} />
                       </td>
                       <td className="table-td text-center text-xs text-gray-400">{row.updatedAt}</td>
                     </tr>

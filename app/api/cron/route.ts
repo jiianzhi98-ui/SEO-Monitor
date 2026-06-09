@@ -149,10 +149,10 @@ export async function GET(request: Request) {
     // 9. Fetch weight + index data from aizhan.com for all enabled sites
     for (const site of sites) {
       try {
-        const { pc, mobile, indexCount, pcIp, mobileIp } = await fetchAizhanData(site.domain)
+        const { pc, mobile, indexCount, pcIpMin, pcIpMax, pcIpAvg, mobileIpMin, mobileIpMax, mobileIpAvg } = await fetchAizhanData(site.domain)
         await Promise.all([
           (supabase.from('weight_history') as any).upsert(
-            { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile, pc_ip: pcIp, mobile_ip: mobileIp },
+            { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile, pc_ip: pcIpMin, pc_ip_max: pcIpMax, mobile_ip: mobileIpMin, mobile_ip_max: mobileIpMax },
             { onConflict: 'site_id,record_date' }
           ),
           (supabase.from('index_snapshots') as any).upsert(

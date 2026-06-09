@@ -157,23 +157,27 @@ export function filterDownloadKeywords(keywords: string[]): string[] {
   )
 }
 
-function parseIpRange(text: string): number {
+function parseIpRange(text: string): { min: number; max: number; avg: number } {
   const parts = text.replace(/,/g, '').split('~').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
-  if (parts.length === 0) return 0
-  return Math.round(parts.reduce((a, b) => a + b, 0) / parts.length)
+  if (parts.length === 0) return { min: 0, max: 0, avg: 0 }
+  const min = parts[0]
+  const max = parts.length > 1 ? parts[1] : parts[0]
+  return { min, max, avg: Math.round((min + max) / 2) }
 }
 
 // Fetch weight, index count, and IP data from aizhan.com (single request)
-export async function fetchAizhanData(domain: string): Promise<{ pc: number; mobile: number; indexCount: number; pcIp: number; mobileIp: number }> {
+export async function fetchAizhanData(domain: string): Promise<{
+  pc: number; mobile: number; indexCount: number
+  pcIpMin: number; pcIpMax: number; pcIpAvg: number
+  mobileIpMin: number; mobileIpMax: number; mobileIpAvg: number
+}> {
+  const empty = { pc: 0, mobile: 0, indexCount: 0, pcIpMin: 0, pcIpMax: 0, pcIpAvg: 0, mobileIpMin: 0, mobileIpMax: 0, mobileIpAvg: 0 }
   try {
     const res = await fetch(`https://www.aizhan.com/cha/${domain}/`, {
-      headers: {
-        ...BROWSER_HEADERS,
-        Referer: 'https://www.aizhan.com/',
-      },
+      headers: { ...BROWSER_HEADERS, Referer: 'https://www.aizhan.com/' },
       signal: AbortSignal.timeout(10000),
     })
-    if (!res.ok) return { pc: 0, mobile: 0, indexCount: 0, pcIp: 0, mobileIp: 0 }
+    if (!res.ok) return empty
     const html = await res.text()
     const $ = cheerio.load(html)
 
@@ -181,18 +185,18 @@ export async function fetchAizhanData(domain: string): Promise<{ pc: number; mob
     const mobile = parseInt($('#baidurank_mbr img').attr('alt') || '0', 10)
     const indexRaw = $('#shoulu1_baidu a').first().text().replace(/[^0-9]/g, '')
     const indexCount = parseInt(indexRaw || '0', 10)
-    const pcIp = parseIpRange($('#baidurank_ip').text())
-    const mobileIp = parseIpRange($('#baidurank_m_ip').text())
+    const pcRange = parseIpRange($('#baidurank_ip').text())
+    const mobileRange = parseIpRange($('#baidurank_m_ip').text())
 
     return {
       pc: isNaN(pc) ? 0 : pc,
       mobile: isNaN(mobile) ? 0 : mobile,
       indexCount: isNaN(indexCount) ? 0 : indexCount,
-      pcIp,
-      mobileIp,
+      pcIpMin: pcRange.min, pcIpMax: pcRange.max, pcIpAvg: pcRange.avg,
+      mobileIpMin: mobileRange.min, mobileIpMax: mobileRange.max, mobileIpAvg: mobileRange.avg,
     }
   } catch {
-    return { pc: 0, mobile: 0, indexCount: 0, pcIp: 0, mobileIp: 0 }
+    return empty
   }
 }
 
