@@ -31,23 +31,41 @@ interface Keyword {
   discovered_at: string
 }
 
+interface CleanedEntry {
+  base: string
+  variants: string[]
+}
+
 const statusConfig = {
   normal: { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '偏低', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
   danger: { label: '异常', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
 }
 
+// Client-side version of cleanTitle — strips standalone suffix from end of title
+function cleanTitleClient(title: string, suffixes: string[]): string {
+  if (suffixes.length === 0) return title
+  const escaped = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const pattern = new RegExp(`\\s*(${escaped.join('|')})$`, 'i')
+  return title.replace(pattern, '').replace(/\s{2,}/g, ' ').trim() || title
+}
+
 export default function CompetitorDailyPage() {
   const [rows, setRows] = useState<CompetitorRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // 昨日新词 modal
   const [selectedSite, setSelectedSite] = useState<CompetitorRow | null>(null)
   const [siteKeywords, setSiteKeywords] = useState<Keyword[]>([])
   const [kwLoading, setKwLoading] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  // 更新词库 modal
+  const [cleanSite, setCleanSite] = useState<CompetitorRow | null>(null)
+  const [cleanedEntries, setCleanedEntries] = useState<CleanedEntry[]>([])
+  const [cleanLoading, setCleanLoading] = useState(false)
+
+  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
@@ -72,17 +90,14 @@ export default function CompetitorDailyPage() {
         const avg7d = siteStats.length > 0
           ? Math.round(siteStats.reduce((sum, s) => sum + s.new_count, 0) / siteStats.length)
           : 0
-
         const todayVal = todayStat?.new_count ?? 0
         const yesterdayVal = yesterdayStat?.new_count ?? 0
-
         let status: 'normal' | 'warning' | 'danger' = 'normal'
         if (avg7d > 0) {
           const ratio = todayVal / avg7d
           if (ratio < 0.3) status = 'danger'
           else if (ratio < 0.6) status = 'warning'
         }
-
         return { site_id: site.id, domain: site.domain, name: site.name, today: todayVal, yesterday: yesterdayVal, avg7d, status }
       })
 
@@ -100,7 +115,6 @@ export default function CompetitorDailyPage() {
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      // Query last 24 hours — cron runs at 05~08 MY time, keywords are inserted then
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       const { data, error: err } = await supabase
         .from('raw_keywords')
@@ -110,13 +124,57 @@ export default function CompetitorDailyPage() {
         .order('discovered_at', { ascending: false })
         .limit(200)
       if (err) throw err
-      // Filter at display level only — keeps dedup and count accurate in DB
       const filtered = (data || []).filter((kw) => !kw.keyword.includes('电脑版'))
       setSiteKeywords(filtered)
     } catch {
       setSiteKeywords([])
     } finally {
       setKwLoading(false)
+    }
+  }
+
+  async function viewCleanedKeywords(site: CompetitorRow) {
+    setCleanSite(site)
+    setCleanLoading(true)
+    setCleanedEntries([])
+    try {
+      const supabase = getBrowserClient()
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+      const [{ data: kwData }, { data: siteData }] = await Promise.all([
+        supabase
+          .from('raw_keywords')
+          .select('keyword')
+          .eq('site_id', site.site_id)
+          .gte('discovered_at', since)
+          .limit(500),
+        supabase
+          .from('sites')
+          .select('enable_version_clean, version_suffixes')
+          .eq('id', site.site_id)
+          .single(),
+      ])
+
+      const suffixes: string[] = (siteData as { version_suffixes?: string[] } | null)?.version_suffixes ?? []
+      const keywords = (kwData || []).map((r) => (r as { keyword: string }).keyword)
+
+      // Group by cleaned base name
+      const map = new Map<string, string[]>()
+      for (const kw of keywords) {
+        const base = cleanTitleClient(kw, suffixes)
+        if (!map.has(base)) map.set(base, [])
+        if (!map.get(base)!.includes(kw)) map.get(base)!.push(kw)
+      }
+
+      const entries: CleanedEntry[] = Array.from(map.entries())
+        .map(([base, variants]) => ({ base, variants }))
+        .sort((a, b) => b.variants.length - a.variants.length)
+
+      setCleanedEntries(entries)
+    } catch {
+      setCleanedEntries([])
+    } finally {
+      setCleanLoading(false)
     }
   }
 
@@ -176,12 +234,20 @@ export default function CompetitorDailyPage() {
                           <span className={s.className}>{s.label}</span>
                         </td>
                         <td className="table-td text-right">
-                          <button
-                            onClick={() => viewYesterdayKeywords(row)}
-                            className="text-xs text-gray-500 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                          >
-                            昨日新词
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => viewYesterdayKeywords(row)}
+                              className="text-xs text-gray-500 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                            >
+                              昨日新词
+                            </button>
+                            <button
+                              onClick={() => viewCleanedKeywords(row)}
+                              className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                            >
+                              更新词库
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -193,7 +259,7 @@ export default function CompetitorDailyPage() {
         )}
       </div>
 
-      {/* Keywords Modal */}
+      {/* 昨日新词 Modal */}
       {selectedSite && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
@@ -225,6 +291,55 @@ export default function CompetitorDailyPage() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 更新词库 Modal */}
+      {cleanSite && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">{cleanSite.domain} · 更新词库</h3>
+                <p className="text-xs text-gray-400 mt-0.5">昨日新词去重后的基础词条（按版本后缀归并）</p>
+              </div>
+              <button onClick={() => setCleanSite(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {cleanLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  加载中...
+                </div>
+              ) : cleanedEntries.length === 0 ? (
+                <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-400 mb-3">共 {cleanedEntries.length} 个基础词条</p>
+                  {cleanedEntries.map((entry, i) => (
+                    <div key={i} className="py-2 border-b border-gray-50">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-900">{entry.base}</span>
+                        {entry.variants.length > 1 && (
+                          <span className="text-xs text-blue-500 flex-shrink-0">{entry.variants.length} 个版本</span>
+                        )}
+                      </div>
+                      {entry.variants.length > 1 && (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{entry.variants.join('、')}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
