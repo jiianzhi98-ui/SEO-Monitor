@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { LineChart, Line, ResponsiveContainer } from 'recharts'
 
 interface SiteRow { id: string; domain: string; name: string }
 interface HistoryRow {
@@ -29,7 +30,7 @@ interface WeightRow {
   mobileIpMin: number
   mobileIpMax: number
   mobileIpAvgChange: number
-  updatedAt: string
+  trend: { date: string; pc: number }[]
 }
 
 function fmt(n: number) {
@@ -63,6 +64,17 @@ function IpChangeCell({ change }: { change: number }) {
   )
 }
 
+function Sparkline({ data }: { data: { date: string; pc: number }[] }) {
+  if (data.length < 2) return <span className="text-gray-300 text-xs">暂无趋势</span>
+  return (
+    <ResponsiveContainer width={120} height={36}>
+      <LineChart data={data}>
+        <Line type="monotone" dataKey="pc" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
 export default function WeightMonitorPage() {
   const [rows, setRows] = useState<WeightRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,23 +87,24 @@ export default function WeightMonitorPage() {
     setError(null)
     try {
       const supabase = getBrowserClient()
-      const d14ago = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
+      const d30ago = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
       const [{ data: sitesRaw }, { data: historyRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
         supabase.from('weight_history')
           .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max')
-          .gte('record_date', d14ago)
-          .order('record_date', { ascending: false }),
+          .gte('record_date', d30ago)
+          .order('record_date', { ascending: true }),
       ])
 
       const sites = (sitesRaw || []) as SiteRow[]
       const history = (historyRaw || []) as HistoryRow[]
 
       const result: WeightRow[] = sites.map((site) => {
+        // history is ascending by date
         const siteHistory = history.filter((h) => h.site_id === site.id)
-        const latest = siteHistory[0]
-        const prev = siteHistory.length > 1 ? siteHistory[siteHistory.length - 1] : null
+        const latest = siteHistory.length > 0 ? siteHistory[siteHistory.length - 1] : null
+        const prev = siteHistory.length > 1 ? siteHistory[siteHistory.length - 2] : null
 
         const latestAvgPc = latest ? Math.round((latest.pc_ip + latest.pc_ip_max) / 2) : 0
         const latestAvgMobile = latest ? Math.round((latest.mobile_ip + latest.mobile_ip_max) / 2) : 0
@@ -112,7 +125,7 @@ export default function WeightMonitorPage() {
           mobileIpMin: latest?.mobile_ip ?? 0,
           mobileIpMax: latest?.mobile_ip_max ?? 0,
           mobileIpAvgChange: prev ? latestAvgMobile - prevAvgMobile : 0,
-          updatedAt: latest?.record_date ?? '-',
+          trend: siteHistory.map((h) => ({ date: h.record_date, pc: h.pc_weight })),
         }
       })
 
@@ -156,7 +169,7 @@ export default function WeightMonitorPage() {
                   <th className="table-th text-center">移动来路IP</th>
                   <th className="table-th text-center">PC均值变化</th>
                   <th className="table-th text-center">移动均值变化</th>
-                  <th className="table-th text-center">更新时间</th>
+                  <th className="table-th text-center">30天趋势</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -191,7 +204,9 @@ export default function WeightMonitorPage() {
                       <td className="table-td text-center">
                         <IpChangeCell change={row.mobileIpAvgChange} />
                       </td>
-                      <td className="table-td text-center text-xs text-gray-400">{row.updatedAt}</td>
+                      <td className="table-td text-center">
+                        <Sparkline data={row.trend} />
+                      </td>
                     </tr>
                   ))
                 )}
