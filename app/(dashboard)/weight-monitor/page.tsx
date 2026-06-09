@@ -30,7 +30,7 @@ interface WeightRow {
   mobileIpMin: number
   mobileIpMax: number
   mobileIpAvgChange: number
-  trend: { date: string; pc: number }[]
+  trend: { date: string; pcAvg: number; mobileAvg: number }[]
 }
 
 function fmt(n: number) {
@@ -64,12 +64,13 @@ function IpChangeCell({ change }: { change: number }) {
   )
 }
 
-function Sparkline({ data }: { data: { date: string; pc: number }[] }) {
+function Sparkline({ data }: { data: { date: string; pcAvg: number; mobileAvg: number }[] }) {
   if (data.length < 2) return <span className="text-gray-300 text-xs">暂无趋势</span>
   return (
-    <ResponsiveContainer width={120} height={36}>
+    <ResponsiveContainer width={140} height={36}>
       <LineChart data={data}>
-        <Line type="monotone" dataKey="pc" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+        <Line type="monotone" dataKey="pcAvg" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+        <Line type="monotone" dataKey="mobileAvg" stroke="#f97316" strokeWidth={1.5} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   )
@@ -125,7 +126,11 @@ export default function WeightMonitorPage() {
           mobileIpMin: latest?.mobile_ip ?? 0,
           mobileIpMax: latest?.mobile_ip_max ?? 0,
           mobileIpAvgChange: prev ? latestAvgMobile - prevAvgMobile : 0,
-          trend: siteHistory.map((h) => ({ date: h.record_date, pc: h.pc_weight })),
+          trend: siteHistory.map((h) => ({
+            date: h.record_date,
+            pcAvg: Math.round((h.pc_ip + h.pc_ip_max) / 2),
+            mobileAvg: Math.round((h.mobile_ip + h.mobile_ip_max) / 2),
+          })),
         }
       })
 
