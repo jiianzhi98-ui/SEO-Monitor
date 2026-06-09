@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
-import { LineChart, Line, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
 
 interface SiteRow { id: string; domain: string; name: string }
 interface HistoryRow {
@@ -80,6 +80,7 @@ export default function WeightMonitorPage() {
   const [rows, setRows] = useState<WeightRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<WeightRow | null>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -149,6 +150,61 @@ export default function WeightMonitorPage() {
         <p className="text-gray-500 text-sm mt-1">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
       </div>
 
+      {/* Detail modal */}
+      {selected && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">{selected.domain} · 来路IP趋势</h2>
+                <p className="text-sm text-gray-400">近30天PC/移动来路IP均值变化</p>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="flex gap-8 mb-4">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">PC当前均值</p>
+                <p className="text-2xl font-bold text-blue-600">{fmt(selected.pcIpAvgChange !== 0 || selected.pcIpMin > 0 ? Math.round((selected.pcIpMin + selected.pcIpMax) / 2) : 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">移动当前均值</p>
+                <p className="text-2xl font-bold text-orange-500">{fmt(Math.round((selected.mobileIpMin + selected.mobileIpMax) / 2))}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">PC均值变化</p>
+                <p className={`text-xl font-bold ${selected.pcIpAvgChange > 0 ? 'text-green-600' : selected.pcIpAvgChange < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                  {selected.pcIpAvgChange === 0 ? '-' : (selected.pcIpAvgChange > 0 ? '+' : '') + fmt(selected.pcIpAvgChange)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">移动均值变化</p>
+                <p className={`text-xl font-bold ${selected.mobileIpAvgChange > 0 ? 'text-green-600' : selected.mobileIpAvgChange < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                  {selected.mobileIpAvgChange === 0 ? '-' : (selected.mobileIpAvgChange > 0 ? '+' : '') + fmt(selected.mobileIpAvgChange)}
+                </p>
+              </div>
+            </div>
+            {selected.trend.length >= 2 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={selected.trend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v: string) => v.slice(5)} />
+                  <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v: number) => v >= 10000 ? (v / 10000).toFixed(1) + 'w' : v.toLocaleString()} />
+                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : v} labelFormatter={(l: string) => l} />
+                  <Line type="monotone" dataKey="pcAvg" name="PC均值" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="mobileAvg" name="移动均值" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-40 text-gray-400 text-sm">数据积累中，每天跑 cron 后会有更多数据点</div>
+            )}
+            <div className="flex gap-4 mt-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-blue-500 inline-block"></span>PC均值</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-orange-500 inline-block"></span>移动均值</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-gray-400 gap-3">
@@ -175,12 +231,13 @@ export default function WeightMonitorPage() {
                   <th className="table-th text-center">PC均值变化</th>
                   <th className="table-th text-center">移动均值变化</th>
                   <th className="table-th text-center">30天趋势</th>
+                  <th className="table-th text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
+                    <td colSpan={9} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
                   </tr>
                 ) : (
                   rows.map((row) => (
@@ -211,6 +268,14 @@ export default function WeightMonitorPage() {
                       </td>
                       <td className="table-td text-center">
                         <Sparkline data={row.trend} />
+                      </td>
+                      <td className="table-td text-center">
+                        <button
+                          onClick={() => setSelected(row)}
+                          className="text-xs text-blue-500 hover:text-blue-700 hover:underline"
+                        >
+                          详情
+                        </button>
                       </td>
                     </tr>
                   ))
