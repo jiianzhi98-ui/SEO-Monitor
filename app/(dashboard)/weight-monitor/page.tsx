@@ -28,17 +28,10 @@ interface WeightRow {
   updatedAt: string
 }
 
-function weightColor(v: number) {
-  if (v >= 6) return 'text-red-600 font-bold'
-  if (v >= 4) return 'text-orange-500 font-semibold'
-  if (v >= 2) return 'text-yellow-600'
-  return 'text-gray-400'
-}
-
 function WeightCell({ value, change }: { value: number; change: number }) {
   return (
     <div className="flex items-center justify-center gap-1.5">
-      <span className={`text-lg tabular-nums ${weightColor(value)}`}>{value}</span>
+      <span className="text-lg tabular-nums font-medium text-gray-900">{value}</span>
       {change !== 0 && (
         <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
           {change > 0 ? `+${change}` : change}
