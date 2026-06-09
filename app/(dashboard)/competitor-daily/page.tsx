@@ -110,7 +110,9 @@ export default function CompetitorDailyPage() {
         .order('discovered_at', { ascending: false })
         .limit(200)
       if (err) throw err
-      setSiteKeywords(data || [])
+      // Filter at display level only — keeps dedup and count accurate in DB
+      const filtered = (data || []).filter((kw) => !kw.keyword.includes('电脑版'))
+      setSiteKeywords(filtered)
     } catch {
       setSiteKeywords([])
     } finally {

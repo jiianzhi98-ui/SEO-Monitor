@@ -113,7 +113,7 @@ export async function GET(request: Request) {
         const cleaned = rawTitles.map((t) =>
           cleanTitle(t, site.enable_version_clean, site.version_suffixes || [])
         )
-        const validKeywords = cleaned.filter((k) => k.length > 0 && !k.includes('电脑版'))
+        const validKeywords = cleaned.filter((k) => k.length > 0)
 
         if (validKeywords.length === 0) {
           results.push({ site: site.domain, count: 0 })
