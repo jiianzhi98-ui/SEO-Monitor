@@ -17,6 +17,12 @@ interface Site {
   is_enabled: boolean
 }
 
+interface HtmlSource {
+  url: string
+  titleSelector: string
+  dateSelector: string
+}
+
 interface PreviewRow {
   original: string
   cleaned: string
@@ -42,8 +48,22 @@ const defaultForm: Site = {
   is_enabled: true,
 }
 
+function sitToSources(s: Site | null): HtmlSource[] {
+  if (!s) return [{ url: '', titleSelector: '', dateSelector: '' }]
+  const urls = (s.list_url || '').split('\n').map((u) => u.trim()).filter(Boolean)
+  const titles = (s.title_selector || '').split('\n').map((t) => t.trim())
+  const dates = (s.date_selector || '').split('\n').map((d) => d.trim())
+  if (urls.length === 0) return [{ url: '', titleSelector: '', dateSelector: '' }]
+  return urls.map((url, i) => ({
+    url,
+    titleSelector: titles[i] ?? titles[0] ?? '',
+    dateSelector: dates[i] ?? dates[0] ?? '',
+  }))
+}
+
 export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalProps) {
   const [form, setForm] = useState<Site>(site ? { ...site } : { ...defaultForm })
+  const [htmlSources, setHtmlSources] = useState<HtmlSource[]>(() => sitToSources(site ?? null))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [newSuffix, setNewSuffix] = useState('')
@@ -53,9 +73,38 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
 
   useEffect(() => {
     setForm(site ? { ...site } : { ...defaultForm })
+    setHtmlSources(sitToSources(site ?? null))
     setPreviewData(null)
     setPreviewError(null)
   }, [site])
+
+  function updateSource(idx: number, field: keyof HtmlSource, value: string) {
+    const next = htmlSources.map((s, i) => i === idx ? { ...s, [field]: value } : s)
+    setHtmlSources(next)
+    const valid = next.filter((s) => s.url.trim())
+    setForm((prev) => ({
+      ...prev,
+      list_url: valid.map((s) => s.url).join('\n'),
+      title_selector: valid.map((s) => s.titleSelector).join('\n'),
+      date_selector: valid.map((s) => s.dateSelector).join('\n'),
+    }))
+  }
+
+  function addSource() {
+    if (htmlSources.length < 2) setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '' }])
+  }
+
+  function removeSource(idx: number) {
+    const next = htmlSources.filter((_, i) => i !== idx)
+    setHtmlSources(next)
+    const valid = next.filter((s) => s.url.trim())
+    setForm((prev) => ({
+      ...prev,
+      list_url: valid.map((s) => s.url).join('\n'),
+      title_selector: valid.map((s) => s.titleSelector).join('\n'),
+      date_selector: valid.map((s) => s.dateSelector).join('\n'),
+    }))
+  }
 
   function update<K extends keyof Site>(key: K, value: Site[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -77,14 +126,15 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
     setPreviewData(null)
     setPreviewError(null)
     try {
+      const src = form.crawl_type === 'html' ? htmlSources[0] : null
       const res = await fetch('/api/crawl/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: form.list_url || form.domain,
+          url: src ? src.url : (form.list_url || form.domain),
           type: form.crawl_type,
-          titleSelector: form.title_selector,
-          dateSelector: form.date_selector,
+          titleSelector: src ? src.titleSelector : form.title_selector,
+          dateSelector: src ? src.dateSelector : form.date_selector,
           enableVersionClean: form.enable_version_clean,
           suffixes: form.version_suffixes,
         }),
@@ -188,23 +238,10 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
             </div>
           </div>
 
-          {/* List URL */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              列表页URL
-              {form.crawl_type === 'html' && (
-                <span className="ml-1.5 text-xs text-gray-400 font-normal">（多个URL每行一个）</span>
-              )}
-            </label>
-            {form.crawl_type === 'html' ? (
-              <textarea
-                rows={3}
-                value={form.list_url}
-                onChange={(e) => update('list_url', e.target.value)}
-                placeholder={"https://example.com/new/\nhttps://example.com/new/games.html"}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none font-mono"
-              />
-            ) : (
+          {/* List URL — single for sitemap/rss, dual-source for html */}
+          {form.crawl_type !== 'html' ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">列表页URL</label>
               <input
                 type="url"
                 value={form.list_url}
@@ -212,32 +249,62 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                 placeholder="https://example.com/sitemap.xml"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
-            )}
-          </div>
-
-          {/* HTML-only selectors */}
-          {form.crawl_type === 'html' && (
-            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">标题CSS选择器</label>
-                <input
-                  type="text"
-                  value={form.title_selector}
-                  onChange={(e) => update('title_selector', e.target.value)}
-                  placeholder=".article-title a"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">日期CSS选择器</label>
-                <input
-                  type="text"
-                  value={form.date_selector}
-                  onChange={(e) => update('date_selector', e.target.value)}
-                  placeholder=".pub-date"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {htmlSources.map((src, idx) => (
+                <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">来源 {idx + 1}</span>
+                    {idx > 0 && (
+                      <button type="button" onClick={() => removeSource(idx)} className="text-xs text-red-400 hover:text-red-600">
+                        移除
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">列表页URL</label>
+                    <input
+                      type="url"
+                      value={src.url}
+                      onChange={(e) => updateSource(idx, 'url', e.target.value)}
+                      placeholder="https://example.com/new/"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">标题CSS选择器</label>
+                      <input
+                        type="text"
+                        value={src.titleSelector}
+                        onChange={(e) => updateSource(idx, 'titleSelector', e.target.value)}
+                        placeholder=".article-title a"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">日期CSS选择器</label>
+                      <input
+                        type="text"
+                        value={src.dateSelector}
+                        onChange={(e) => updateSource(idx, 'dateSelector', e.target.value)}
+                        placeholder="td:last-child"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {htmlSources.length < 2 && (
+                <button
+                  type="button"
+                  onClick={addSource}
+                  className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-xs text-gray-400 hover:border-green-400 hover:text-green-600 transition-colors"
+                >
+                  + 添加来源 2（不同页面布局）
+                </button>
+              )}
             </div>
           )}
 

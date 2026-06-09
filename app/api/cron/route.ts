@@ -7,6 +7,7 @@ import {
   cleanTitle,
   fetchBaiduSuggestion,
   fetchAizhanData,
+  type HtmlSource,
 } from '@/lib/crawler'
 
 interface SiteRecord {
@@ -91,10 +92,18 @@ export async function GET(request: Request) {
           })
         } else if (site.crawl_type === 'html' && site.list_url && site.title_selector) {
           const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
-          const htmlCutoff = getMalaysiaDate(-cutoffDays) // yesterday for daily, 3/7 days ago for others
-          const htmlUrls = site.list_url.split('\n').map((u: string) => u.trim()).filter(Boolean)
+          const htmlCutoff = getMalaysiaDate(-cutoffDays)
           const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
-          const entries = await fetchHtmlListPages(htmlUrls, site.title_selector, site.date_selector || '', htmlCutoff, maxPg)
+          // Each URL may have its own selectors (newline-separated, same index)
+          const urls = site.list_url.split('\n').map((u: string) => u.trim()).filter(Boolean)
+          const titleSels = (site.title_selector || '').split('\n').map((s: string) => s.trim())
+          const dateSels = (site.date_selector || '').split('\n').map((s: string) => s.trim())
+          const sources: HtmlSource[] = urls.map((url: string, i: number) => ({
+            url,
+            titleSelector: titleSels[i] || titleSels[0] || '',
+            dateSelector: dateSels[i] || dateSels[0] || '',
+          }))
+          const entries = await fetchHtmlListPages(sources, htmlCutoff, maxPg)
           rawTitles = entries.map((e) => e.title)
         } else if (site.crawl_type === 'rss' && site.list_url) {
           const entries = await fetchRss(site.list_url)

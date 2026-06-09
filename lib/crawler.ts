@@ -129,18 +129,23 @@ function parseEntryDateStr(dateStr: string | undefined): string | null {
   return null
 }
 
-// Fetch multiple HTML list URLs with auto-pagination, stopping when entries are older than cutoffDateStr
+export interface HtmlSource {
+  url: string
+  titleSelector: string
+  dateSelector: string
+}
+
+// Fetch multiple HTML sources (each with own selectors) with auto-pagination
+// Stops when all entries on a page are older than cutoffDateStr
 export async function fetchHtmlListPages(
-  urls: string[],
-  titleSelector: string,
-  dateSelector: string,
-  cutoffDateStr: string, // YYYY-MM-DD — stop paginating when all entries are older than this
+  sources: HtmlSource[],
+  cutoffDateStr: string,
   maxPages = 5
 ): Promise<PageEntry[]> {
   const all: PageEntry[] = []
 
-  for (const startUrl of urls) {
-    let currentUrl: string | null = startUrl
+  for (const source of sources) {
+    let currentUrl: string | null = source.url
     let page = 0
 
     while (currentUrl && page < maxPages) {
@@ -152,13 +157,13 @@ export async function fetchHtmlListPages(
         const $ = cheerio.load(html)
 
         const pageEntries: PageEntry[] = []
-        $(titleSelector).each((_, el) => {
+        $(source.titleSelector).each((_, el) => {
           const title = $(el).text().trim()
           const href = $(el).attr('href') || $(el).closest('a').attr('href') || ''
           const fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl!).href
           let date: string | undefined
-          if (dateSelector) {
-            const dateEl = $(el).closest('li, article, .item, tr').find(dateSelector).first()
+          if (source.dateSelector) {
+            const dateEl = $(el).closest('li, article, .item, tr').find(source.dateSelector).first()
             if (dateEl.length) date = dateEl.text().trim()
           }
           if (title) pageEntries.push({ title, date, url: fullUrl })
@@ -166,19 +171,17 @@ export async function fetchHtmlListPages(
 
         all.push(...pageEntries)
 
-        // Stop paginating if all dated entries on this page are older than cutoff
         const datedEntries = pageEntries.map((e) => parseEntryDateStr(e.date)).filter(Boolean) as string[]
         if (datedEntries.length > 0 && datedEntries.every((d) => d < cutoffDateStr)) break
 
         currentUrl = findNextPageUrl($, currentUrl)
-        if (currentUrl) await new Promise((r) => setTimeout(r, 1000)) // polite delay between pages
+        if (currentUrl) await new Promise((r) => setTimeout(r, 1000))
       } catch {
         break
       }
     }
   }
 
-  // Final filter: only keep entries from cutoffDateStr or newer (undated entries pass through)
   return all.filter((e) => {
     const d = parseEntryDateStr(e.date)
     return !d || d >= cutoffDateStr
