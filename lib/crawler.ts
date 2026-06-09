@@ -219,16 +219,21 @@ export function cleanTitle(
   let cleaned = title
 
   if (suffixes && suffixes.length > 0) {
-    // Remove version + any of the suffixes
-    const suffixPattern = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-    const pattern = new RegExp(`[vV]\\d+(?:\\.\\d+)*(?:\\s*(?:${suffixPattern}))*`, 'gi')
-    cleaned = cleaned.replace(pattern, '').trim()
+    const escaped = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const suffixPattern = escaped.join('|')
+
+    // Remove version numbers optionally followed by suffixes (e.g. v1.0破解版)
+    const versionPattern = new RegExp(`[vV]\\d+(?:\\.\\d+)*(?:\\s*(?:${suffixPattern}))*`, 'gi')
+    cleaned = cleaned.replace(versionPattern, '')
+
+    // Also remove standalone suffix at end of title (e.g. 剑与家园破解版 → 剑与家园)
+    const standalonePattern = new RegExp(`\\s*(${suffixPattern})$`, 'i')
+    cleaned = cleaned.replace(standalonePattern, '')
   } else {
     // Remove version numbers only
-    cleaned = cleaned.replace(/[vV]\d+(?:\.\d+)*/g, '').trim()
+    cleaned = cleaned.replace(/[vV]\d+(?:\.\d+)*/g, '')
   }
 
-  // Clean up extra spaces
   cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()
   return cleaned
 }
