@@ -160,7 +160,7 @@ export async function GET(request: Request) {
             { onConflict: 'site_id,snapshot_date' }
           ),
         ])
-        await new Promise((r) => setTimeout(r, 1000))
+        await new Promise((r) => setTimeout(r, 3000))
       } catch {
         // ignore per-site errors
       }
