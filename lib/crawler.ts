@@ -157,8 +157,14 @@ export function filterDownloadKeywords(keywords: string[]): string[] {
   )
 }
 
-// Fetch Baidu PC + mobile weight AND Baidu index count from aizhan.com (single request)
-export async function fetchAizhanData(domain: string): Promise<{ pc: number; mobile: number; indexCount: number }> {
+function parseIpRange(text: string): number {
+  const parts = text.replace(/,/g, '').split('~').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
+  if (parts.length === 0) return 0
+  return Math.round(parts.reduce((a, b) => a + b, 0) / parts.length)
+}
+
+// Fetch weight, index count, and IP data from aizhan.com (single request)
+export async function fetchAizhanData(domain: string): Promise<{ pc: number; mobile: number; indexCount: number; pcIp: number; mobileIp: number }> {
   try {
     const res = await fetch(`https://www.aizhan.com/cha/${domain}/`, {
       headers: {
@@ -167,7 +173,7 @@ export async function fetchAizhanData(domain: string): Promise<{ pc: number; mob
       },
       signal: AbortSignal.timeout(10000),
     })
-    if (!res.ok) return { pc: 0, mobile: 0, indexCount: 0 }
+    if (!res.ok) return { pc: 0, mobile: 0, indexCount: 0, pcIp: 0, mobileIp: 0 }
     const html = await res.text()
     const $ = cheerio.load(html)
 
@@ -175,14 +181,18 @@ export async function fetchAizhanData(domain: string): Promise<{ pc: number; mob
     const mobile = parseInt($('#baidurank_mbr img').attr('alt') || '0', 10)
     const indexRaw = $('#shoulu1_baidu a').first().text().replace(/[^0-9]/g, '')
     const indexCount = parseInt(indexRaw || '0', 10)
+    const pcIp = parseIpRange($('#baidurank_ip').text())
+    const mobileIp = parseIpRange($('#baidurank_m_ip').text())
 
     return {
       pc: isNaN(pc) ? 0 : pc,
       mobile: isNaN(mobile) ? 0 : mobile,
       indexCount: isNaN(indexCount) ? 0 : indexCount,
+      pcIp,
+      mobileIp,
     }
   } catch {
-    return { pc: 0, mobile: 0, indexCount: 0 }
+    return { pc: 0, mobile: 0, indexCount: 0, pcIp: 0, mobileIp: 0 }
   }
 }
 
