@@ -105,6 +105,82 @@ export async function fetchHtmlList(
   return entries
 }
 
+// Try to find the "next page" link on a page
+function findNextPageUrl($: ReturnType<typeof cheerio.load>, currentUrl: string): string | null {
+  const nextTexts = ['下一页', '下一頁', '>', '›', '»', 'Next', 'next']
+  for (const text of nextTexts) {
+    let el = $(`a`).filter((_, node) => $(node).text().trim() === text).first()
+    if (!el.length) el = $(`a[class*="next"]`).first()
+    if (el.length) {
+      const href = el.attr('href')
+      if (href && !href.includes('javascript') && !href.startsWith('#')) {
+        return href.startsWith('http') ? href : new URL(href, currentUrl).href
+      }
+    }
+  }
+  return null
+}
+
+// Parse a date string like "2026-06-09 17:04" or "2026/06/09" to YYYY-MM-DD
+function parseEntryDateStr(dateStr: string | undefined): string | null {
+  if (!dateStr) return null
+  const m = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+  return null
+}
+
+// Fetch multiple HTML list URLs with auto-pagination, stopping when entries are older than cutoffDateStr
+export async function fetchHtmlListPages(
+  urls: string[],
+  titleSelector: string,
+  dateSelector: string,
+  cutoffDateStr: string, // YYYY-MM-DD — stop paginating when all entries are older than this
+  maxPages = 5
+): Promise<PageEntry[]> {
+  const all: PageEntry[] = []
+
+  for (const startUrl of urls) {
+    let currentUrl: string | null = startUrl
+    let page = 0
+
+    while (currentUrl && page < maxPages) {
+      page++
+      try {
+        const res = await fetch(currentUrl, { headers: BROWSER_HEADERS, next: { revalidate: 0 } })
+        if (!res.ok) break
+        const html = await res.text()
+        const $ = cheerio.load(html)
+
+        const pageEntries: PageEntry[] = []
+        $(titleSelector).each((_, el) => {
+          const title = $(el).text().trim()
+          const href = $(el).attr('href') || $(el).closest('a').attr('href') || ''
+          const fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl!).href
+          let date: string | undefined
+          if (dateSelector) {
+            const dateEl = $(el).closest('li, article, .item, tr').find(dateSelector).first()
+            if (dateEl.length) date = dateEl.text().trim()
+          }
+          if (title) pageEntries.push({ title, date, url: fullUrl })
+        })
+
+        all.push(...pageEntries)
+
+        // Stop paginating if all dated entries on this page are older than cutoff
+        const datedEntries = pageEntries.map((e) => parseEntryDateStr(e.date)).filter(Boolean) as string[]
+        if (datedEntries.length > 0 && datedEntries.every((d) => d < cutoffDateStr)) break
+
+        currentUrl = findNextPageUrl($, currentUrl)
+        if (currentUrl) await new Promise((r) => setTimeout(r, 1000)) // polite delay between pages
+      } catch {
+        break
+      }
+    }
+  }
+
+  return all
+}
+
 // Fetch and parse RSS feed
 export async function fetchRss(url: string): Promise<PageEntry[]> {
   const res = await fetch(url, {

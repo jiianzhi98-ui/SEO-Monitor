@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 import {
   fetchSitemap,
-  fetchHtmlList,
+  fetchHtmlListPages,
   fetchRss,
   cleanTitle,
   fetchBaiduSuggestion,
@@ -90,7 +90,10 @@ export async function GET(request: Request) {
             return decodeURIComponent(slug.replace(/[-_]/g, ' ').replace(/\.\w+$/, ''))
           })
         } else if (site.crawl_type === 'html' && site.list_url && site.title_selector) {
-          const entries = await fetchHtmlList(site.list_url, site.title_selector, site.date_selector || '')
+          // list_url may contain multiple URLs separated by newlines
+          const htmlUrls = site.list_url.split('\n').map((u: string) => u.trim()).filter(Boolean)
+          const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
+          const entries = await fetchHtmlListPages(htmlUrls, site.title_selector, site.date_selector || '', yesterday, maxPg)
           rawTitles = entries.map((e) => e.title)
         } else if (site.crawl_type === 'rss' && site.list_url) {
           const entries = await fetchRss(site.list_url)

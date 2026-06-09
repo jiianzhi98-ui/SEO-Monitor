@@ -190,14 +190,29 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
 
           {/* List URL */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">列表页URL</label>
-            <input
-              type="url"
-              value={form.list_url}
-              onChange={(e) => update('list_url', e.target.value)}
-              placeholder="https://example.com/sitemap.xml"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              列表页URL
+              {form.crawl_type === 'html' && (
+                <span className="ml-1.5 text-xs text-gray-400 font-normal">（多个URL每行一个）</span>
+              )}
+            </label>
+            {form.crawl_type === 'html' ? (
+              <textarea
+                rows={3}
+                value={form.list_url}
+                onChange={(e) => update('list_url', e.target.value)}
+                placeholder={"https://example.com/new/\nhttps://example.com/new/games.html"}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none font-mono"
+              />
+            ) : (
+              <input
+                type="url"
+                value={form.list_url}
+                onChange={(e) => update('list_url', e.target.value)}
+                placeholder="https://example.com/sitemap.xml"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            )}
           </div>
 
           {/* HTML-only selectors */}
