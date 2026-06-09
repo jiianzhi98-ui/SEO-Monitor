@@ -178,7 +178,11 @@ export async function fetchHtmlListPages(
     }
   }
 
-  return all
+  // Final filter: only keep entries from cutoffDateStr or newer (undated entries pass through)
+  return all.filter((e) => {
+    const d = parseEntryDateStr(e.date)
+    return !d || d >= cutoffDateStr
+  })
 }
 
 // Fetch and parse RSS feed
