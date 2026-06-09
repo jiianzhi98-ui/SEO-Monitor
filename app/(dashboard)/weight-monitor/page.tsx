@@ -189,7 +189,7 @@ export default function WeightMonitorPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v: string) => v.slice(5)} />
                   <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v: number) => v >= 10000 ? (v / 10000).toFixed(1) + 'w' : v.toLocaleString()} />
-                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : v} labelFormatter={(l: string) => l} />
+                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
                   <Line type="monotone" dataKey="pcAvg" name="PC均值" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="mobileAvg" name="移动均值" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
