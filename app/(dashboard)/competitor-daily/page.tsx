@@ -34,6 +34,7 @@ interface Keyword {
 interface CleanedEntry {
   base: string
   variants: string[]
+  dates: string[]
 }
 
 const statusConfig = {
@@ -165,15 +166,15 @@ export default function CompetitorDailyPage() {
     setCleanedEntries([])
     try {
       const supabase = getBrowserClient()
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const since = new Date(Date.now() - 30 * 86400000).toISOString()
 
       const [{ data: kwData }, { data: siteData }] = await Promise.all([
         supabase
           .from('raw_keywords')
-          .select('keyword')
+          .select('keyword, discovered_at')
           .eq('site_id', site.site_id)
           .gte('discovered_at', since)
-          .limit(500),
+          .limit(5000),
         supabase
           .from('sites')
           .select('enable_version_clean, version_suffixes')
@@ -182,19 +183,29 @@ export default function CompetitorDailyPage() {
       ])
 
       const suffixes: string[] = (siteData as { version_suffixes?: string[] } | null)?.version_suffixes ?? []
-      const keywords = (kwData || []).map((r) => (r as { keyword: string }).keyword)
+      const records = (kwData || []) as { keyword: string; discovered_at: string }[]
 
-      // Group by cleaned base name
-      const map = new Map<string, string[]>()
-      for (const kw of keywords) {
-        const base = cleanTitleClient(kw, suffixes)
-        if (!map.has(base)) map.set(base, [])
-        if (!map.get(base)!.includes(kw)) map.get(base)!.push(kw)
+      // stat_date D: discovered_at falls in UTC [D 16:00, D+1 15:59], so D = (discovered_at - 16h).date
+      const toStatDate = (iso: string) =>
+        new Date(new Date(iso).getTime() - 16 * 3600000).toISOString().slice(0, 10)
+
+      const map = new Map<string, { variants: Set<string>; dates: Set<string> }>()
+      for (const r of records) {
+        if (r.keyword.includes('电脑版')) continue
+        const base = cleanTitleClient(r.keyword, suffixes)
+        if (!map.has(base)) map.set(base, { variants: new Set(), dates: new Set() })
+        const entry = map.get(base)!
+        entry.variants.add(r.keyword)
+        entry.dates.add(toStatDate(r.discovered_at))
       }
 
       const entries: CleanedEntry[] = Array.from(map.entries())
-        .map(([base, variants]) => ({ base, variants }))
-        .sort((a, b) => b.variants.length - a.variants.length)
+        .map(([base, { variants, dates }]) => ({
+          base,
+          variants: Array.from(variants),
+          dates: Array.from(dates).sort().reverse(),
+        }))
+        .sort((a, b) => b.dates.length - a.dates.length || b.variants.length - a.variants.length)
 
       setCleanedEntries(entries)
     } catch {
@@ -341,7 +352,7 @@ export default function CompetitorDailyPage() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div>
                 <h3 className="font-semibold text-gray-900">{cleanSite.domain} · 更新词库</h3>
-                <p className="text-xs text-gray-400 mt-0.5">昨日新词去重后的基础词条（按版本后缀归并）</p>
+                <p className="text-xs text-gray-400 mt-0.5">近30天持续更新的词条，按出现天数排序</p>
               </div>
               <button onClick={() => setCleanSite(null)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -363,19 +374,33 @@ export default function CompetitorDailyPage() {
               ) : (
                 <div className="space-y-1">
                   <p className="text-xs text-gray-400 mb-3">共 {cleanedEntries.length} 个基础词条</p>
-                  {cleanedEntries.map((entry, i) => (
-                    <div key={i} className="py-2 border-b border-gray-50">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-gray-900">{entry.base}</span>
+                  {cleanedEntries.map((entry, i) => {
+                    const dayCount = entry.dates.length
+                    const dayBadgeClass = dayCount >= 3
+                      ? 'text-green-600 bg-green-50'
+                      : dayCount === 2
+                        ? 'text-orange-500 bg-orange-50'
+                        : 'text-gray-400 bg-gray-100'
+                    return (
+                      <div key={i} className="py-2 border-b border-gray-50">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-gray-900">{entry.base}</span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${dayBadgeClass}`}>{dayCount}天</span>
+                            {entry.variants.length > 1 && (
+                              <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">{entry.variants.length}个版本</span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {entry.dates.map((d) => d.slice(5).replace('-', '/')).join(' · ')}
+                        </p>
                         {entry.variants.length > 1 && (
-                          <span className="text-xs text-blue-500 flex-shrink-0">{entry.variants.length} 个版本</span>
+                          <p className="text-xs text-gray-300 mt-0.5 truncate">{entry.variants.join('、')}</p>
                         )}
                       </div>
-                      {entry.variants.length > 1 && (
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">{entry.variants.join('、')}</p>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
