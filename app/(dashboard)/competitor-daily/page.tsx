@@ -188,7 +188,7 @@ export default function CompetitorDailyPage() {
       const groups = new Map<string, string[]>()
       for (const k of keywords) {
         let matched = false
-        for (const base of groups.keys()) {
+        for (const base of Array.from(groups.keys())) {
           if (k.startsWith(base) && k !== base) {
             groups.get(base)!.push(k)
             matched = true
