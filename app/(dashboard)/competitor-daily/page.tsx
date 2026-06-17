@@ -71,9 +71,12 @@ export default function CompetitorDailyPage() {
   }
 
   function utcRangeForMalaysiaDate(date: string) {
+    // Cron labels stat_date = Malaysia yesterday, but keywords are inserted on Malaysia today.
+    // Malaysia "today" = UTC [date 16:00, date+1 15:59:59].
+    const startMs = new Date(date + 'T16:00:00.000Z').getTime()
     return {
-      start: new Date(date + 'T00:00:00+08:00').toISOString(),
-      end: new Date(date + 'T23:59:59.999+08:00').toISOString(),
+      start: new Date(startMs).toISOString(),
+      end: new Date(startMs + 86400000 - 1).toISOString(),
     }
   }
 
@@ -320,7 +323,7 @@ export default function CompetitorDailyPage() {
                     <li key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50">
                       <span className="text-sm text-gray-900">{kw.keyword}</span>
                       <span className="text-xs text-gray-400 flex-shrink-0">
-                        {new Date(new Date(kw.discovered_at).getTime() + 8 * 3600000).toISOString().slice(5, 10).replace('-', '/')}
+                        {kwDate.slice(5).replace('-', '/')}
                       </span>
                     </li>
                   ))}
