@@ -59,11 +59,23 @@ export default function CompetitorDailyPage() {
   const [selectedSite, setSelectedSite] = useState<CompetitorRow | null>(null)
   const [siteKeywords, setSiteKeywords] = useState<Keyword[]>([])
   const [kwLoading, setKwLoading] = useState(false)
+  const [kwDate, setKwDate] = useState('')
 
   // 更新词库 modal
   const [cleanSite, setCleanSite] = useState<CompetitorRow | null>(null)
   const [cleanedEntries, setCleanedEntries] = useState<CleanedEntry[]>([])
   const [cleanLoading, setCleanLoading] = useState(false)
+
+  function getMalaysiaDate(offsetDays = 0) {
+    return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
+  }
+
+  function utcRangeForMalaysiaDate(date: string) {
+    return {
+      start: new Date(date + 'T00:00:00+08:00').toISOString(),
+      end: new Date(date + 'T23:59:59.999+08:00').toISOString(),
+    }
+  }
 
   useEffect(() => { loadData() }, [])
 
@@ -109,28 +121,39 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  async function viewYesterdayKeywords(site: CompetitorRow) {
-    setSelectedSite(site)
+  async function fetchKeywordsForDate(site: CompetitorRow, date: string) {
     setKwLoading(true)
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const { start, end } = utcRangeForMalaysiaDate(date)
       const { data, error: err } = await supabase
         .from('raw_keywords')
         .select('keyword, source_url, discovered_at')
         .eq('site_id', site.site_id)
-        .gte('discovered_at', since)
+        .gte('discovered_at', start)
+        .lte('discovered_at', end)
         .order('discovered_at', { ascending: false })
-        .limit(200)
+        .limit(500)
       if (err) throw err
-      const filtered = (data || []).filter((kw) => !kw.keyword.includes('电脑版'))
-      setSiteKeywords(filtered)
+      setSiteKeywords(((data || []) as Keyword[]).filter((kw) => !kw.keyword.includes('电脑版')))
     } catch {
       setSiteKeywords([])
     } finally {
       setKwLoading(false)
     }
+  }
+
+  function viewYesterdayKeywords(site: CompetitorRow) {
+    const date = getMalaysiaDate(-1)
+    setSelectedSite(site)
+    setKwDate(date)
+    fetchKeywordsForDate(site, date)
+  }
+
+  function handleKwDateChange(date: string) {
+    setKwDate(date)
+    if (selectedSite) fetchKeywordsForDate(selectedSite, date)
   }
 
   async function viewCleanedKeywords(site: CompetitorRow) {
@@ -264,7 +287,16 @@ export default function CompetitorDailyPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 昨日新词</h3>
+              <div className="flex items-center gap-3">
+                <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 新词</h3>
+                <input
+                  type="date"
+                  value={kwDate}
+                  max={getMalaysiaDate(0)}
+                  onChange={(e) => handleKwDateChange(e.target.value)}
+                  className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+              </div>
               <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -281,13 +313,15 @@ export default function CompetitorDailyPage() {
                   加载中...
                 </div>
               ) : siteKeywords.length === 0 ? (
-                <p className="text-center text-gray-400 py-10 text-sm">昨日暂无新词</p>
+                <p className="text-center text-gray-400 py-10 text-sm">该日期暂无新词</p>
               ) : (
                 <ul className="space-y-2">
                   {siteKeywords.map((kw, i) => (
                     <li key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50">
                       <span className="text-sm text-gray-900">{kw.keyword}</span>
-                      <span className="text-xs text-gray-400 flex-shrink-0">{new Date(kw.discovered_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        {new Date(new Date(kw.discovered_at).getTime() + 8 * 3600000).toISOString().slice(5, 10).replace('-', '/')}
+                      </span>
                     </li>
                   ))}
                 </ul>
