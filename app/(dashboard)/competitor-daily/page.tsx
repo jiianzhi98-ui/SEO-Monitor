@@ -34,7 +34,6 @@ interface Keyword {
 interface CleanedEntry {
   base: string
   variants: string[]
-  dates: string[]
 }
 
 const statusConfig = {
@@ -169,43 +168,38 @@ export default function CompetitorDailyPage() {
       const supabase = getBrowserClient()
       const since = new Date(Date.now() - 30 * 86400000).toISOString()
 
-      const [{ data: kwData }, { data: siteData }] = await Promise.all([
-        supabase
-          .from('raw_keywords')
-          .select('keyword, discovered_at')
-          .eq('site_id', site.site_id)
-          .gte('discovered_at', since)
-          .limit(5000),
-        supabase
-          .from('sites')
-          .select('enable_version_clean, version_suffixes')
-          .eq('id', site.site_id)
-          .single(),
-      ])
+      const { data: kwData } = await supabase
+        .from('raw_keywords')
+        .select('keyword')
+        .eq('site_id', site.site_id)
+        .gte('discovered_at', since)
+        .limit(5000)
 
-      const suffixes: string[] = (siteData as { version_suffixes?: string[] } | null)?.version_suffixes ?? []
-      const records = (kwData || []) as { keyword: string; discovered_at: string }[]
+      // Deduplicate across days, filter 电脑版, sort shortest first for prefix matching
+      const keywords = Array.from(
+        new Set(
+          ((kwData || []) as { keyword: string }[])
+            .map((r) => r.keyword)
+            .filter((k) => !k.includes('电脑版'))
+        )
+      ).sort((a, b) => a.length - b.length)
 
-      // stat_date D: discovered_at falls in UTC [D 16:00, D+1 15:59], so D = (discovered_at - 16h).date
-      const toStatDate = (iso: string) =>
-        new Date(new Date(iso).getTime() - 16 * 3600000).toISOString().slice(0, 10)
-
-      const map = new Map<string, { variants: Set<string>; dates: Set<string> }>()
-      for (const r of records) {
-        if (r.keyword.includes('电脑版')) continue
-        const base = cleanTitleClient(r.keyword, suffixes)
-        if (!map.has(base)) map.set(base, { variants: new Set(), dates: new Set() })
-        const entry = map.get(base)!
-        entry.variants.add(r.keyword)
-        entry.dates.add(toStatDate(r.discovered_at))
+      // Auto-group by prefix: if keyword A is a prefix of keyword B, they belong to the same group
+      const groups = new Map<string, string[]>()
+      for (const k of keywords) {
+        let matched = false
+        for (const base of groups.keys()) {
+          if (k.startsWith(base) && k !== base) {
+            groups.get(base)!.push(k)
+            matched = true
+            break
+          }
+        }
+        if (!matched) groups.set(k, [k])
       }
 
-      const entries: CleanedEntry[] = Array.from(map.entries())
-        .map(([base, { variants, dates }]) => ({
-          base,
-          variants: Array.from(variants),
-          dates: Array.from(dates).sort().reverse(),
-        }))
+      const entries: CleanedEntry[] = Array.from(groups.entries())
+        .map(([base, variants]) => ({ base, variants }))
         .filter((e) => e.variants.length > 1)
         .sort((a, b) => b.variants.length - a.variants.length)
 
