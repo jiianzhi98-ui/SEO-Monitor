@@ -66,6 +66,7 @@ export default function CompetitorDailyPage() {
   const [cleanSite, setCleanSite] = useState<CompetitorRow | null>(null)
   const [cleanedEntries, setCleanedEntries] = useState<CleanedEntry[]>([])
   const [cleanLoading, setCleanLoading] = useState(false)
+  const [expandedBases, setExpandedBases] = useState<Set<string>>(new Set())
 
   function getMalaysiaDate(offsetDays = 0) {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
@@ -205,7 +206,8 @@ export default function CompetitorDailyPage() {
           variants: Array.from(variants),
           dates: Array.from(dates).sort().reverse(),
         }))
-        .sort((a, b) => b.dates.length - a.dates.length || b.variants.length - a.variants.length)
+        .filter((e) => e.variants.length > 1)
+        .sort((a, b) => b.variants.length - a.variants.length)
 
       setCleanedEntries(entries)
     } catch {
@@ -372,31 +374,28 @@ export default function CompetitorDailyPage() {
               ) : cleanedEntries.length === 0 ? (
                 <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
               ) : (
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-400 mb-3">共 {cleanedEntries.length} 个基础词条</p>
+                <div className="divide-y divide-gray-50">
                   {cleanedEntries.map((entry, i) => {
-                    const dayCount = entry.dates.length
-                    const dayBadgeClass = dayCount >= 3
-                      ? 'text-green-600 bg-green-50'
-                      : dayCount === 2
-                        ? 'text-orange-500 bg-orange-50'
-                        : 'text-gray-400 bg-gray-100'
+                    const expanded = expandedBases.has(entry.base)
                     return (
-                      <div key={i} className="py-2 border-b border-gray-50">
+                      <div key={i} className="py-2.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-gray-900">{entry.base}</span>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${dayBadgeClass}`}>{dayCount}天</span>
-                            {entry.variants.length > 1 && (
-                              <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">{entry.variants.length}个版本</span>
-                            )}
-                          </div>
+                          <span className="text-sm text-gray-900">{entry.base}</span>
+                          <button
+                            onClick={() => setExpandedBases((prev) => {
+                              const next = new Set(prev)
+                              next.has(entry.base) ? next.delete(entry.base) : next.add(entry.base)
+                              return next
+                            })}
+                            className="text-xs text-blue-500 hover:text-blue-700 flex-shrink-0"
+                          >
+                            {entry.variants.length}条
+                          </button>
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {entry.dates.map((d) => d.slice(5).replace('-', '/')).join(' · ')}
-                        </p>
-                        {entry.variants.length > 1 && (
-                          <p className="text-xs text-gray-300 mt-0.5 truncate">{entry.variants.join('、')}</p>
+                        {expanded && (
+                          <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                            {entry.variants.join('、')}
+                          </p>
                         )}
                       </div>
                     )
