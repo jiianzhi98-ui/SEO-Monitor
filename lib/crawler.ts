@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio'
+import * as iconv from 'iconv-lite'
 
 export interface PageEntry {
   title: string
@@ -27,18 +28,32 @@ const DOWNLOAD_KEYWORDS = [
   '老版本', '网页版', 'h5版', '不用登录', '离线版',
 ]
 
+// Fetch HTML with automatic charset detection (handles GBK/GB2312 sites)
+async function fetchHtmlDecoded(url: string, headers: Record<string, string>): Promise<{ ok: boolean; html: string; status?: number }> {
+  try {
+    const res = await fetch(url, { headers, next: { revalidate: 0 } })
+    if (!res.ok) return { ok: false, html: '', status: res.status }
+    const buffer = Buffer.from(await res.arrayBuffer())
+    // ASCII-safe peek to detect charset without corrupting data
+    const peek = buffer.subarray(0, 4096).toString('ascii')
+    const ctCharset = (res.headers.get('content-type') || '').match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase()
+    const metaCharset = peek.match(/<meta[^>]+charset=["']?\s*([^"'\s;>]+)/i)?.[1]?.toLowerCase()
+    const raw = ctCharset || metaCharset || 'utf-8'
+    const charset = (raw === 'gb2312' || raw === 'gb18030') ? 'gbk' : raw
+    return { ok: true, html: iconv.decode(buffer, charset) }
+  } catch {
+    return { ok: false, html: '' }
+  }
+}
+
 // Fetch HTML list page and extract titles/dates
 export async function fetchHtmlList(
   url: string,
   titleSelector: string,
   dateSelector: string
 ): Promise<PageEntry[]> {
-  const res = await fetch(url, {
-    headers: BROWSER_HEADERS,
-    next: { revalidate: 0 },
-  })
-  if (!res.ok) throw new Error(`Failed to fetch HTML list: ${res.status}`)
-  const html = await res.text()
+  const { ok, html, status } = await fetchHtmlDecoded(url, BROWSER_HEADERS)
+  if (!ok) throw new Error(`Failed to fetch HTML list: ${status}`)
   const $ = cheerio.load(html)
 
   const entries: PageEntry[] = []
@@ -107,9 +122,8 @@ export async function fetchHtmlListPages(
     while (currentUrl && page < maxPages) {
       page++
       try {
-        const res = await fetch(currentUrl, { headers: BROWSER_HEADERS, next: { revalidate: 0 } })
-        if (!res.ok) break
-        const html = await res.text()
+        const { ok, html } = await fetchHtmlDecoded(currentUrl, BROWSER_HEADERS)
+        if (!ok) break
         const $ = cheerio.load(html)
 
         const pageEntries: PageEntry[] = []
