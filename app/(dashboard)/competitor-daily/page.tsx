@@ -69,6 +69,12 @@ export default function CompetitorDailyPage() {
   const [cleanLoading, setCleanLoading] = useState(false)
   const [expandedBases, setExpandedBases] = useState<Set<string>>(new Set())
 
+  // 排名变动 modal
+  const [rankSite, setRankSite] = useState<CompetitorRow | null>(null)
+
+  // 不稳定词 modal
+  const [unstableSite, setUnstableSite] = useState<CompetitorRow | null>(null)
+
   function getMalaysiaDate(offsetDays = 0) {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
   }
@@ -265,6 +271,18 @@ export default function CompetitorDailyPage() {
                             >
                               更新词库
                             </button>
+                            <button
+                              onClick={() => setRankSite(row)}
+                              className="text-xs text-purple-500 hover:text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors"
+                            >
+                              排名变动
+                            </button>
+                            <button
+                              onClick={() => setUnstableSite(row)}
+                              className="text-xs text-orange-500 hover:text-orange-700 px-2 py-1 rounded hover:bg-orange-50 transition-colors"
+                            >
+                              不稳定词
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -381,6 +399,49 @@ export default function CompetitorDailyPage() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 排名变动 Modal */}
+      {rankSite && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">{rankSite.domain} · 排名变动</h3>
+                <p className="text-xs text-gray-400 mt-0.5">关键词排名变化追踪</p>
+              </div>
+              <button onClick={() => setRankSite(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center py-16 text-gray-400 text-sm">
+              功能开发中
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 不稳定词 Modal */}
+      {unstableSite && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">{unstableSite.domain} · 不稳定词</h3>
+                <p className="text-xs text-gray-400 mt-0.5">时有时无、排名波动较大的关键词</p>
+              </div>
+              <button onClick={() => setUnstableSite(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center py-16 text-gray-400 text-sm">
+              功能开发中
             </div>
           </div>
         </div>
