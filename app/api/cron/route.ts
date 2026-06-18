@@ -29,6 +29,17 @@ function getMalaysiaDate(offsetDays = 0): string {
   return new Date(ms).toISOString().slice(0, 10)
 }
 
+function parseContentDate(dateStr: string | undefined): string | null {
+  if (!dateStr) return null
+  const m = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+  try {
+    const d = new Date(dateStr)
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  } catch { /* ignore */ }
+  return null
+}
+
 function shouldCrawlToday(frequency: string, createdAt: string): boolean {
   const todayMY = getMalaysiaDate()
   const dayOfWeek = new Date(todayMY).getDay() // 0=Sun
@@ -74,27 +85,29 @@ export async function GET(request: Request) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
 
       try {
-        let rawTitles: string[] = []
+        type RawEntry = { title: string; content_date: string | null }
+        let rawEntries: RawEntry[] = []
 
         if (site.crawl_type === 'sitemap' && site.list_url) {
           const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
-          // Use yesterday as cutoff for daily — capture the previous calendar day's content
-          const cutoffStr = getMalaysiaDate(-(cutoffDays - 1 + 1)) // yesterday for daily, N days ago for others
+          const cutoffStr = getMalaysiaDate(-(cutoffDays - 1 + 1))
           const entries = await fetchSitemap(site.list_url)
           const recentEntries = entries.filter((e) => {
             if (!e.lastmod) return false
             return e.lastmod.slice(0, 10) >= cutoffStr
           })
-          rawTitles = recentEntries.map((e) => {
+          rawEntries = recentEntries.map((e) => {
             const parts = e.url.split('/').filter(Boolean)
             const slug = parts[parts.length - 1] || e.url
-            return decodeURIComponent(slug.replace(/[-_]/g, ' ').replace(/\.\w+$/, ''))
+            return {
+              title: decodeURIComponent(slug.replace(/[-_]/g, ' ').replace(/\.\w+$/, '')),
+              content_date: e.lastmod ? e.lastmod.slice(0, 10) : null,
+            }
           })
         } else if (site.crawl_type === 'html' && site.list_url && site.title_selector) {
           const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
           const htmlCutoff = getMalaysiaDate(-cutoffDays)
           const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
-          // Each URL may have its own selectors (newline-separated, same index)
           const urls = site.list_url.split('\n').map((u: string) => u.trim()).filter(Boolean)
           const titleSels = (site.title_selector || '').split('\n').map((s: string) => s.trim())
           const dateSels = (site.date_selector || '').split('\n').map((s: string) => s.trim())
@@ -104,18 +117,26 @@ export async function GET(request: Request) {
             dateSelector: dateSels[i] || dateSels[0] || '',
           }))
           const entries = await fetchHtmlListPages(sources, htmlCutoff, maxPg)
-          rawTitles = entries.map((e) => e.title)
+          rawEntries = entries.map((e) => ({
+            title: e.title,
+            content_date: parseContentDate(e.date),
+          }))
         } else if (site.crawl_type === 'rss' && site.list_url) {
           const entries = await fetchRss(site.list_url)
-          rawTitles = entries.map((e) => e.title)
+          rawEntries = entries.map((e) => ({
+            title: e.title,
+            content_date: parseContentDate(e.date),
+          }))
         }
 
-        const cleaned = rawTitles.map((t) =>
-          cleanTitle(t, site.enable_version_clean, site.version_suffixes || [])
-        )
-        const validKeywords = cleaned.filter((k) => k.length > 0)
+        const cleanedEntries = rawEntries
+          .map((e) => ({
+            keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
+            content_date: e.content_date,
+          }))
+          .filter((e) => e.keyword.length > 0)
 
-        if (validKeywords.length === 0) {
+        if (cleanedEntries.length === 0) {
           results.push({ site: site.domain, count: 0 })
           continue
         }
@@ -128,30 +149,31 @@ export async function GET(request: Request) {
           .gte('discovered_at', new Date(Date.now() - 7 * 86400000).toISOString())
 
         const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
-        const newKeywords = validKeywords.filter((k) => !existingSet.has(k))
+        const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
 
-        if (newKeywords.length === 0) {
+        if (newEntries.length === 0) {
           results.push({ site: site.domain, count: 0 })
           continue
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from('raw_keywords') as any).insert(
-          newKeywords.map((keyword) => ({
-            keyword,
+          newEntries.map((e) => ({
+            keyword: e.keyword,
             site_id: site.id,
             discovered_at: new Date().toISOString(),
+            content_date: e.content_date,
           }))
         )
 
         // stat_date = yesterday (we're recording yesterday's new content)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from('daily_stats') as any).upsert(
-          { site_id: site.id, stat_date: yesterday, new_count: newKeywords.length },
+          { site_id: site.id, stat_date: yesterday, new_count: newEntries.length },
           { onConflict: 'site_id,stat_date' }
         )
 
-        results.push({ site: site.domain, count: newKeywords.length })
+        results.push({ site: site.domain, count: newEntries.length })
       } catch (siteErr: unknown) {
         results.push({
           site: site.domain,

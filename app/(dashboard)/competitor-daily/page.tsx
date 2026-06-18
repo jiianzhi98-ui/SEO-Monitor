@@ -29,6 +29,7 @@ interface Keyword {
   keyword: string
   source_url: string | null
   discovered_at: string
+  content_date: string | null
 }
 
 interface CleanedEntry {
@@ -133,7 +134,7 @@ export default function CompetitorDailyPage() {
       const { start, end } = utcRangeForMalaysiaDate(date)
       const { data, error: err } = await supabase
         .from('raw_keywords')
-        .select('keyword, source_url, discovered_at')
+        .select('keyword, source_url, discovered_at, content_date')
         .eq('site_id', site.site_id)
         .gte('discovered_at', start)
         .lte('discovered_at', end)
@@ -330,7 +331,7 @@ export default function CompetitorDailyPage() {
                     <li key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50">
                       <span className="text-sm text-gray-900">{kw.keyword}</span>
                       <span className="text-xs text-gray-400 flex-shrink-0">
-                        {kwDate.slice(5).replace('-', '/')}
+                        {(kw.content_date ?? kwDate).slice(5).replace('-', '/')}
                       </span>
                     </li>
                   ))}
