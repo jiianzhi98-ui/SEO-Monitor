@@ -66,7 +66,9 @@ export async function fetchHtmlList(
 
     let date: string | undefined
     if (dateSelector) {
-      const dateEl = $(el).closest('li, article, .item, tr').find(dateSelector).first()
+      let container = $(el).closest('li, article, .item, tr')
+      if (!container.length) container = $(el).closest('div').parent()
+      const dateEl = container.find(dateSelector).first()
       if (dateEl.length) date = dateEl.text().trim()
     }
 
@@ -133,7 +135,9 @@ export async function fetchHtmlListPages(
           const fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl!).href
           let date: string | undefined
           if (source.dateSelector) {
-            const dateEl = $(el).closest('li, article, .item, tr').find(source.dateSelector).first()
+            let container = $(el).closest('li, article, .item, tr')
+            if (!container.length) container = $(el).closest('div').parent()
+            const dateEl = container.find(source.dateSelector).first()
             if (dateEl.length) date = dateEl.text().trim()
           }
           if (title) pageEntries.push({ title, date, url: fullUrl })
