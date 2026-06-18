@@ -151,25 +151,6 @@ export async function GET(request: Request) {
         )
 
         results.push({ site: site.domain, count: newEntries.length })
-
-        // Fetch rank changes (涨入 + 跌出) for yesterday, save to rank_changes
-        try {
-          const [rankupEntries, rankdownEntries] = await Promise.all([
-            fetchRankChanges(site.domain, today, 'rankup'),
-            fetchRankChanges(site.domain, today, 'rankdown'),
-          ])
-          const rankRows = [
-            ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
-            ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
-          ]
-          if (rankRows.length > 0) {
-            await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('rank_changes') as any).insert(rankRows)
-          }
-        } catch {
-          // rank fetch failure does not affect keyword results
-        }
       } catch (siteErr: unknown) {
         results.push({
           site: site.domain,
@@ -181,6 +162,28 @@ export async function GET(request: Request) {
 
     // Aggregate hot keywords from this run
     await aggregateHotKeywords(supabase, crawlStartedAt)
+
+    // Fetch rank changes for each site (always runs, independent of keyword count)
+    for (const site of sites) {
+      if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
+      try {
+        const [rankupEntries, rankdownEntries] = await Promise.all([
+          fetchRankChanges(site.domain, today, 'rankup'),
+          fetchRankChanges(site.domain, today, 'rankdown'),
+        ])
+        const rankRows = [
+          ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
+          ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
+        ]
+        if (rankRows.length > 0) {
+          await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('rank_changes') as any).insert(rankRows)
+        }
+      } catch {
+        // rank fetch failure does not block other processing
+      }
+    }
 
     // Fetch weight + index snapshot from aizhan (today's reading)
     for (const site of sites) {
