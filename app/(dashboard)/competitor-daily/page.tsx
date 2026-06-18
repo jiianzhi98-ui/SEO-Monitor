@@ -278,7 +278,7 @@ export default function CompetitorDailyPage() {
 
       const results: UnstableEntry[] = []
       for (const [keyword, { upDays, downDays, volumes }] of Array.from(kwMap.entries())) {
-        if (upDays.size > 0 && downDays.size > 0) {
+        if (upDays.size > 0 && downDays.size > 0 && upDays.size + downDays.size >= 3) {
           const volume = volumes.length > 0 ? Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length) : 0
           results.push({ keyword, volume, upDays: upDays.size, downDays: downDays.size, totalDays: upDays.size + downDays.size })
         }
