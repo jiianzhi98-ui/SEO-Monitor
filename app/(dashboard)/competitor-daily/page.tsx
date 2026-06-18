@@ -73,16 +73,6 @@ export default function CompetitorDailyPage() {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
   }
 
-  function utcRangeForMalaysiaDate(date: string) {
-    // Cron labels stat_date = Malaysia yesterday, but keywords are inserted on Malaysia today.
-    // Malaysia "today" = UTC [date 16:00, date+1 15:59:59].
-    const startMs = new Date(date + 'T16:00:00.000Z').getTime()
-    return {
-      start: new Date(startMs).toISOString(),
-      end: new Date(startMs + 86400000 - 1).toISOString(),
-    }
-  }
-
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
@@ -90,8 +80,8 @@ export default function CompetitorDailyPage() {
     setError(null)
     try {
       const supabase = getBrowserClient()
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-      const d7ago = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+      const yesterday = getMalaysiaDate(-1)
+      const d7ago = getMalaysiaDate(-7)
 
       const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level').eq('is_enabled', true),
@@ -129,14 +119,12 @@ export default function CompetitorDailyPage() {
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      const { start, end } = utcRangeForMalaysiaDate(date)
       const { data, error: err } = await supabase
         .from('raw_keywords')
         .select('keyword, source_url, discovered_at, content_date')
         .eq('site_id', site.site_id)
-        .gte('discovered_at', start)
-        .lte('discovered_at', end)
-        .order('discovered_at', { ascending: false })
+        .eq('content_date', date)
+        .order('keyword', { ascending: true })
         .limit(500)
       if (err) throw err
       setSiteKeywords(((data || []) as Keyword[]).filter((kw) => !kw.keyword.includes('电脑版')))
