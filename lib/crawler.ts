@@ -269,6 +269,7 @@ export async function fetchRankChanges(
         const pageEntries = await fetchRankPage(domain, type, rankPos, date, page)
         if (pageEntries.length === 0) break
         entries.push(...pageEntries.filter((e) => e.volume > 0))
+        if (page < 15) await new Promise((r) => setTimeout(r, 500))
       }
       return entries
     })
