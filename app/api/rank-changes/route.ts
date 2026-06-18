@@ -59,8 +59,8 @@ export async function GET(req: Request) {
       const entries: { keyword: string; volume: number }[] = []
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchOnePage(domain, type, rankPos, date, page)
-        if (pageEntries.length === 0) break
-        entries.push(...pageEntries)
+        if (pageEntries.length === 0) break  // truly empty page = no more data
+        entries.push(...pageEntries.filter((e) => e.volume > 0))
       }
       return entries
     })
@@ -68,11 +68,11 @@ export async function GET(req: Request) {
 
   const all = allResults.flat()
 
-  // Deduplicate, filter 0 volume, sort by volume desc
+  // Deduplicate and sort by volume desc
   const seen = new Set<string>()
   const filtered = all
     .filter((e) => {
-      if (e.volume === 0 || seen.has(e.keyword)) return false
+      if (seen.has(e.keyword)) return false
       seen.add(e.keyword)
       return true
     })
