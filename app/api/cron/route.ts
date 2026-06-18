@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 import {
-  fetchSitemap,
   fetchHtmlListPages,
-  fetchRss,
   cleanTitle,
   fetchBaiduSuggestion,
   fetchAizhanData,
@@ -13,7 +11,7 @@ import {
 interface SiteRecord {
   id: string
   domain: string
-  crawl_type: 'sitemap' | 'html' | 'rss'
+  crawl_type: 'html'
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
   list_url: string | null
   title_selector: string | null
@@ -88,23 +86,7 @@ export async function GET(request: Request) {
         type RawEntry = { title: string; content_date: string | null }
         let rawEntries: RawEntry[] = []
 
-        if (site.crawl_type === 'sitemap' && site.list_url) {
-          const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
-          const cutoffStr = getMalaysiaDate(-(cutoffDays - 1 + 1))
-          const entries = await fetchSitemap(site.list_url)
-          const recentEntries = entries.filter((e) => {
-            if (!e.lastmod) return false
-            return e.lastmod.slice(0, 10) >= cutoffStr
-          })
-          rawEntries = recentEntries.map((e) => {
-            const parts = e.url.split('/').filter(Boolean)
-            const slug = parts[parts.length - 1] || e.url
-            return {
-              title: decodeURIComponent(slug.replace(/[-_]/g, ' ').replace(/\.\w+$/, '')),
-              content_date: e.lastmod ? e.lastmod.slice(0, 10) : null,
-            }
-          })
-        } else if (site.crawl_type === 'html' && site.list_url && site.title_selector) {
+        if (site.list_url && site.title_selector) {
           const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
           const htmlCutoff = getMalaysiaDate(-cutoffDays)
           const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
@@ -117,12 +99,6 @@ export async function GET(request: Request) {
             dateSelector: dateSels[i] || dateSels[0] || '',
           }))
           const entries = await fetchHtmlListPages(sources, htmlCutoff, maxPg)
-          rawEntries = entries.map((e) => ({
-            title: e.title,
-            content_date: parseContentDate(e.date),
-          }))
-        } else if (site.crawl_type === 'rss' && site.list_url) {
-          const entries = await fetchRss(site.list_url)
           rawEntries = entries.map((e) => ({
             title: e.title,
             content_date: parseContentDate(e.date),

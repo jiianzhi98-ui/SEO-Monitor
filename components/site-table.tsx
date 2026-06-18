@@ -5,7 +5,7 @@ interface Site {
   domain: string
   name: string
   category: 'large' | 'medium' | 'small'
-  crawl_type: 'sitemap' | 'html' | 'rss'
+  crawl_type: 'html'
   list_url: string
   title_selector: string
   date_selector: string

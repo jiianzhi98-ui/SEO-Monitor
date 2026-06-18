@@ -1,10 +1,4 @@
 import * as cheerio from 'cheerio'
-import { parseStringPromise } from 'xml2js'
-
-export interface SitemapEntry {
-  url: string
-  lastmod?: string
-}
 
 export interface PageEntry {
   title: string
@@ -32,44 +26,6 @@ const DOWNLOAD_KEYWORDS = [
   '电脑版', 'pc版', '破解版', '免费版', '中文版', '汉化版',
   '老版本', '网页版', 'h5版', '不用登录', '离线版',
 ]
-
-// Fetch and parse sitemap.xml
-export async function fetchSitemap(url: string): Promise<SitemapEntry[]> {
-  const res = await fetch(url, {
-    headers: BROWSER_HEADERS,
-    next: { revalidate: 0 },
-  })
-  if (!res.ok) throw new Error(`Failed to fetch sitemap: ${res.status}`)
-  const xml = await res.text()
-  const parsed = await parseStringPromise(xml, { explicitArray: false })
-
-  const entries: SitemapEntry[] = []
-
-  // Handle sitemap index
-  if (parsed.sitemapindex?.sitemap) {
-    const sitemaps = Array.isArray(parsed.sitemapindex.sitemap)
-      ? parsed.sitemapindex.sitemap
-      : [parsed.sitemapindex.sitemap]
-    for (const sm of sitemaps.slice(0, 3)) {
-      try {
-        const sub = await fetchSitemap(sm.loc)
-        entries.push(...sub)
-      } catch {
-        // skip broken sub-sitemaps
-      }
-    }
-    return entries
-  }
-
-  // Handle regular sitemap
-  const urls = parsed.urlset?.url
-  if (!urls) return entries
-  const urlArr = Array.isArray(urls) ? urls : [urls]
-  for (const u of urlArr) {
-    entries.push({ url: u.loc, lastmod: u.lastmod })
-  }
-  return entries
-}
 
 // Fetch HTML list page and extract titles/dates
 export async function fetchHtmlList(
@@ -186,26 +142,6 @@ export async function fetchHtmlListPages(
     const d = parseEntryDateStr(e.date)
     return !d || d >= cutoffDateStr
   })
-}
-
-// Fetch and parse RSS feed
-export async function fetchRss(url: string): Promise<PageEntry[]> {
-  const res = await fetch(url, {
-    headers: BROWSER_HEADERS,
-    next: { revalidate: 0 },
-  })
-  if (!res.ok) throw new Error(`Failed to fetch RSS: ${res.status}`)
-  const xml = await res.text()
-  const parsed = await parseStringPromise(xml, { explicitArray: false })
-
-  const items = parsed?.rss?.channel?.item || parsed?.feed?.entry || []
-  const itemArr = Array.isArray(items) ? items : [items]
-
-  return itemArr.map((item: Record<string, unknown>) => ({
-    title: String(item.title || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/, '$1').trim(),
-    date: String(item.pubDate || item.updated || item['dc:date'] || '').trim() || undefined,
-    url: String(item.link || item.id || '').trim(),
-  }))
 }
 
 // Clean title by removing version numbers and optional suffixes

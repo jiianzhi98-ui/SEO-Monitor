@@ -7,7 +7,7 @@ interface Site {
   domain: string
   name: string
   category: 'large' | 'medium' | 'small'
-  crawl_type: 'sitemap' | 'html' | 'rss'
+  crawl_type: 'html'
   list_url: string
   title_selector: string
   date_selector: string
@@ -38,7 +38,7 @@ const defaultForm: Site = {
   domain: '',
   name: '',
   category: 'medium',
-  crawl_type: 'sitemap',
+  crawl_type: 'html',
   list_url: '',
   title_selector: '',
   date_selector: '',
@@ -126,15 +126,15 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
     setPreviewData(null)
     setPreviewError(null)
     try {
-      const src = form.crawl_type === 'html' ? htmlSources[0] : null
+      const src = htmlSources[0]
       const res = await fetch('/api/crawl/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: src ? src.url : (form.list_url || form.domain),
-          type: form.crawl_type,
-          titleSelector: src ? src.titleSelector : form.title_selector,
-          dateSelector: src ? src.dateSelector : form.date_selector,
+          url: src.url,
+          type: 'html',
+          titleSelector: src.titleSelector,
+          dateSelector: src.dateSelector,
           enableVersionClean: form.enable_version_clean,
           suffixes: form.version_suffixes,
         }),
@@ -210,49 +210,23 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
             </div>
           </div>
 
-          {/* Category & Crawl Type */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
-              <select
-                value={form.category}
-                onChange={(e) => update('category', e.target.value as Site['category'])}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="large">大站</option>
-                <option value="medium">中站</option>
-                <option value="small">小站</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">抓取类型</label>
-              <select
-                value={form.crawl_type}
-                onChange={(e) => update('crawl_type', e.target.value as Site['crawl_type'])}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="sitemap">Sitemap</option>
-                <option value="html">HTML列表页</option>
-                <option value="rss">RSS</option>
-              </select>
-            </div>
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
+            <select
+              value={form.category}
+              onChange={(e) => update('category', e.target.value as Site['category'])}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="large">大站</option>
+              <option value="medium">中站</option>
+              <option value="small">小站</option>
+            </select>
           </div>
 
-          {/* List URL — single for sitemap/rss, dual-source for html */}
-          {form.crawl_type !== 'html' ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">列表页URL</label>
-              <input
-                type="url"
-                value={form.list_url}
-                onChange={(e) => update('list_url', e.target.value)}
-                placeholder="https://example.com/sitemap.xml"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {htmlSources.map((src, idx) => (
+          {/* HTML sources */}
+          <div className="space-y-3">
+            {htmlSources.map((src, idx) => (
                 <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">来源 {idx + 1}</span>
@@ -306,7 +280,6 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                 </button>
               )}
             </div>
-          )}
 
           {/* Crawl Frequency */}
           <div>
