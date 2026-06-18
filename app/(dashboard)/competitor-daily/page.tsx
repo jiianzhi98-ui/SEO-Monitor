@@ -88,6 +88,7 @@ export default function CompetitorDailyPage() {
   const [rankDate, setRankDate] = useState('')
   const [rankData, setRankData] = useState<RankEntry[]>([])
   const [rankLoading, setRankLoading] = useState(false)
+  const [rankUnstableSet, setRankUnstableSet] = useState<Set<string>>(new Set())
 
   // 不稳定词 modal
   const [unstableSite, setUnstableSite] = useState<CompetitorRow | null>(null)
@@ -243,12 +244,46 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  function openRankModal(site: CompetitorRow) {
+  async function openRankModal(site: CompetitorRow) {
     const today = getMalaysiaDate(0)
     setRankType('rankup')
     setRankDate(today)
     setRankSite(site)
     fetchRankData(site, 'rankup', today)
+
+    // Compute unstable keyword set from last 30 days
+    try {
+      const supabase = getBrowserClient()
+      const since = getMalaysiaDate(-30)
+      const { data } = await supabase
+        .from('rank_changes')
+        .select('keyword, type, stat_date')
+        .eq('site_id', site.site_id)
+        .gte('stat_date', since)
+
+      type RawRow = { keyword: string; type: string; stat_date: string }
+      const rows = (data || []) as RawRow[]
+      const upSet = new Map<string, Set<string>>()
+      const downSet = new Map<string, Set<string>>()
+      for (const row of rows) {
+        if (row.type === 'rankup') {
+          if (!upSet.has(row.keyword)) upSet.set(row.keyword, new Set())
+          upSet.get(row.keyword)!.add(row.stat_date)
+        } else {
+          if (!downSet.has(row.keyword)) downSet.set(row.keyword, new Set())
+          downSet.get(row.keyword)!.add(row.stat_date)
+        }
+      }
+      const unstable = new Set<string>()
+      for (const kw of Array.from(upSet.keys())) {
+        const up = upSet.get(kw)!.size
+        const down = downSet.get(kw)?.size ?? 0
+        if (down > 0 && up + down >= 3) unstable.add(kw)
+      }
+      setRankUnstableSet(unstable)
+    } catch {
+      setRankUnstableSet(new Set())
+    }
   }
 
   async function openUnstableModal(site: CompetitorRow) {
@@ -564,12 +599,17 @@ export default function CompetitorDailyPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {rankData.map((entry, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-5 py-2 text-gray-900">{entry.keyword}</td>
-                        <td className="px-5 py-2 text-right text-gray-600">{entry.volume.toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {rankData.map((entry, i) => {
+                      const isUnstable = rankUnstableSet.has(entry.keyword)
+                      return (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className={`px-5 py-2 ${isUnstable ? 'text-red-500 font-medium' : 'text-gray-900'}`}>
+                            {entry.keyword}
+                          </td>
+                          <td className="px-5 py-2 text-right text-gray-600">{entry.volume.toLocaleString()}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
