@@ -38,6 +38,11 @@ interface CleanedEntry {
   variants: string[]
 }
 
+interface RankEntry {
+  keyword: string
+  volume: number
+}
+
 const statusConfig = {
   normal: { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '偏低', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
@@ -71,6 +76,10 @@ export default function CompetitorDailyPage() {
 
   // 排名变动 modal
   const [rankSite, setRankSite] = useState<CompetitorRow | null>(null)
+  const [rankType, setRankType] = useState<'rankup' | 'rankdown'>('rankup')
+  const [rankDate, setRankDate] = useState('')
+  const [rankData, setRankData] = useState<RankEntry[]>([])
+  const [rankLoading, setRankLoading] = useState(false)
 
   // 不稳定词 modal
   const [unstableSite, setUnstableSite] = useState<CompetitorRow | null>(null)
@@ -204,6 +213,29 @@ export default function CompetitorDailyPage() {
     }
   }
 
+  async function fetchRankData(site: CompetitorRow, type: 'rankup' | 'rankdown', date: string) {
+    setRankLoading(true)
+    setRankData([])
+    try {
+      const res = await fetch(`/api/rank-changes?domain=${encodeURIComponent(site.domain)}&type=${type}&date=${date}`)
+      if (!res.ok) throw new Error('获取失败')
+      const data: RankEntry[] = await res.json()
+      setRankData(data)
+    } catch {
+      setRankData([])
+    } finally {
+      setRankLoading(false)
+    }
+  }
+
+  function openRankModal(site: CompetitorRow) {
+    const today = getMalaysiaDate(0)
+    setRankType('rankup')
+    setRankDate(today)
+    setRankSite(site)
+    fetchRankData(site, 'rankup', today)
+  }
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -272,7 +304,7 @@ export default function CompetitorDailyPage() {
                               更新词库
                             </button>
                             <button
-                              onClick={() => setRankSite(row)}
+                              onClick={() => openRankModal(row)}
                               className="text-xs text-purple-500 hover:text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors"
                             >
                               排名变动
@@ -406,11 +438,21 @@ export default function CompetitorDailyPage() {
       {/* 排名变动 Modal */}
       {rankSite && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
+              <div className="flex items-center gap-3">
                 <h3 className="font-semibold text-gray-900">{rankSite.domain} · 排名变动</h3>
-                <p className="text-xs text-gray-400 mt-0.5">关键词排名变化追踪</p>
+                <input
+                  type="date"
+                  value={rankDate}
+                  max={getMalaysiaDate(0)}
+                  onChange={(e) => {
+                    setRankDate(e.target.value)
+                    fetchRankData(rankSite, rankType, e.target.value)
+                  }}
+                  className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
               </div>
               <button onClick={() => setRankSite(null)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -418,8 +460,63 @@ export default function CompetitorDailyPage() {
                 </svg>
               </button>
             </div>
-            <div className="flex-1 flex items-center justify-center py-16 text-gray-400 text-sm">
-              功能开发中
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 px-5">
+              {(['rankup', 'rankdown'] as const).map((t) => {
+                const isActive = rankType === t
+                const label = t === 'rankup' ? '涨入' : '跌出'
+                const activeClass = t === 'rankup'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-red-500 text-red-600'
+                return (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setRankType(t)
+                      fetchRankData(rankSite, t, rankDate)
+                    }}
+                    className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${
+                      isActive ? activeClass : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {label}
+                    {isActive && !rankLoading && rankData.length > 0 && (
+                      <span className="ml-1.5 text-xs text-gray-400">({rankData.length})</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {rankLoading ? (
+                <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="text-sm">抓取中，请稍候...</span>
+                </div>
+              ) : rankData.length === 0 ? (
+                <p className="text-center text-gray-400 py-16 text-sm">无数据</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-5 py-2.5 text-left font-medium text-gray-500">关键词</th>
+                      <th className="px-5 py-2.5 text-right font-medium text-gray-500">搜索量</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {rankData.map((entry, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-5 py-2 text-gray-900">{entry.keyword}</td>
+                        <td className="px-5 py-2 text-right text-gray-600">{entry.volume.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
