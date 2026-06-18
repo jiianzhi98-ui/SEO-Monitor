@@ -273,12 +273,7 @@ export async function fetchRankChanges(
       return entries
     })
   )
-  const seen = new Set<string>()
-  return allResults.flat().filter((e) => {
-    if (seen.has(e.keyword)) return false
-    seen.add(e.keyword)
-    return true
-  })
+  return allResults.flat()
 }
 
 // @deprecated use fetchAizhanData instead

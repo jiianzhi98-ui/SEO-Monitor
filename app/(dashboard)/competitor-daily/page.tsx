@@ -234,11 +234,11 @@ export default function CompetitorDailyPage() {
   }
 
   function openRankModal(site: CompetitorRow) {
-    const yesterday = getMalaysiaDate(-1)
+    const today = getMalaysiaDate(0)
     setRankType('rankup')
-    setRankDate(yesterday)
+    setRankDate(today)
     setRankSite(site)
-    fetchRankData(site, 'rankup', yesterday)
+    fetchRankData(site, 'rankup', today)
   }
 
   return (

@@ -155,15 +155,15 @@ export async function GET(request: Request) {
         // Fetch rank changes (涨入 + 跌出) for yesterday, save to rank_changes
         try {
           const [rankupEntries, rankdownEntries] = await Promise.all([
-            fetchRankChanges(site.domain, yesterday, 'rankup'),
-            fetchRankChanges(site.domain, yesterday, 'rankdown'),
+            fetchRankChanges(site.domain, today, 'rankup'),
+            fetchRankChanges(site.domain, today, 'rankdown'),
           ])
           const rankRows = [
-            ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: yesterday, type: 'rankup', keyword: e.keyword, volume: e.volume })),
-            ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: yesterday, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
+            ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
+            ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
           ]
           if (rankRows.length > 0) {
-            await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', yesterday)
+            await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase.from('rank_changes') as any).insert(rankRows)
           }
