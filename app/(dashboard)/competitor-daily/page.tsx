@@ -43,6 +43,14 @@ interface RankEntry {
   volume: number
 }
 
+interface UnstableEntry {
+  keyword: string
+  volume: number
+  upDays: number
+  downDays: number
+  totalDays: number
+}
+
 const statusConfig = {
   normal: { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '偏低', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
@@ -83,6 +91,8 @@ export default function CompetitorDailyPage() {
 
   // 不稳定词 modal
   const [unstableSite, setUnstableSite] = useState<CompetitorRow | null>(null)
+  const [unstableData, setUnstableData] = useState<UnstableEntry[]>([])
+  const [unstableLoading, setUnstableLoading] = useState(false)
 
   function getMalaysiaDate(offsetDays = 0) {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
@@ -241,6 +251,47 @@ export default function CompetitorDailyPage() {
     fetchRankData(site, 'rankup', today)
   }
 
+  async function openUnstableModal(site: CompetitorRow) {
+    setUnstableSite(site)
+    setUnstableLoading(true)
+    setUnstableData([])
+    try {
+      const supabase = getBrowserClient()
+      const since = getMalaysiaDate(-30)
+      const { data } = await supabase
+        .from('rank_changes')
+        .select('keyword, volume, type, stat_date')
+        .eq('site_id', site.site_id)
+        .gte('stat_date', since)
+
+      type RawRow = { keyword: string; volume: number; type: string; stat_date: string }
+      const rows = (data || []) as RawRow[]
+
+      const kwMap = new Map<string, { upDays: Set<string>; downDays: Set<string>; volumes: number[] }>()
+      for (const row of rows) {
+        if (!kwMap.has(row.keyword)) kwMap.set(row.keyword, { upDays: new Set(), downDays: new Set(), volumes: [] })
+        const entry = kwMap.get(row.keyword)!
+        if (row.type === 'rankup') entry.upDays.add(row.stat_date)
+        else entry.downDays.add(row.stat_date)
+        if (row.volume > 0) entry.volumes.push(row.volume)
+      }
+
+      const results: UnstableEntry[] = []
+      for (const [keyword, { upDays, downDays, volumes }] of kwMap) {
+        if (upDays.size > 0 && downDays.size > 0) {
+          const volume = volumes.length > 0 ? Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length) : 0
+          results.push({ keyword, volume, upDays: upDays.size, downDays: downDays.size, totalDays: upDays.size + downDays.size })
+        }
+      }
+
+      setUnstableData(results.sort((a, b) => b.totalDays - a.totalDays))
+    } catch {
+      setUnstableData([])
+    } finally {
+      setUnstableLoading(false)
+    }
+  }
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -315,7 +366,7 @@ export default function CompetitorDailyPage() {
                               排名变动
                             </button>
                             <button
-                              onClick={() => setUnstableSite(row)}
+                              onClick={() => openUnstableModal(row)}
                               className="text-xs text-orange-500 hover:text-orange-700 px-2 py-1 rounded hover:bg-orange-50 transition-colors"
                             >
                               不稳定词
@@ -530,11 +581,11 @@ export default function CompetitorDailyPage() {
       {/* 不稳定词 Modal */}
       {unstableSite && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div>
                 <h3 className="font-semibold text-gray-900">{unstableSite.domain} · 不稳定词</h3>
-                <p className="text-xs text-gray-400 mt-0.5">时有时无、排名波动较大的关键词</p>
+                <p className="text-xs text-gray-400 mt-0.5">近30天在涨入和跌出均出现过的词，按波动天数排序</p>
               </div>
               <button onClick={() => setUnstableSite(null)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -542,8 +593,41 @@ export default function CompetitorDailyPage() {
                 </svg>
               </button>
             </div>
-            <div className="flex-1 flex items-center justify-center py-16 text-gray-400 text-sm">
-              功能开发中
+            <div className="flex-1 overflow-y-auto">
+              {unstableLoading ? (
+                <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="text-sm">加载中...</span>
+                </div>
+              ) : unstableData.length === 0 ? (
+                <p className="text-center text-gray-400 py-16 text-sm">暂无不稳定词（需积累多天数据）</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-5 py-2.5 text-left font-medium text-gray-500">关键词</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-gray-500">搜索量</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-green-600">涨入天</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-red-500">跌出天</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-gray-500">波动天</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {unstableData.map((entry, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-5 py-2 text-gray-900">{entry.keyword}</td>
+                        <td className="px-4 py-2 text-right text-gray-600">{entry.volume > 0 ? entry.volume.toLocaleString() : '-'}</td>
+                        <td className="px-4 py-2 text-right text-green-600 font-medium">{entry.upDays}</td>
+                        <td className="px-4 py-2 text-right text-red-500 font-medium">{entry.downDays}</td>
+                        <td className="px-4 py-2 text-right text-gray-700 font-bold">{entry.totalDays}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
