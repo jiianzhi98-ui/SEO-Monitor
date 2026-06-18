@@ -8,7 +8,6 @@ interface CompetitorRow {
   domain: string
   name: string
   focus_level: number
-  today: number
   yesterday: number
   avg7d: number
   status: 'normal' | 'warning' | 'danger'
@@ -91,7 +90,6 @@ export default function CompetitorDailyPage() {
     setError(null)
     try {
       const supabase = getBrowserClient()
-      const today = new Date().toISOString().slice(0, 10)
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
       const d7ago = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
@@ -104,23 +102,21 @@ export default function CompetitorDailyPage() {
 
       const result: CompetitorRow[] = (sites || []).map((site) => {
         const siteStats = stats.filter((s) => s.site_id === site.id)
-        const todayStat = siteStats.find((s) => s.stat_date === today)
         const yesterdayStat = siteStats.find((s) => s.stat_date === yesterday)
         const avg7d = siteStats.length > 0
           ? Math.round(siteStats.reduce((sum, s) => sum + s.new_count, 0) / siteStats.length)
           : 0
-        const todayVal = todayStat?.new_count ?? 0
         const yesterdayVal = yesterdayStat?.new_count ?? 0
         let status: 'normal' | 'warning' | 'danger' = 'normal'
         if (avg7d > 0) {
-          const ratio = todayVal / avg7d
+          const ratio = yesterdayVal / avg7d
           if (ratio < 0.3) status = 'danger'
           else if (ratio < 0.6) status = 'warning'
         }
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, today: todayVal, yesterday: yesterdayVal, avg7d, status }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status }
       })
 
-      setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.today - a.today))
+      setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.yesterday - a.yesterday))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -240,7 +236,6 @@ export default function CompetitorDailyPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th className="table-th text-right">今日新增</th>
                   <th className="table-th text-right">昨日新增</th>
                   <th className="table-th text-right">7日均值</th>
                   <th className="table-th text-center">状态</th>
@@ -250,7 +245,7 @@ export default function CompetitorDailyPage() {
               <tbody className="divide-y divide-gray-100">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td>
+                    <td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td>
                   </tr>
                 ) : (
                   rows.map((row) => {
@@ -263,8 +258,7 @@ export default function CompetitorDailyPage() {
                             <p className="text-xs text-gray-400">{row.name}</p>
                           </div>
                         </td>
-                        <td className="table-td text-right font-bold text-gray-900">{row.today.toLocaleString()}</td>
-                        <td className="table-td text-right text-gray-600">{row.yesterday.toLocaleString()}</td>
+                        <td className="table-td text-right font-bold text-gray-900">{row.yesterday.toLocaleString()}</td>
                         <td className="table-td text-right text-gray-600">{row.avg7d.toLocaleString()}</td>
                         <td className="table-td text-center">
                           <span className={s.className}>{s.label}</span>

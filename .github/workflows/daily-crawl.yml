@@ -4,22 +4,58 @@ on:
   schedule:
     # 21:00 UTC = 05:00 Malaysia (UTC+8), random delay pushes execution to 05:00~08:00
     - cron: '0 21 * * *'
-  workflow_dispatch: # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      staggered:
+        description: '分批抓取（每个站点间隔等待）'
+        type: boolean
+        default: false
+      delay_minutes:
+        description: '每个站点之间的等待分钟数（仅分批模式）'
+        type: number
+        default: 10
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
-      - name: Random delay (0 to 3 hours)
+      - name: Random delay (scheduled only, 0 to 3 hours)
+        if: github.event_name == 'schedule'
         run: |
           DELAY=$((RANDOM % 10800))
           echo "Sleeping ${DELAY} seconds before crawl..."
           sleep $DELAY
 
-      - name: Trigger crawl
+      - name: Trigger crawl (all sites at once)
+        if: github.event.inputs.staggered != 'true'
         run: |
           curl -f -s \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://seo-monitor-iota.vercel.app/api/cron \
             | jq .
+
+      - name: Trigger crawl (staggered, one site at a time)
+        if: github.event.inputs.staggered == 'true'
+        run: |
+          DELAY_SECONDS=$(( ${{ github.event.inputs.delay_minutes || 10 }} * 60 ))
+          BASE_URL="https://seo-monitor-iota.vercel.app"
+
+          echo "Fetching site list..."
+          DOMAINS=$(curl -sf "$BASE_URL/api/sites/domains" | jq -r '.[]')
+
+          first=true
+          for domain in $DOMAINS; do
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo "Waiting ${DELAY_SECONDS}s before next site..."
+              sleep $DELAY_SECONDS
+            fi
+            echo "=== Crawling $domain ==="
+            curl -f -s \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "$BASE_URL/api/cron?site=$domain" \
+              | jq .
+          done
+          echo "=== All sites crawled ==="
