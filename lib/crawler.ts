@@ -230,18 +230,30 @@ async function fetchRankPage(
   type: string,
   rankPos: number,
   date: string,
-  page: number
+  page: number,
+  cookie = ''
 ): Promise<{ keyword: string; volume: number }[]> {
   const suffix = page === 1 ? '' : `${page}/`
   const url = `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${date}/${suffix}`
   try {
+    const headers: Record<string, string> = { ...RANK_HEADERS }
+    if (cookie) headers['Cookie'] = cookie
+
     const res = await fetch(url, {
-      headers: RANK_HEADERS,
+      headers,
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 0 },
     })
     if (!res.ok) return []
     const html = await res.text()
+
+    // Detect anti-bot JS challenge: sets a cookie and redirects
+    const cookieMatch = html.match(/\.cookie\s*=\s*"([^"]+)"/)
+    if (cookieMatch && !cookie) {
+      const challengeCookie = cookieMatch[1].split(';')[0]
+      return fetchRankPage(domain, type, rankPos, date, page, challengeCookie)
+    }
+
     const $ = cheerio.load(html)
     const results: { keyword: string; volume: number }[] = []
     $('tbody tr').each((_, tr) => {
