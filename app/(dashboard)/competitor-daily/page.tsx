@@ -11,6 +11,7 @@ interface CompetitorRow {
   yesterday: number
   avg7d: number
   status: 'normal' | 'warning' | 'danger'
+  hasHtml: boolean
 }
 
 interface SiteRow {
@@ -18,6 +19,7 @@ interface SiteRow {
   domain: string
   name: string
   focus_level: number
+  list_url: string | null
 }
 
 interface StatRow {
@@ -110,7 +112,7 @@ export default function CompetitorDailyPage() {
       const d7ago = getMalaysiaDate(-7)
 
       const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level, list_url').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
@@ -129,7 +131,7 @@ export default function CompetitorDailyPage() {
           if (ratio < 0.3) status = 'danger'
           else if (ratio < 0.6) status = 'warning'
         }
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url }
       })
 
       setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.yesterday - a.yesterday))
@@ -375,7 +377,7 @@ export default function CompetitorDailyPage() {
                             <p className="text-xs text-gray-400">{row.name}</p>
                           </div>
                         </td>
-                        <td className="table-td text-right font-bold text-gray-900">{row.yesterday.toLocaleString()}</td>
+                        <td className="table-td text-right font-bold text-green-600">{row.yesterday.toLocaleString()}</td>
                         <td className="table-td text-right text-gray-600">{row.avg7d.toLocaleString()}</td>
                         <td className="table-td text-center">
                           <span className={s.className}>{s.label}</span>
@@ -383,14 +385,16 @@ export default function CompetitorDailyPage() {
                         <td className="table-td text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => viewYesterdayKeywords(row)}
-                              className="text-xs text-gray-500 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                              onClick={() => row.hasHtml && viewYesterdayKeywords(row)}
+                              disabled={!row.hasHtml}
+                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasHtml ? 'text-gray-500 hover:text-green-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
                             >
                               昨日新词
                             </button>
                             <button
-                              onClick={() => viewCleanedKeywords(row)}
-                              className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                              onClick={() => row.hasHtml && viewCleanedKeywords(row)}
+                              disabled={!row.hasHtml}
+                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasHtml ? 'text-blue-500 hover:text-blue-700 hover:bg-blue-50' : 'text-gray-300 cursor-not-allowed'}`}
                             >
                               更新词库
                             </button>

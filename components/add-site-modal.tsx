@@ -297,30 +297,6 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
               )}
             </div>
 
-          {/* Crawl Frequency */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">抓取频率</label>
-            <div className="flex gap-3">
-              {[
-                { value: 'daily', label: '每天' },
-                { value: 'every3days', label: '每3天' },
-                { value: 'weekly', label: '每周' },
-              ].map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="crawl_frequency"
-                    value={opt.value}
-                    checked={form.crawl_frequency === opt.value}
-                    onChange={() => update('crawl_frequency', opt.value as Site['crawl_frequency'])}
-                    className="text-green-600 focus:ring-green-500"
-                  />
-                  <span className="text-sm text-gray-700">{opt.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           {/* Version Clean */}
           <div>
             <label className="flex items-center gap-2.5 cursor-pointer">
