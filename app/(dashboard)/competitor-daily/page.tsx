@@ -217,10 +217,15 @@ export default function CompetitorDailyPage() {
     setRankLoading(true)
     setRankData([])
     try {
-      const res = await fetch(`/api/rank-changes?domain=${encodeURIComponent(site.domain)}&type=${type}&date=${date}`)
-      if (!res.ok) throw new Error('获取失败')
-      const data: RankEntry[] = await res.json()
-      setRankData(data)
+      const supabase = getBrowserClient()
+      const { data } = await supabase
+        .from('rank_changes')
+        .select('keyword, volume')
+        .eq('site_id', site.site_id)
+        .eq('stat_date', date)
+        .eq('type', type)
+        .order('volume', { ascending: false })
+      setRankData((data || []) as RankEntry[])
     } catch {
       setRankData([])
     } finally {
@@ -229,11 +234,11 @@ export default function CompetitorDailyPage() {
   }
 
   function openRankModal(site: CompetitorRow) {
-    const today = getMalaysiaDate(0)
+    const yesterday = getMalaysiaDate(-1)
     setRankType('rankup')
-    setRankDate(today)
+    setRankDate(yesterday)
     setRankSite(site)
-    fetchRankData(site, 'rankup', today)
+    fetchRankData(site, 'rankup', yesterday)
   }
 
   return (

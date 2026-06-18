@@ -5,6 +5,7 @@ import {
   cleanTitle,
   fetchBaiduSuggestion,
   fetchAizhanData,
+  fetchRankChanges,
   type HtmlSource,
 } from '@/lib/crawler'
 
@@ -150,6 +151,25 @@ export async function GET(request: Request) {
         )
 
         results.push({ site: site.domain, count: newEntries.length })
+
+        // Fetch rank changes (涨入 + 跌出) for yesterday, save to rank_changes
+        try {
+          const [rankupEntries, rankdownEntries] = await Promise.all([
+            fetchRankChanges(site.domain, yesterday, 'rankup'),
+            fetchRankChanges(site.domain, yesterday, 'rankdown'),
+          ])
+          const rankRows = [
+            ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: yesterday, type: 'rankup', keyword: e.keyword, volume: e.volume })),
+            ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: yesterday, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
+          ]
+          if (rankRows.length > 0) {
+            await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', yesterday)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('rank_changes') as any).insert(rankRows)
+          }
+        } catch {
+          // rank fetch failure does not affect keyword results
+        }
       } catch (siteErr: unknown) {
         results.push({
           site: site.domain,
@@ -184,6 +204,7 @@ export async function GET(request: Request) {
 
     await supabase.rpc('delete_old_raw_keywords').maybeSingle()
     await supabase.rpc('delete_old_hot_keywords').maybeSingle()
+    await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
 
     return NextResponse.json({ date: today, yesterday, results })
   } catch (err: unknown) {

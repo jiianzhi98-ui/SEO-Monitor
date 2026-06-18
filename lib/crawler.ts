@@ -218,6 +218,69 @@ export async function fetchAizhanData(domain: string): Promise<{
   }
 }
 
+const RANK_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'zh-CN,zh;q=0.9',
+  'Referer': 'https://baidurank.aizhan.com/',
+}
+
+async function fetchRankPage(
+  domain: string,
+  type: string,
+  rankPos: number,
+  date: string,
+  page: number
+): Promise<{ keyword: string; volume: number }[]> {
+  const suffix = page === 1 ? '' : `${page}/`
+  const url = `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${date}/${suffix}`
+  try {
+    const res = await fetch(url, {
+      headers: RANK_HEADERS,
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 0 },
+    })
+    if (!res.ok) return []
+    const html = await res.text()
+    const $ = cheerio.load(html)
+    const results: { keyword: string; volume: number }[] = []
+    $('tbody tr').each((_, tr) => {
+      const keyword = $(tr).find('td.title a').first().text().trim()
+      const volume = parseInt($(tr).find('td.ip').eq(2).text().trim(), 10) || 0
+      if (keyword) results.push({ keyword, volume })
+    })
+    return results
+  } catch {
+    return []
+  }
+}
+
+// Fetch all rank changes (涨入 or 跌出) for a domain on a given date
+// Covers rank positions 1-5, up to 15 sub-pages each, filters 0-volume
+export async function fetchRankChanges(
+  domain: string,
+  date: string,
+  type: 'rankup' | 'rankdown'
+): Promise<{ keyword: string; volume: number }[]> {
+  const allResults = await Promise.all(
+    [1, 2, 3, 4, 5].map(async (rankPos) => {
+      const entries: { keyword: string; volume: number }[] = []
+      for (let page = 1; page <= 15; page++) {
+        const pageEntries = await fetchRankPage(domain, type, rankPos, date, page)
+        if (pageEntries.length === 0) break
+        entries.push(...pageEntries.filter((e) => e.volume > 0))
+      }
+      return entries
+    })
+  )
+  const seen = new Set<string>()
+  return allResults.flat().filter((e) => {
+    if (seen.has(e.keyword)) return false
+    seen.add(e.keyword)
+    return true
+  })
+}
+
 // @deprecated use fetchAizhanData instead
 export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; mobile: number }> {
   const { pc, mobile } = await fetchAizhanData(domain)
