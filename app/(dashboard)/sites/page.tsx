@@ -11,6 +11,7 @@ interface Site {
   name: string
   category: 'large' | 'medium' | 'small'
   crawl_type: 'html'
+  focus_level: number
   list_url: string
   title_selector: string
   date_selector: string

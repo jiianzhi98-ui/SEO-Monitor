@@ -6,6 +6,7 @@ interface Site {
   name: string
   category: 'large' | 'medium' | 'small'
   crawl_type: 'html'
+  focus_level: number
   list_url: string
   title_selector: string
   date_selector: string
@@ -29,10 +30,10 @@ const categoryLabel: Record<string, string> = {
   small: '小站',
 }
 
-const crawlTypeLabel: Record<string, string> = {
-  sitemap: 'Sitemap',
-  html: 'HTML列表页',
-  rss: 'RSS',
+const focusConfig: Record<number, { label: string; className: string }> = {
+  1: { label: '重点', className: 'bg-red-50 text-red-600' },
+  2: { label: '侧重', className: 'bg-orange-50 text-orange-600' },
+  3: { label: '普通', className: 'bg-gray-50 text-gray-400' },
 }
 
 const frequencyLabel: Record<string, string> = {
@@ -42,7 +43,9 @@ const frequencyLabel: Record<string, string> = {
 }
 
 export default function SiteTable({ sites, onEdit, onDelete, onToggle }: SiteTableProps) {
-  if (sites.length === 0) {
+  const sorted = [...sites].sort((a, b) => a.focus_level - b.focus_level)
+
+  if (sorted.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400 text-sm">
         暂无网站，点击右上角按钮新增
@@ -58,7 +61,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle }: SiteTab
             <th className="table-th">域名</th>
             <th className="table-th">名称</th>
             <th className="table-th">分类</th>
-            <th className="table-th">抓取类型</th>
+            <th className="table-th">关注</th>
             <th className="table-th">频率</th>
             <th className="table-th text-center">版本清洗</th>
             <th className="table-th text-center">状态</th>
@@ -66,7 +69,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle }: SiteTab
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {sites.map((site) => (
+          {sorted.map((site) => (
             <tr key={site.id} className="hover:bg-gray-50 transition-colors">
               <td className="table-td">
                 <a
@@ -84,7 +87,11 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle }: SiteTab
                   {categoryLabel[site.category]}
                 </span>
               </td>
-              <td className="table-td text-gray-600 text-xs">{crawlTypeLabel[site.crawl_type]}</td>
+              <td className="table-td">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${focusConfig[site.focus_level]?.className ?? 'bg-gray-50 text-gray-400'}`}>
+                  {focusConfig[site.focus_level]?.label ?? '普通'}
+                </span>
+              </td>
               <td className="table-td text-gray-600 text-xs">{frequencyLabel[site.crawl_frequency]}</td>
               <td className="table-td text-center">
                 {site.enable_version_clean ? (

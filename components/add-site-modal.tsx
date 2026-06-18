@@ -8,6 +8,7 @@ interface Site {
   name: string
   category: 'large' | 'medium' | 'small'
   crawl_type: 'html'
+  focus_level: number
   list_url: string
   title_selector: string
   date_selector: string
@@ -39,6 +40,7 @@ const defaultForm: Site = {
   name: '',
   category: 'medium',
   crawl_type: 'html',
+  focus_level: 3,
   list_url: '',
   title_selector: '',
   date_selector: '',
@@ -210,18 +212,32 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
             </div>
           </div>
 
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
-            <select
-              value={form.category}
-              onChange={(e) => update('category', e.target.value as Site['category'])}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="large">大站</option>
-              <option value="medium">中站</option>
-              <option value="small">小站</option>
-            </select>
+          {/* Category & Focus */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
+              <select
+                value={form.category}
+                onChange={(e) => update('category', e.target.value as Site['category'])}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="large">大站</option>
+                <option value="medium">中站</option>
+                <option value="small">小站</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">关注</label>
+              <select
+                value={form.focus_level}
+                onChange={(e) => update('focus_level', Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value={1}>重点关注</option>
+                <option value={2}>侧重关注</option>
+                <option value={3}>普通关注</option>
+              </select>
+            </div>
           </div>
 
           {/* HTML sources */}

@@ -6,13 +6,14 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 
-interface SiteRow { id: string; domain: string; name: string }
+interface SiteRow { id: string; domain: string; name: string; focus_level: number }
 interface SnapRow { site_id: string; snapshot_date: string; index_count: number }
 
 interface IndexRow {
   site_id: string
   domain: string
   name: string
+  focus_level: number
   latest: number
   weekAgo: number
   weeklyChange: number
@@ -55,7 +56,7 @@ export default function IndexMonitorPage() {
       const d7ago = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
       const [{ data: sitesRaw }, { data: snapsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level').eq('is_enabled', true),
         supabase.from('index_snapshots')
           .select('site_id, snapshot_date, index_count')
           .gte('snapshot_date', d30ago)
@@ -81,10 +82,10 @@ export default function IndexMonitorPage() {
           else if (weeklyRate < -0.1) status = 'warning'
         }
 
-        return { site_id: site.id, domain: site.domain, name: site.name, latest, weekAgo, weeklyChange, weeklyRate, trend, status }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, latest, weekAgo, weeklyChange, weeklyRate, trend, status }
       })
 
-      setRows(result.sort((a, b) => b.latest - a.latest))
+      setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.latest - a.latest))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {

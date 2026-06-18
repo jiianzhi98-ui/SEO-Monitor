@@ -7,6 +7,7 @@ interface CompetitorRow {
   site_id: string
   domain: string
   name: string
+  focus_level: number
   today: number
   yesterday: number
   avg7d: number
@@ -17,6 +18,7 @@ interface SiteRow {
   id: string
   domain: string
   name: string
+  focus_level: number
 }
 
 interface StatRow {
@@ -94,7 +96,7 @@ export default function CompetitorDailyPage() {
       const d7ago = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
       const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
@@ -115,10 +117,10 @@ export default function CompetitorDailyPage() {
           if (ratio < 0.3) status = 'danger'
           else if (ratio < 0.6) status = 'warning'
         }
-        return { site_id: site.id, domain: site.domain, name: site.name, today: todayVal, yesterday: yesterdayVal, avg7d, status }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, today: todayVal, yesterday: yesterdayVal, avg7d, status }
       })
 
-      setRows(result.sort((a, b) => b.today - a.today))
+      setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.today - a.today))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {

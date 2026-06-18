@@ -7,8 +7,9 @@ interface SiteRow {
   id: string
   domain: string
   name: string
-  crawl_type: 'sitemap' | 'html' | 'rss'
+  crawl_type: 'html'
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
+  focus_level: number
   is_enabled: boolean
 }
 
@@ -47,7 +48,7 @@ export default function CrawlLogPage() {
         { data: indexRaw },
         { data: weightRaw },
       ] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, crawl_type, crawl_frequency, is_enabled').order('created_at', { ascending: true }),
+        supabase.from('sites').select('id, domain, name, crawl_type, crawl_frequency, focus_level, is_enabled').order('focus_level', { ascending: true }),
         supabase.from('daily_stats').select('site_id, stat_date').order('stat_date', { ascending: false }),
         supabase.from('index_snapshots').select('site_id, snapshot_date').order('snapshot_date', { ascending: false }),
         supabase.from('weight_history').select('site_id, record_date').order('record_date', { ascending: false }),
