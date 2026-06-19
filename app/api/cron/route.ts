@@ -143,10 +143,9 @@ export async function GET(request: Request) {
           }))
         )
 
-        // stat_date = yesterday (we're recording yesterday's new content)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from('daily_stats') as any).upsert(
-          { site_id: site.id, stat_date: yesterday, new_count: newEntries.length },
+          { site_id: site.id, stat_date: today, new_count: newEntries.length },
           { onConflict: 'site_id,stat_date' }
         )
 
