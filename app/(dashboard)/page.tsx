@@ -511,17 +511,22 @@ function SortedTooltip({
   const sorted = [...payload]
     .filter(p => p.value != null)
     .sort((a, b) => b.value - a.value)
+
   return (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
-      <p style={{ color: '#6b7280', marginBottom: 4 }}>日期：{label}</p>
-      {sorted.map((p, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '1px 0' }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: p.color, flexShrink: 0 }} />
-          <span style={{ color: '#374151' }}>
-            {siteMap.get(p.name)?.domain ?? p.name} : {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
-          </span>
-        </div>
-      ))}
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', fontSize: 12, maxWidth: 520 }}>
+      <p style={{ color: '#6b7280', marginBottom: 6, fontWeight: 500 }}>日期：{label}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 20, rowGap: 2 }}>
+        {sorted.map((p, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: p.color, flexShrink: 0 }} />
+            <span style={{ color: '#374151', whiteSpace: 'nowrap' }}>
+              {siteMap.get(p.name)?.domain ?? p.name}
+              <span style={{ color: '#6b7280' }}> : </span>
+              {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
