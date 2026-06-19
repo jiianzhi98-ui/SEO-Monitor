@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { type ReactNode } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import {
@@ -327,9 +327,7 @@ export default function DashboardPage() {
           ))}
         </AlertCard>
 
-        <AlertCard title="其它功能" count={-1} color="gray" empty="开发中，敬请期待">
-          {null}
-        </AlertCard>
+        <KeywordSearchCard />
 
       </div>
 
@@ -449,43 +447,31 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Keyword Volume Search ───────────────────────────────────────── */}
-      <KeywordSearch />
-
     </div>
   )
 }
 
-// ─── KeywordSearch ────────────────────────────────────────────────────────────
+// ─── KeywordSearchCard ────────────────────────────────────────────────────────
 
 interface KwVolRow { keyword: string; volume: number }
 
-function KeywordSearch() {
+function KeywordSearchCard() {
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<KwVolRow[]>([])
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [searched, setSearched] = useState(false)
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const fetchRows = useCallback(async (q: string) => {
+  async function handleSearch() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(query)}`)
       const data = await res.json()
       setRows(data.keywords || [])
       setSearched(true)
     } finally {
       setLoading(false)
     }
-  }, [])
-
-  function handleSearch() {
-    fetchRows(query)
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') fetchRows(query)
   }
 
   async function handleExport() {
@@ -494,9 +480,7 @@ function KeywordSearch() {
       const res = await fetch('/api/keyword-volume?export=1')
       const data = await res.json()
       const all: KwVolRow[] = data.keywords || []
-      const header = '关键词,搜索量'
-      const csvRows = all.map(r => `"${r.keyword}",${r.volume}`)
-      const csv = [header, ...csvRows].join('\n')
+      const csv = ['关键词,搜索量', ...all.map(r => `"${r.keyword}",${r.volume}`)].join('\n')
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -510,92 +494,52 @@ function KeywordSearch() {
   }
 
   return (
-    <div className="card">
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-gray-800">关键词搜索量查询</p>
-          <p className="text-xs text-gray-400 mt-0.5">收录全部竞品涨排名关键词及百度搜索量，永久保留</p>
-        </div>
+    <div className="rounded-xl border border-gray-100 bg-white p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-gray-600">搜索量查询</span>
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition-colors disabled:opacity-50"
+          className="text-xs text-gray-400 hover:text-green-600 transition-colors disabled:opacity-50"
         >
-          {exporting ? (
-            <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          )}
-          导出全部数据
+          {exporting ? '导出中...' : '导出全部'}
         </button>
       </div>
 
-      <div className="px-5 py-3 border-b border-gray-100">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="输入关键词..."
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
-          <button
-            onClick={handleSearch}
-            disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            搜索
-          </button>
-        </div>
+      <div className="flex gap-1.5 mb-3">
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          placeholder="搜索词..."
+          className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+        />
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+        >
+          {loading ? '...' : '搜索'}
+        </button>
       </div>
 
-      <div className="overflow-x-auto">
-        {loading ? (
-          <div className="flex items-center justify-center py-10 text-gray-400 gap-2 text-sm">
-            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            查询中...
-          </div>
-        ) : !searched ? (
-          <div className="py-10 text-center text-gray-400 text-sm">输入关键词后点击搜索</div>
+      <div className="max-h-28 overflow-y-auto">
+        {!searched ? (
+          <p className="text-xs text-gray-400">输入关键词后搜索</p>
         ) : rows.length === 0 ? (
-          <div className="py-10 text-center text-gray-400 text-sm">
-            未找到包含「{query}」的关键词
-          </div>
+          <p className="text-xs text-gray-400">未找到「{query}」</p>
         ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="table-th w-8">#</th>
-                <th className="table-th">关键词</th>
-                <th className="table-th text-right">搜索量</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {rows.map((r, i) => (
-                <tr key={r.keyword} className="hover:bg-gray-50 transition-colors">
-                  <td className="table-td text-gray-400 text-xs">{i + 1}</td>
-                  <td className="table-td font-medium text-gray-900">{r.keyword}</td>
-                  <td className="table-td text-right text-gray-700 font-medium tabular-nums">
-                    {r.volume > 0 ? r.volume.toLocaleString() : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="space-y-0.5">
+            {rows.map(r => (
+              <div key={r.keyword} className="flex items-center justify-between py-0.5">
+                <span className="text-xs text-gray-700 truncate mr-2">{r.keyword}</span>
+                <span className="text-xs font-medium text-gray-500 flex-shrink-0 tabular-nums">
+                  {r.volume > 0 ? r.volume.toLocaleString() : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
