@@ -515,7 +515,7 @@ function CompareChart({
           tickLine={false}
           axisLine={false}
           width={46}
-          tickCount={4}
+          domain={['auto', 'auto']}
           tickFormatter={(v: number) => yFormatter(v)}
         />
         <Tooltip
