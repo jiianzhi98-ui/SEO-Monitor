@@ -459,8 +459,14 @@ function KeywordSearchCard() {
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<KwVolRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const [searched, setSearched] = useState(false)
+
+  // Export auth dialog
+  const [showDialog, setShowDialog] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [verifyError, setVerifyError] = useState<string | null>(null)
+  const [verifying, setVerifying] = useState(false)
 
   async function handleSearch() {
     setLoading(true)
@@ -474,9 +480,30 @@ function KeywordSearchCard() {
     }
   }
 
-  async function handleExport() {
-    setExporting(true)
+  function openExportDialog() {
+    setEmail('')
+    setPassword('')
+    setVerifyError(null)
+    setShowDialog(true)
+  }
+
+  async function handleVerifyAndExport() {
+    setVerifying(true)
+    setVerifyError(null)
     try {
+      const verifyRes = await fetch('/api/keyword-volume/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const verifyData = await verifyRes.json()
+      if (!verifyRes.ok) {
+        setVerifyError(verifyData.error || '验证失败')
+        return
+      }
+
+      // Credentials valid — proceed with download
+      setShowDialog(false)
       const res = await fetch('/api/keyword-volume?export=1')
       const data = await res.json()
       const all: KwVolRow[] = data.keywords || []
@@ -489,60 +516,116 @@ function KeywordSearchCard() {
       a.click()
       URL.revokeObjectURL(url)
     } finally {
-      setExporting(false)
+      setVerifying(false)
     }
   }
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-gray-600">搜索量查询</span>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="text-xs text-gray-400 hover:text-green-600 transition-colors disabled:opacity-50"
-        >
-          {exporting ? '导出中...' : '导出全部'}
-        </button>
+    <>
+      <div className="rounded-xl border border-gray-100 bg-white p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-gray-600">搜索量查询</span>
+          <button
+            onClick={openExportDialog}
+            className="text-xs text-gray-400 hover:text-green-600 transition-colors"
+          >
+            导出全部
+          </button>
+        </div>
+
+        <div className="flex gap-1.5 mb-3">
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="搜索词..."
+            className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? '...' : '搜索'}
+          </button>
+        </div>
+
+        <div className="max-h-28 overflow-y-auto">
+          {!searched ? (
+            <p className="text-xs text-gray-400">输入关键词后搜索</p>
+          ) : rows.length === 0 ? (
+            <p className="text-xs text-gray-400">未找到「{query}」</p>
+          ) : (
+            <div className="space-y-0.5">
+              {rows.map(r => (
+                <div key={r.keyword} className="flex items-center justify-between py-0.5">
+                  <span className="text-xs text-gray-700 truncate mr-2">{r.keyword}</span>
+                  <span className="text-xs font-medium text-gray-500 flex-shrink-0 tabular-nums">
+                    {r.volume > 0 ? r.volume.toLocaleString() : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-1.5 mb-3">
-        <input
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          placeholder="搜索词..."
-          className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-        />
-        <button
-          onClick={handleSearch}
-          disabled={loading}
-          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-        >
-          {loading ? '...' : '搜索'}
-        </button>
-      </div>
+      {/* Export auth dialog */}
+      {showDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">验证身份</h3>
+            <p className="text-xs text-gray-400 mb-5">导出数据需要验证账号权限</p>
 
-      <div className="max-h-28 overflow-y-auto">
-        {!searched ? (
-          <p className="text-xs text-gray-400">输入关键词后搜索</p>
-        ) : rows.length === 0 ? (
-          <p className="text-xs text-gray-400">未找到「{query}」</p>
-        ) : (
-          <div className="space-y-0.5">
-            {rows.map(r => (
-              <div key={r.keyword} className="flex items-center justify-between py-0.5">
-                <span className="text-xs text-gray-700 truncate mr-2">{r.keyword}</span>
-                <span className="text-xs font-medium text-gray-500 flex-shrink-0 tabular-nums">
-                  {r.volume > 0 ? r.volume.toLocaleString() : '—'}
-                </span>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">邮箱</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  autoFocus
+                  placeholder="your@email.com"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
               </div>
-            ))}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">密码</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleVerifyAndExport()}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
+              {verifyError && (
+                <p className="text-xs text-red-500">{verifyError}</p>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowDialog(false)}
+                className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleVerifyAndExport}
+                disabled={verifying || !email || !password}
+                className="flex-1 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 font-medium"
+              >
+                {verifying ? '验证中...' : '确认导出'}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   )
 }
 
