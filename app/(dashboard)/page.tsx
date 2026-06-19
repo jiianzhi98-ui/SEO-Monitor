@@ -499,6 +499,19 @@ function CompareChart({
     )
   }
 
+  // Compute Y-axis max from 95th percentile to avoid one outlier site stretching the scale
+  const allVals: number[] = []
+  for (const row of data) {
+    for (const id of siteIds) {
+      const v = row[id]
+      if (typeof v === 'number' && v > 0) allVals.push(v)
+    }
+  }
+  allVals.sort((a, b) => a - b)
+  const p95 = allVals.length > 0 ? allVals[Math.floor(allVals.length * 0.95)] : 0
+  const yMax = p95 > 0 ? Math.ceil(p95 * 1.15) : undefined
+  const yDomain: [number, number | string] = yMax ? [0, yMax] : [0, 'auto']
+
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -515,7 +528,8 @@ function CompareChart({
           tickLine={false}
           axisLine={false}
           width={46}
-          domain={['auto', 'auto']}
+          domain={yDomain}
+          allowDataOverflow
           tickFormatter={(v: number) => yFormatter(v)}
         />
         <Tooltip
