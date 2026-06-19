@@ -12,7 +12,7 @@ export default function CrawlLogPage() {
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-base font-semibold text-gray-900">主 Cron</h2>
-            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">/api/cron · 每日 05:00</span>
+            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">/api/cron · 每日 06:00</span>
           </div>
           <div className="space-y-4">
 
@@ -21,7 +21,7 @@ export default function CrawlLogPage() {
               <div className="space-y-2 text-sm text-gray-600">
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">竞品关键词</span>
-                  <span>爬取各站点 HTML 列表页，提取新标题存入 <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code>，每日新增数记录到 <code className="text-xs bg-gray-100 px-1 rounded">daily_stats</code></span>
+                  <span>爬取各站点 HTML 列表页，提取新标题存入 <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code>，每日新增数记录到 <code className="text-xs bg-gray-100 px-1 rounded">daily_stats</code>；每次翻页随机等待 2-5 秒，User-Agent 随机轮换</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">排名变动</span>
@@ -75,7 +75,7 @@ export default function CrawlLogPage() {
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-base font-semibold text-gray-900">百度收录 Cron</h2>
-            <span className="text-xs bg-teal-50 text-teal-600 px-2 py-0.5 rounded font-medium">/api/cron/baidu-index · 每日 07:00</span>
+            <span className="text-xs bg-teal-50 text-teal-600 px-2 py-0.5 rounded font-medium">/api/cron/baidu-index · 每日 06:00</span>
           </div>
           <div className="space-y-4">
 
