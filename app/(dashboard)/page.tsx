@@ -72,6 +72,14 @@ function fmtNum(n: number): string {
   return n.toLocaleString()
 }
 
+// Round up to a clean chart-friendly number (e.g. 1002.8w → 1100w, 345w → 400w)
+function niceMax(v: number): number {
+  if (v <= 0) return 10
+  const exp = Math.floor(Math.log10(v))
+  const step = Math.pow(10, exp - 1)
+  return Math.ceil(v / step) * step
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -499,7 +507,7 @@ function CompareChart({
     )
   }
 
-  // Compute Y-axis max from 95th percentile to avoid one outlier site stretching the scale
+  // Compute Y-axis max: p95 to exclude outlier sites, then round up to a clean number
   const allVals: number[] = []
   for (const row of data) {
     for (const id of siteIds) {
@@ -509,8 +517,7 @@ function CompareChart({
   }
   allVals.sort((a, b) => a - b)
   const p95 = allVals.length > 0 ? allVals[Math.floor(allVals.length * 0.95)] : 0
-  const yMax = p95 > 0 ? Math.ceil(p95 * 1.15) : undefined
-  const yDomain: [number, number | string] = yMax ? [0, yMax] : [0, 'auto']
+  const yDomain: [number, number | string] = p95 > 0 ? [0, niceMax(p95 * 1.1)] : [0, 'auto']
 
   return (
     <ResponsiveContainer width="100%" height={200}>
