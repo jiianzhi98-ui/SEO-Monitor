@@ -207,6 +207,7 @@ export async function GET(request: Request) {
     await supabase.rpc('delete_old_raw_keywords').maybeSingle()
     await supabase.rpc('delete_old_hot_keywords').maybeSingle()
     await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
+    await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
 
     return NextResponse.json({ date: today, yesterday, results })
   } catch (err: unknown) {

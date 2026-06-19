@@ -48,6 +48,11 @@ export default function CrawlLogPage() {
                   <span className="text-gray-500">— stat_date 早于 30 天</span>
                 </div>
                 <div className="flex items-center gap-3">
+                  <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-24 text-center flex-shrink-0">30 天</span>
+                  <code className="text-xs bg-gray-100 px-1 rounded">daily_stats</code>
+                  <span className="text-gray-500">— stat_date 早于 30 天</span>
+                </div>
+                <div className="flex items-center gap-3">
                   <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-24 text-center flex-shrink-0">90 天</span>
                   <code className="text-xs bg-gray-100 px-1 rounded">hot_keywords</code>
                   <span className="text-gray-500">— created_at 早于 90 天</span>
@@ -58,7 +63,6 @@ export default function CrawlLogPage() {
             <div className="border-t border-gray-100 pt-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">永久保留</p>
               <div className="flex flex-wrap gap-2 text-sm text-gray-500">
-                <code className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">daily_stats</code>
                 <code className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">index_snapshots</code>
                 <code className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">weight_history</code>
               </div>
