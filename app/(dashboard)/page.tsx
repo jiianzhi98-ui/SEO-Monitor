@@ -504,7 +504,7 @@ function SortedTooltip({
   active, payload, label, siteMap,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  active?: boolean; payload?: any[]; label?: string
+  active?: boolean; payload?: readonly any[]; label?: string
   siteMap: Map<string, Site>
 }) {
   if (!active || !payload || payload.length === 0) return null
