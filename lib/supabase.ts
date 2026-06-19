@@ -53,22 +53,6 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['index_snapshots']['Row'], 'id'>
         Update: Partial<Database['public']['Tables']['index_snapshots']['Insert']>
       }
-      hot_keywords: {
-        Row: {
-          id: string
-          keyword: string
-          site_count: number
-          site_list: string[]
-          suggestions: string[]
-          suggestion_count: number
-          priority: 'urgent' | 'today' | 'queue'
-          period_start: string
-          period_end: string
-          created_at: string
-        }
-        Insert: Omit<Database['public']['Tables']['hot_keywords']['Row'], 'id' | 'created_at'>
-        Update: Partial<Database['public']['Tables']['hot_keywords']['Insert']>
-      }
       weight_history: {
         Row: {
           id: string

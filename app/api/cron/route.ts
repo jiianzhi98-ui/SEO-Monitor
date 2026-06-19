@@ -3,7 +3,6 @@ import { createServiceClient } from '@/lib/supabase-server'
 import {
   fetchHtmlListPages,
   cleanTitle,
-  fetchBaiduSuggestion,
   fetchAizhanData,
   fetchRankChanges,
   type HtmlSource,
@@ -159,9 +158,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // Aggregate hot keywords from this run
-    await aggregateHotKeywords(supabase, crawlStartedAt)
-
     // Fetch rank changes for each site (always runs, independent of keyword count)
     for (const site of sites) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
@@ -205,7 +201,6 @@ export async function GET(request: Request) {
     }
 
     await supabase.rpc('delete_old_raw_keywords').maybeSingle()
-    await supabase.rpc('delete_old_hot_keywords').maybeSingle()
     await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
     await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
 
@@ -218,61 +213,3 @@ export async function GET(request: Request) {
   }
 }
 
-async function aggregateHotKeywords(
-  supabase: ReturnType<typeof createServiceClient>,
-  since: string
-) {
-  const { data: todayKws } = await supabase
-    .from('raw_keywords')
-    .select('keyword, site_id, sites(domain)')
-    .gte('discovered_at', since)
-
-  if (!todayKws || todayKws.length === 0) return
-
-  type KwRow = { keyword: string; site_id: string; sites: { domain: string } | null }
-  const rows = todayKws as unknown as KwRow[]
-
-  const kwMap = new Map<string, Set<string>>()
-  for (const row of rows) {
-    if (!kwMap.has(row.keyword)) kwMap.set(row.keyword, new Set())
-    if (row.sites?.domain) kwMap.get(row.keyword)!.add(row.sites.domain)
-  }
-
-  const hotEntries = Array.from(kwMap.entries())
-    .filter(([, sites]) => sites.size >= 2)
-    .sort(([, a], [, b]) => b.size - a.size)
-    .slice(0, 200)
-
-  const today = getMalaysiaDate()
-
-  for (const [keyword, siteSet] of hotEntries) {
-    const siteList = Array.from(siteSet)
-    const siteCount = siteList.length
-
-    let suggestions: string[] = []
-    try {
-      suggestions = await fetchBaiduSuggestion(keyword)
-      await new Promise((r) => setTimeout(r, 300))
-    } catch {
-      // ignore
-    }
-
-    const priority: 'urgent' | 'today' | 'queue' =
-      siteCount >= 5 ? 'urgent' : siteCount >= 3 ? 'today' : 'queue'
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from('hot_keywords') as any).upsert(
-      {
-        keyword,
-        site_count: siteCount,
-        site_list: siteList,
-        suggestions,
-        suggestion_count: suggestions.length,
-        priority,
-        period_start: today,
-        period_end: today,
-      },
-      { onConflict: 'keyword,period_start' }
-    )
-  }
-}

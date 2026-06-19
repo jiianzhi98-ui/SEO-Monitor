@@ -52,11 +52,6 @@ export default function CrawlLogPage() {
                   <code className="text-xs bg-gray-100 px-1 rounded">daily_stats</code>
                   <span className="text-gray-500">— stat_date 早于 30 天</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-24 text-center flex-shrink-0">90 天</span>
-                  <code className="text-xs bg-gray-100 px-1 rounded">hot_keywords</code>
-                  <span className="text-gray-500">— created_at 早于 90 天</span>
-                </div>
               </div>
             </div>
 
