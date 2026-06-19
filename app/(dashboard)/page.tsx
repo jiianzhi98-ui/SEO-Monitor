@@ -1,137 +1,230 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { type ReactNode } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts'
 
-interface StatCards {
-  todayNewWords: number
-  multiSiteWords: number
-  indexAlertSites: number
-  weightChangeSites: number
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Category = 'large' | 'medium' | 'small'
+type TimeRange = 'month' | '3m' | 'year'
+
+interface Site { id: string; domain: string; name: string; category: Category }
+interface IndexSnap { site_id: string; snapshot_date: string; index_count: number }
+interface WeightRec {
+  site_id: string
+  record_date: string
+  pc_weight: number
+  mobile_weight: number
+  mobile_ip: number
+  mobile_ip_max: number
+}
+interface DailyStat { site_id: string; stat_date: string; new_count: number }
+interface WeightChangeItem { domain: string; pcChange: number; mobileChange: number }
+interface AlertItem { domain: string }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CAT_LABEL: Record<Category, string> = { large: '大站', medium: '中站', small: '小站' }
+
+const TIME_OPTIONS: { value: TimeRange; label: string }[] = [
+  { value: 'month', label: '当月' },
+  { value: '3m', label: '近3个月' },
+  { value: 'year', label: '全年' },
+]
+
+const LINE_COLORS = ['#22c55e', '#f97316']
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getMY(offsetDays = 0): string {
+  return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000)
+    .toISOString()
+    .slice(0, 10)
 }
 
-interface HotKeyword {
-  id: string
-  keyword: string
-  site_count: number
-  suggestion_count: number
-  priority: 'urgent' | 'today' | 'queue'
-  period_start: string
-  period_end: string
+function getDateCutoff(range: TimeRange): string {
+  if (range === '3m') return getMY(-90)
+  const now = new Date(Date.now() + 8 * 3600000)
+  const y = now.getFullYear()
+  if (range === 'month') {
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    return `${y}-${m}-01`
+  }
+  return `${y}-01-01`
 }
 
-interface SnapRow { site_id: string; index_count: number }
-interface WeightRow { site_id: string; pc_weight: number; mobile_weight: number }
-
-const priorityLabel: Record<string, { label: string; className: string }> = {
-  urgent: { label: '紧急', className: 'badge-urgent' },
-  today: { label: '今日', className: 'badge-today' },
-  queue: { label: '待处理', className: 'badge-queue' },
+function fmtNum(n: number): string {
+  if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
+  return n.toLocaleString()
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<StatCards | null>(null)
-  const [keywords, setKeywords] = useState<HotKeyword[]>([])
+  const [sites, setSites] = useState<Site[]>([])
+  const [indexSnaps, setIndexSnaps] = useState<IndexSnap[]>([])
+  const [weightRecs, setWeightRecs] = useState<WeightRec[]>([])
+  const [weightChanges, setWeightChanges] = useState<WeightChangeItem[]>([])
+  const [indexAlerts, setIndexAlerts] = useState<AlertItem[]>([])
+  const [kwAlerts, setKwAlerts] = useState<AlertItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const [timeRange, setTimeRange] = useState<TimeRange>('3m')
+  const [activeCategory, setActiveCategory] = useState<Category>('large')
+  const [chartSites, setChartSites] = useState<Record<Category, [string, string]>>({
+    large: ['', ''], medium: ['', ''], small: ['', ''],
+  })
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const supabase = getBrowserClient()
+  useEffect(() => { load() }, [])
 
-        // Today's hot keywords
-        const { data: hotData, error: hotErr } = await supabase
-          .from('hot_keywords')
-          .select('*')
-          .eq('period_start', today)
-          .order('site_count', { ascending: false })
-          .limit(20)
-        if (hotErr) throw hotErr
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const db = getBrowserClient()
+      const today = getMY()
+      const yesterday = getMY(-1)
+      const d7 = getMY(-7)
+      const d365 = getMY(-365)
 
-        // Today's raw_keywords count (total)
-        const { count: todayCount } = await supabase
-          .from('raw_keywords')
-          .select('*', { count: 'exact', head: true })
-          .gte('discovered_at', today + 'T00:00:00')
+      const [
+        { data: sitesRaw },
+        { data: snapsRaw },
+        { data: wrecsRaw },
+        { data: statsRaw },
+        { data: snapTRaw },
+        { data: snapYRaw },
+        { data: wtTRaw },
+        { data: wtWRaw },
+      ] = await Promise.all([
+        db.from('sites').select('id, domain, name, category').eq('is_enabled', true),
+        db.from('index_snapshots')
+          .select('site_id, snapshot_date, index_count')
+          .gte('snapshot_date', d365)
+          .order('snapshot_date'),
+        db.from('weight_history')
+          .select('site_id, record_date, pc_weight, mobile_weight, mobile_ip, mobile_ip_max')
+          .gte('record_date', d365)
+          .order('record_date'),
+        db.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7),
+        db.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', today),
+        db.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', yesterday),
+        db.from('weight_history').select('site_id, pc_weight, mobile_weight').eq('record_date', today),
+        db.from('weight_history').select('site_id, pc_weight, mobile_weight').eq('record_date', getMY(-7)),
+      ])
 
-        // Multi-site keywords (site_count > 1)
-        const { count: multiCount } = await supabase
-          .from('hot_keywords')
-          .select('*', { count: 'exact', head: true })
-          .eq('period_start', today)
-          .gt('site_count', 1)
+      const siteList = (sitesRaw || []) as Site[]
+      setSites(siteList)
+      setIndexSnaps((snapsRaw || []) as IndexSnap[])
+      setWeightRecs((wrecsRaw || []) as WeightRec[])
 
-        // Index alert sites (placeholder — would compare snapshots)
-        const { data: snapYesterday } = await supabase
-          .from('index_snapshots')
-          .select('site_id, index_count')
-          .eq('snapshot_date', getPrevDate(1))
-
-        const { data: snapToday } = await supabase
-          .from('index_snapshots')
-          .select('site_id, index_count')
-          .eq('snapshot_date', today)
-
-        const snapsToday = (snapToday || []) as SnapRow[]
-        const snapsYesterday = (snapYesterday || []) as SnapRow[]
-
-        let indexAlerts = 0
-        if (snapsYesterday.length && snapsToday.length) {
-          const mapYesterday = Object.fromEntries(snapsYesterday.map((s) => [s.site_id, s.index_count]))
-          for (const s of snapsToday) {
-            const prev = mapYesterday[s.site_id]
-            if (prev && prev > 0 && (s.index_count - prev) / prev < -0.1) indexAlerts++
-          }
+      // Weight change alerts (today vs 7 days ago)
+      type WRow = { site_id: string; pc_weight: number; mobile_weight: number }
+      const wtTMap = new Map((wtTRaw || []).map((w: WRow) => [w.site_id, w]))
+      const wtWMap = new Map((wtWRaw || []).map((w: WRow) => [w.site_id, w]))
+      const wChanges: WeightChangeItem[] = []
+      for (const s of siteList) {
+        const t = wtTMap.get(s.id)
+        const w = wtWMap.get(s.id)
+        if (t && w) {
+          const pc = t.pc_weight - w.pc_weight
+          const mo = t.mobile_weight - w.mobile_weight
+          if (pc !== 0 || mo !== 0) wChanges.push({ domain: s.domain, pcChange: pc, mobileChange: mo })
         }
-
-        // Weight change sites
-        const { data: weightTodayRaw } = await supabase
-          .from('weight_history')
-          .select('site_id, pc_weight, mobile_weight')
-          .eq('record_date', today)
-
-        const { data: weightLastWeekRaw } = await supabase
-          .from('weight_history')
-          .select('site_id, pc_weight, mobile_weight')
-          .eq('record_date', getPrevDate(7))
-
-        const weightToday = (weightTodayRaw || []) as WeightRow[]
-        const weightLastWeek = (weightLastWeekRaw || []) as WeightRow[]
-
-        let weightChanges = 0
-        if (weightToday.length && weightLastWeek.length) {
-          const mapLastWeek = Object.fromEntries(weightLastWeek.map((w) => [w.site_id, w]))
-          for (const w of weightToday) {
-            const prev = mapLastWeek[w.site_id]
-            if (prev && (w.pc_weight !== prev.pc_weight || w.mobile_weight !== prev.mobile_weight)) {
-              weightChanges++
-            }
-          }
-        }
-
-        setStats({
-          todayNewWords: todayCount ?? 0,
-          multiSiteWords: multiCount ?? 0,
-          indexAlertSites: indexAlerts,
-          weightChangeSites: weightChanges,
-        })
-        setKeywords((hotData as HotKeyword[]) || [])
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : '加载失败')
-      } finally {
-        setLoading(false)
       }
-    }
-    load()
-  }, [today])
+      setWeightChanges(wChanges)
 
-  function getPrevDate(days: number) {
-    const d = new Date()
-    d.setDate(d.getDate() - days)
-    return d.toISOString().slice(0, 10)
+      // Index drop alerts (today vs yesterday, >10% drop)
+      type SRow = { site_id: string; index_count: number }
+      const snapTMap = new Map((snapTRaw || []).map((r: SRow) => [r.site_id, r.index_count]))
+      const snapYMap = new Map((snapYRaw || []).map((r: SRow) => [r.site_id, r.index_count]))
+      const iAlerts: AlertItem[] = []
+      for (const s of siteList) {
+        const t = snapTMap.get(s.id) ?? 0
+        const y = snapYMap.get(s.id) ?? 0
+        if (y > 0 && (t - y) / y < -0.1) iAlerts.push({ domain: s.domain })
+      }
+      setIndexAlerts(iAlerts)
+
+      // Keyword anomaly alerts (yesterday < 30% of 7-day avg)
+      const stats = (statsRaw || []) as DailyStat[]
+      const kAlerts: AlertItem[] = []
+      for (const s of siteList) {
+        const ss = stats.filter(r => r.site_id === s.id)
+        const yStat = ss.find(r => r.stat_date === yesterday)
+        if (!yStat) continue
+        const avg = ss.length > 0 ? ss.reduce((a, r) => a + r.new_count, 0) / ss.length : 0
+        if (avg > 0 && yStat.new_count / avg < 0.3) kAlerts.push({ domain: s.domain })
+      }
+      setKwAlerts(kAlerts)
+
+      // Auto-select first two sites per category
+      const auto: Record<Category, [string, string]> = { large: ['', ''], medium: ['', ''], small: ['', ''] }
+      for (const cat of ['large', 'medium', 'small'] as Category[]) {
+        const cs = siteList.filter(s => s.category === cat)
+        auto[cat] = [cs[0]?.id ?? '', cs[1]?.id ?? '']
+      }
+      setChartSites(auto)
+
+      const firstCat = (['large', 'medium', 'small'] as Category[]).find(
+        c => siteList.some(s => s.category === c)
+      )
+      if (firstCat) setActiveCategory(firstCat)
+
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const catSites = useMemo<Record<Category, Site[]>>(() => {
+    const r: Record<Category, Site[]> = { large: [], medium: [], small: [] }
+    for (const s of sites) r[s.category].push(s)
+    return r
+  }, [sites])
+
+  const siteMap = useMemo(() => new Map(sites.map(s => [s.id, s])), [sites])
+
+  function getIndexData(ids: string[]) {
+    const cutoff = getDateCutoff(timeRange)
+    const active = ids.filter(Boolean)
+    const filtered = indexSnaps.filter(r => r.snapshot_date >= cutoff && active.includes(r.site_id))
+    const map = new Map<string, Record<string, number>>()
+    for (const r of filtered) {
+      if (!map.has(r.snapshot_date)) map.set(r.snapshot_date, {})
+      map.get(r.snapshot_date)![r.site_id] = r.index_count
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date: date.slice(5), ...v }))
+  }
+
+  function getMobileIPData(ids: string[]) {
+    const cutoff = getDateCutoff(timeRange)
+    const active = ids.filter(Boolean)
+    const filtered = weightRecs.filter(r => r.record_date >= cutoff && active.includes(r.site_id))
+    const map = new Map<string, Record<string, number>>()
+    for (const r of filtered) {
+      const avg = Math.round(((r.mobile_ip ?? 0) + (r.mobile_ip_max ?? 0)) / 2)
+      if (avg === 0) continue
+      if (!map.has(r.record_date)) map.set(r.record_date, {})
+      map.get(r.record_date)![r.site_id] = avg
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date: date.slice(5), ...v }))
   }
 
   if (loading) {
@@ -156,92 +249,261 @@ export default function DashboardPage() {
     )
   }
 
+  const today = getMY()
+  const activeSiteIds = chartSites[activeCategory]
+
   return (
-    <div className="p-8">
-      <div className="mb-6">
+    <div className="p-8 space-y-6">
+      <div>
         <h1 className="text-2xl font-bold text-gray-900">首页快报</h1>
         <p className="text-gray-500 text-sm mt-1">{today} · 今日数据汇总</p>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard title="今日新词总数" value={stats?.todayNewWords ?? 0} color="green" icon="📝" />
-        <StatCard title="多站重复词数" value={stats?.multiSiteWords ?? 0} color="blue" icon="🔁" />
-        <StatCard title="收录异常站数" value={stats?.indexAlertSites ?? 0} color="red" icon="⚠️" />
-        <StatCard title="权重变动站数" value={stats?.weightChangeSites ?? 0} color="yellow" icon="📊" />
+      {/* ── Alert Cards ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+
+        <AlertCard title="权重变动" count={weightChanges.length} color="yellow" empty="暂无权重变动">
+          {weightChanges.map((w, i) => (
+            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
+              <p className="text-xs font-medium text-gray-800 truncate">{w.domain}</p>
+              <div className="flex gap-1.5 flex-shrink-0">
+                {w.pcChange !== 0 && (
+                  <span className={`text-xs font-semibold ${w.pcChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    PC {w.pcChange > 0 ? '+' : ''}{w.pcChange}
+                  </span>
+                )}
+                {w.mobileChange !== 0 && (
+                  <span className={`text-xs font-semibold ${w.mobileChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    移 {w.mobileChange > 0 ? '+' : ''}{w.mobileChange}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </AlertCard>
+
+        <AlertCard title="新增异常" count={kwAlerts.length} color="orange" empty="各站新增正常">
+          {kwAlerts.map((a, i) => (
+            <p key={i} className="text-xs text-gray-700 truncate py-0.5">{a.domain}</p>
+          ))}
+        </AlertCard>
+
+        <AlertCard title="收录异常" count={indexAlerts.length} color="red" empty="各站收录正常">
+          {indexAlerts.map((a, i) => (
+            <p key={i} className="text-xs text-gray-700 truncate py-0.5">{a.domain}</p>
+          ))}
+        </AlertCard>
+
+        <AlertCard title="其它功能" count={-1} color="gray" empty="开发中，敬请期待">
+          {null}
+        </AlertCard>
+
       </div>
 
-      {/* Today's Hot Keywords */}
+      {/* ── Charts Section ──────────────────────────────────────────────── */}
       <div className="card">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">今日热词列表</h2>
+
+        {/* Header: category tabs + time range */}
+        <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-4 border-b border-gray-100">
+          <div className="flex gap-1">
+            {(['large', 'medium', 'small'] as Category[]).map(cat => {
+              const has = catSites[cat].length > 0
+              return (
+                <button
+                  key={cat}
+                  onClick={() => has && setActiveCategory(cat)}
+                  disabled={!has}
+                  className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                    activeCategory === cat
+                      ? 'bg-green-500 text-white'
+                      : has
+                        ? 'text-gray-500 hover:bg-gray-100'
+                        : 'text-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  {CAT_LABEL[cat]}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex gap-1">
+            {TIME_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setTimeRange(opt.value)}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  timeRange === opt.value
+                    ? 'bg-gray-800 text-white'
+                    : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="table-th w-12">排名</th>
-                <th className="table-th">关键词</th>
-                <th className="table-th text-center">出现站数</th>
-                <th className="table-th text-center">下拉词数</th>
-                <th className="table-th text-center">优先级</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {keywords.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="table-td text-center text-gray-400 py-10">
-                    今日暂无热词数据
-                  </td>
-                </tr>
-              ) : (
-                keywords.map((kw, index) => {
-                  const p = priorityLabel[kw.priority]
-                  return (
-                    <tr key={kw.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="table-td text-gray-400 font-medium">{index + 1}</td>
-                      <td className="table-td font-medium text-gray-900">{kw.keyword}</td>
-                      <td className="table-td text-center">{kw.site_count}</td>
-                      <td className="table-td text-center">{kw.suggestion_count}</td>
-                      <td className="table-td text-center">
-                        <span className={p.className}>{p.label}</span>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+
+        <div className="p-5 space-y-5">
+          {/* Site selectors */}
+          <div className="flex flex-wrap items-center gap-4">
+            {[0, 1].map(idx => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: LINE_COLORS[idx] }} />
+                <select
+                  value={activeSiteIds[idx]}
+                  onChange={e => {
+                    const next = [...activeSiteIds] as [string, string]
+                    next[idx] = e.target.value
+                    setChartSites(prev => ({ ...prev, [activeCategory]: next }))
+                  }}
+                  className="text-sm border border-gray-200 rounded px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-500"
+                >
+                  <option value="">— 选择站点 —</option>
+                  {catSites[activeCategory].map(s => (
+                    <option key={s.id} value={s.id}>{s.domain}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+            {catSites[activeCategory].length === 0 && (
+              <p className="text-sm text-gray-400">该分类暂无站点，请在网站管理中设置分类</p>
+            )}
+          </div>
+
+          {/* Two comparison charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-semibold text-gray-600 mb-3">收录趋势</p>
+              <CompareChart
+                data={getIndexData(Array.from(activeSiteIds))}
+                siteIds={Array.from(activeSiteIds)}
+                siteMap={siteMap}
+                yFormatter={fmtNum}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-600 mb-3">移动 IP 均值趋势</p>
+              <CompareChart
+                data={getMobileIPData(Array.from(activeSiteIds))}
+                siteIds={Array.from(activeSiteIds)}
+                siteMap={siteMap}
+                yFormatter={fmtNum}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function StatCard({
-  title,
-  value,
-  color,
-  icon,
+// ─── AlertCard ────────────────────────────────────────────────────────────────
+
+const PALETTE = {
+  yellow: { border: 'border-yellow-100', count: 'text-yellow-500', pulse: 'bg-yellow-400' },
+  orange: { border: 'border-orange-100', count: 'text-orange-500', pulse: 'bg-orange-400' },
+  red:    { border: 'border-red-100',    count: 'text-red-500',    pulse: 'bg-red-400'    },
+  gray:   { border: 'border-gray-100',   count: 'text-gray-300',   pulse: 'bg-gray-300'   },
+}
+
+function AlertCard({
+  title, count, color, empty, children,
 }: {
   title: string
-  value: number
-  color: 'green' | 'blue' | 'red' | 'yellow'
-  icon: string
+  count: number
+  color: keyof typeof PALETTE
+  empty: string
+  children: ReactNode
 }) {
-  const colors = {
-    green: 'text-green-600 bg-green-50',
-    blue: 'text-blue-600 bg-blue-50',
-    red: 'text-red-600 bg-red-50',
-    yellow: 'text-yellow-600 bg-yellow-50',
-  }
+  const c = PALETTE[color]
+  const isPlaceholder = count < 0
+  const hasAlerts = count > 0
+
   return (
-    <div className="stat-card">
+    <div className={`rounded-xl border ${c.border} bg-white p-4`}>
       <div className="flex items-center justify-between mb-3">
-        <span className={`text-2xl p-2 rounded-lg ${colors[color]}`}>{icon}</span>
+        <div className="flex items-center gap-2">
+          {hasAlerts && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.pulse} animate-pulse`} />}
+          <span className="text-sm font-medium text-gray-600">{title}</span>
+        </div>
+        <span className={`text-2xl font-bold ${c.count}`}>
+          {isPlaceholder ? '—' : count}
+        </span>
       </div>
-      <p className="text-2xl font-bold text-gray-900">{value.toLocaleString()}</p>
-      <p className="text-sm text-gray-500 mt-1">{title}</p>
+      <div className="min-h-[3.5rem]">
+        {isPlaceholder || !hasAlerts ? (
+          <p className="text-xs text-gray-400">{empty}</p>
+        ) : (
+          <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
+            {children}
+          </div>
+        )}
+      </div>
     </div>
+  )
+}
+
+// ─── CompareChart ─────────────────────────────────────────────────────────────
+
+function CompareChart({
+  data, siteIds, siteMap, yFormatter,
+}: {
+  data: Record<string, string | number>[]
+  siteIds: string[]
+  siteMap: Map<string, Site>
+  yFormatter: (v: number) => string
+}) {
+  const active = siteIds.filter(Boolean)
+
+  if (active.length === 0 || data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-44 rounded-lg bg-gray-50 text-gray-400 text-sm">
+        {active.length === 0 ? '请选择站点' : '暂无数据'}
+      </div>
+    )
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={180}>
+      <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <XAxis
+          dataKey="date"
+          tick={{ fontSize: 10, fill: '#9ca3af' }}
+          tickLine={false}
+          axisLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis
+          tick={{ fontSize: 10, fill: '#9ca3af' }}
+          tickLine={false}
+          axisLine={false}
+          width={46}
+          tickFormatter={(v: number) => yFormatter(v)}
+        />
+        <Tooltip
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter={(value: any, name: any) => [
+            typeof value === 'number' ? value.toLocaleString() : value,
+            siteMap.get(name)?.domain ?? name,
+          ]}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          labelFormatter={(label: any) => `日期：${label}`}
+          contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb', padding: '6px 10px' }}
+        />
+        {active.map((id, i) => (
+          <Line
+            key={id}
+            type="monotone"
+            dataKey={id}
+            name={id}
+            stroke={LINE_COLORS[i]}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
   )
 }
