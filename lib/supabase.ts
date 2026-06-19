@@ -68,7 +68,6 @@ export type Database = {
         Row: {
           keyword: string
           volume: number
-          stat_date: string
         }
         Insert: Database['public']['Tables']['keyword_volume']['Row']
         Update: Partial<Database['public']['Tables']['keyword_volume']['Insert']>

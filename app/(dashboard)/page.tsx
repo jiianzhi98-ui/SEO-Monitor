@@ -458,7 +458,7 @@ export default function DashboardPage() {
 
 // ─── KeywordSearch ────────────────────────────────────────────────────────────
 
-interface KwVolRow { keyword: string; volume: number; stat_date: string }
+interface KwVolRow { keyword: string; volume: number }
 
 function KeywordSearch() {
   const [query, setQuery] = useState('')
@@ -494,8 +494,8 @@ function KeywordSearch() {
       const res = await fetch('/api/keyword-volume?export=1')
       const data = await res.json()
       const all: KwVolRow[] = data.keywords || []
-      const header = '关键词,搜索量,记录日期'
-      const csvRows = all.map(r => `"${r.keyword}",${r.volume},${r.stat_date}`)
+      const header = '关键词,搜索量'
+      const csvRows = all.map(r => `"${r.keyword}",${r.volume}`)
       const csv = [header, ...csvRows].join('\n')
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
@@ -582,7 +582,6 @@ function KeywordSearch() {
                 <th className="table-th w-8">#</th>
                 <th className="table-th">关键词</th>
                 <th className="table-th text-right">搜索量</th>
-                <th className="table-th text-right">最近记录</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -593,7 +592,6 @@ function KeywordSearch() {
                   <td className="table-td text-right text-gray-700 font-medium tabular-nums">
                     {r.volume > 0 ? r.volume.toLocaleString() : '—'}
                   </td>
-                  <td className="table-td text-right text-xs text-gray-400">{r.stat_date}</td>
                 </tr>
               ))}
             </tbody>
