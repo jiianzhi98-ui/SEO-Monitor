@@ -7,19 +7,39 @@ export interface PageEntry {
   url: string
 }
 
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-  'Accept-Encoding': 'gzip, deflate, br',
-  'Cache-Control': 'no-cache',
-  'Connection': 'keep-alive',
-  'Referer': 'https://www.baidu.com/',
-  'Upgrade-Insecure-Requests': '1',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
-  'Sec-Fetch-Site': 'cross-site',
-  'Sec-Fetch-User': '?1',
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+]
+
+function randomUA() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
+}
+
+function randomDelay(minMs: number, maxMs: number) {
+  return new Promise((r) => setTimeout(r, minMs + Math.floor(Math.random() * (maxMs - minMs))))
+}
+
+function getBrowserHeaders() {
+  return {
+    'User-Agent': randomUA(),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Referer': 'https://www.baidu.com/',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'cross-site',
+    'Sec-Fetch-User': '?1',
+  }
 }
 
 const DOWNLOAD_KEYWORDS = [
@@ -52,7 +72,7 @@ export async function fetchHtmlList(
   titleSelector: string,
   dateSelector: string
 ): Promise<PageEntry[]> {
-  const { ok, html, status } = await fetchHtmlDecoded(url, BROWSER_HEADERS)
+  const { ok, html, status } = await fetchHtmlDecoded(url, getBrowserHeaders())
   if (!ok) throw new Error(`Failed to fetch HTML list: ${status}`)
   const $ = cheerio.load(html)
 
@@ -124,7 +144,7 @@ export async function fetchHtmlListPages(
     while (currentUrl && page < maxPages) {
       page++
       try {
-        const { ok, html } = await fetchHtmlDecoded(currentUrl, BROWSER_HEADERS)
+        const { ok, html } = await fetchHtmlDecoded(currentUrl, getBrowserHeaders())
         if (!ok) break
         const $ = cheerio.load(html)
 
@@ -149,7 +169,7 @@ export async function fetchHtmlListPages(
         if (datedEntries.length > 0 && datedEntries.every((d) => d < cutoffDateStr)) break
 
         currentUrl = findNextPageUrl($, currentUrl)
-        if (currentUrl) await new Promise((r) => setTimeout(r, 1000))
+        if (currentUrl) await randomDelay(2000, 5000)
       } catch {
         break
       }
@@ -210,7 +230,7 @@ export async function fetchAizhanData(domain: string): Promise<{
   const empty = { pc: 0, mobile: 0, indexCount: 0, pcIpMin: 0, pcIpMax: 0, pcIpAvg: 0, mobileIpMin: 0, mobileIpMax: 0, mobileIpAvg: 0 }
   try {
     const res = await fetch(`https://www.aizhan.com/cha/${domain}/`, {
-      headers: { ...BROWSER_HEADERS, Referer: 'https://www.aizhan.com/' },
+      headers: { ...getBrowserHeaders(), Referer: 'https://www.aizhan.com/' },
       signal: AbortSignal.timeout(10000),
     })
     if (!res.ok) return empty
