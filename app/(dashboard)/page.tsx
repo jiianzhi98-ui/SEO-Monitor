@@ -518,6 +518,10 @@ function CompareChart({
     )
   }
 
+  const yTicks = Array.from({ length: 5 }, (_, i) =>
+    Math.round(domain[0] + (domain[1] - domain[0]) * i / 4)
+  )
+
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -535,7 +539,7 @@ function CompareChart({
           axisLine={false}
           width={46}
           domain={domain}
-          tickCount={5}
+          ticks={yTicks}
           allowDataOverflow
           tickFormatter={(v: number) => yFormatter(v)}
         />
