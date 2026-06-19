@@ -102,7 +102,7 @@ export async function GET(request: Request) {
 
       // Day: fetch all, store only titles not in month or week
       const weekExclusiveSet = new Set(weekTitles.filter((t) => !monthSet.has(t)))
-      const combined = new Set([...monthSet, ...weekExclusiveSet])
+      const combined = new Set(Array.from(monthSet).concat(Array.from(weekExclusiveSet)))
       const dayTitles = await storePeriod(supabase, site, 'day', today, combined)
       await new Promise((r) => setTimeout(r, 500))
 
