@@ -48,6 +48,18 @@ const SITE_COLORS = [
   '#ec4899', '#14b8a6', '#f59e0b', '#ef4444',
 ]
 
+// Fixed Y-axis domains per category
+const INDEX_DOMAIN: Record<Category, [number, number]> = {
+  large:  [0, 10_000_000],  // 0 – 1000w
+  medium: [0,  5_000_000],  // 0 – 500w
+  small:  [0,  2_000_000],  // 0 – 200w
+}
+const MOBILE_IP_DOMAIN: Record<Category, [number, number]> = {
+  large:  [0, 150_000],  // 0 – 15w
+  medium: [0,  80_000],  // 0 – 8w
+  small:  [0,  30_000],  // 0 – 3w
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getMY(offsetDays = 0): string {
@@ -72,13 +84,6 @@ function fmtNum(n: number): string {
   return n.toLocaleString()
 }
 
-// Round up to a clean chart-friendly number (e.g. 1002.8w → 1100w, 345w → 400w)
-function niceMax(v: number): number {
-  if (v <= 0) return 10
-  const exp = Math.floor(Math.log10(v))
-  const step = Math.pow(10, exp - 1)
-  return Math.ceil(v / step) * step
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -422,6 +427,7 @@ export default function DashboardPage() {
                 colorMap={Object.fromEntries(activeIds.map(id => [id, siteColor(activeCategory, id)]))}
                 siteMap={siteMap}
                 yFormatter={fmtNum}
+                domain={INDEX_DOMAIN[activeCategory]}
               />
             </div>
             <div>
@@ -430,6 +436,7 @@ export default function DashboardPage() {
                 data={getMobileIPData(activeIds)}
                 siteIds={activeIds}
                 colorMap={Object.fromEntries(activeIds.map(id => [id, siteColor(activeCategory, id)]))}
+                domain={MOBILE_IP_DOMAIN[activeCategory]}
                 siteMap={siteMap}
                 yFormatter={fmtNum}
               />
@@ -491,13 +498,14 @@ function AlertCard({
 // ─── CompareChart ─────────────────────────────────────────────────────────────
 
 function CompareChart({
-  data, siteIds, colorMap, siteMap, yFormatter,
+  data, siteIds, colorMap, siteMap, yFormatter, domain,
 }: {
   data: Record<string, string | number>[]
   siteIds: string[]
   colorMap: Record<string, string>
   siteMap: Map<string, Site>
   yFormatter: (v: number) => string
+  domain: [number, number]
 }) {
   if (siteIds.length === 0 || data.length === 0) {
     return (
@@ -506,18 +514,6 @@ function CompareChart({
       </div>
     )
   }
-
-  // Compute Y-axis max: p95 to exclude outlier sites, then round up to a clean number
-  const allVals: number[] = []
-  for (const row of data) {
-    for (const id of siteIds) {
-      const v = row[id]
-      if (typeof v === 'number' && v > 0) allVals.push(v)
-    }
-  }
-  allVals.sort((a, b) => a - b)
-  const p95 = allVals.length > 0 ? allVals[Math.floor(allVals.length * 0.95)] : 0
-  const yDomain: [number, number | string] = p95 > 0 ? [0, niceMax(p95 * 1.1)] : [0, 'auto']
 
   return (
     <ResponsiveContainer width="100%" height={200}>
@@ -535,8 +531,8 @@ function CompareChart({
           tickLine={false}
           axisLine={false}
           width={46}
-          domain={yDomain}
-          allowDataOverflow
+          domain={domain}
+          tickCount={5}
           tickFormatter={(v: number) => yFormatter(v)}
         />
         <Tooltip
