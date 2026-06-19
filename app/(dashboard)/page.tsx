@@ -498,6 +498,34 @@ function AlertCard({
   )
 }
 
+// ─── SortedTooltip ───────────────────────────────────────────────────────────
+
+function SortedTooltip({
+  active, payload, label, siteMap,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  active?: boolean; payload?: any[]; label?: string
+  siteMap: Map<string, Site>
+}) {
+  if (!active || !payload || payload.length === 0) return null
+  const sorted = [...payload]
+    .filter(p => p.value != null)
+    .sort((a, b) => b.value - a.value)
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
+      <p style={{ color: '#6b7280', marginBottom: 4 }}>日期：{label}</p>
+      {sorted.map((p, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '1px 0' }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: p.color, flexShrink: 0 }} />
+          <span style={{ color: '#374151' }}>
+            {siteMap.get(p.name)?.domain ?? p.name} : {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── CompareChart ─────────────────────────────────────────────────────────────
 
 function CompareChart({
@@ -543,16 +571,7 @@ function CompareChart({
           allowDataOverflow
           tickFormatter={(v: number) => yFormatter(v)}
         />
-        <Tooltip
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formatter={(value: any, name: any) => [
-            typeof value === 'number' ? value.toLocaleString() : value,
-            siteMap.get(name)?.domain ?? name,
-          ]}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          labelFormatter={(label: any) => `日期：${label}`}
-          contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb', padding: '6px 10px' }}
-        />
+        <Tooltip content={(props) => <SortedTooltip {...props} siteMap={siteMap} />} />
         {siteIds.map(id => (
           <Line
             key={id}
