@@ -168,6 +168,53 @@ export default function CrawlLogPage() {
           </div>
         </div>
 
+        {/* 热词雷达 */}
+        <div className="card p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-base font-semibold text-gray-900">热词雷达</h2>
+            <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-medium">/api/hot-radar · 按需查询</span>
+          </div>
+          <div className="space-y-4">
+
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">数据来源</p>
+              <div className="space-y-2 text-sm text-gray-600">
+                <div className="flex gap-3">
+                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium flex-shrink-0">共新增词</span>
+                  <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code>，按关键词聚合，找出被 N 个以上竞品同时新增的词</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded font-medium flex-shrink-0">竞品涨排名</span>
+                  <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">rank_changes</code>（type=rankup），找出多个竞品同时涨排名的关键词及最高搜索量</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-medium flex-shrink-0">共收录词</span>
+                  <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">baidu_index_changes</code>（change_type=appeared），找出多个竞品同时新增百度收录的标题</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium flex-shrink-0">交叉词</span>
+                  <span>同一关键词命中以上 2 个或以上维度，为最强趋势信号；页面默认展示此 Tab</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">聚合规则</p>
+              <div className="space-y-1.5 text-sm text-gray-600">
+                <div className="flex gap-3">
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">阈值</span>
+                  <span>API 返回站点数 ≥ 2 的词，页面默认过滤为 ≥ 3 站，可手动调整为 2～5 站</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">触发方式</span>
+                  <span>进入热词雷达页面时按需查询，无定时任务，不写入额外数据表</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         {/* 竞品日收手动操作 */}
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
