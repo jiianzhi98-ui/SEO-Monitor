@@ -60,6 +60,7 @@ export default function IndexMonitorPage() {
   const [indexPeriod, setIndexPeriod] = useState<'day' | 'week' | 'month'>('month')
   const [indexItems, setIndexItems] = useState<{ title: string; exclusive: boolean }[]>([])
   const [indexLoading, setIndexLoading] = useState(false)
+  const [indexNotCrawled, setIndexNotCrawled] = useState(false)
 
   // 收录变动 modal
   const [changeSite, setChangeSite] = useState<IndexRow | null>(null)
@@ -119,11 +120,12 @@ export default function IndexMonitorPage() {
     setIndexPeriod(period)
     setIndexLoading(true)
     setIndexItems([])
+    setIndexNotCrawled(false)
     try {
-      const params = new URLSearchParams({ domain: site.domain, period, siteName: site.name, siteId: site.site_id })
-      const res = await fetch(`/api/baidu-site?${params}`)
+      const res = await fetch(`/api/baidu-site?siteId=${encodeURIComponent(site.site_id)}&period=${period}`)
       const data = await res.json()
       setIndexItems(data.items || [])
+      setIndexNotCrawled(!!data.notCrawled)
     } catch {
       setIndexItems([])
     } finally {
@@ -317,7 +319,9 @@ export default function IndexMonitorPage() {
                   <span className="text-sm">抓取中，请稍候...</span>
                 </div>
               ) : indexItems.length === 0 ? (
-                <p className="text-center text-gray-400 py-16 text-sm">无收录数据</p>
+                <p className="text-center text-gray-400 py-16 text-sm">
+                  {indexNotCrawled ? '今日数据尚未抓取，cron 将在每天凌晨 6 点（马来时间）自动运行' : '无收录数据'}
+                </p>
               ) : (
                 <div>
                   <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-500 flex gap-3">

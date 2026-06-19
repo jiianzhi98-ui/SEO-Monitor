@@ -307,6 +307,51 @@ export async function fetchRankChanges(
   return allResults.flat()
 }
 
+const BAIDU_SEARCH_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  'Referer': 'https://www.baidu.com/',
+  'Cache-Control': 'no-cache',
+}
+const TBS_MAP: Record<string, string> = { day: 'qdr:d', week: 'qdr:w', month: 'qdr:m' }
+
+// Fetch all Baidu site: search result titles for a given time period
+export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'week' | 'day', siteName: string): Promise<string[]> {
+  const tbs = TBS_MAP[period] || 'qdr:m'
+  const escapedName = siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const stripRe = escapedName ? new RegExp(`\\s*[-_|]\\s*${escapedName}\\s*$`) : null
+  const titles: string[] = []
+
+  for (let page = 0; page < 20; page++) {
+    const pn = page * 10
+    const url = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&tbs=${encodeURIComponent(tbs)}&ie=utf-8${pn > 0 ? `&pn=${pn}` : ''}`
+    try {
+      const res = await fetch(url, { headers: BAIDU_SEARCH_HEADERS, signal: AbortSignal.timeout(8000), next: { revalidate: 0 } })
+      if (!res.ok) break
+      const buffer = Buffer.from(await res.arrayBuffer())
+      const peek = buffer.subarray(0, 2000).toString('ascii')
+      const ctCharset = (res.headers.get('content-type') || '').match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase()
+      const metaCharset = peek.match(/<meta[^>]+charset=["']?\s*([^"'\s;>]+)/i)?.[1]?.toLowerCase()
+      const raw = ctCharset || metaCharset || 'utf-8'
+      const html = iconv.decode(buffer, (raw === 'gb2312' || raw === 'gb18030') ? 'gbk' : raw)
+      const $ = cheerio.load(html)
+      const pageTitles: string[] = []
+      $('h3.t').each((_, el) => {
+        let title = $(el).find('a').first().text().trim() || $(el).text().trim()
+        if (stripRe) title = title.replace(stripRe, '').trim()
+        if (title) pageTitles.push(title)
+      })
+      if (pageTitles.length === 0) break
+      titles.push(...pageTitles)
+      const hasNext = $('a').filter((_, el) => $(el).text().trim() === '下一页>').length > 0
+      if (!hasNext) break
+      if (page < 19) await new Promise((r) => setTimeout(r, 400))
+    } catch { break }
+  }
+  return titles
+}
+
 // @deprecated use fetchAizhanData instead
 export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; mobile: number }> {
   const { pc, mobile } = await fetchAizhanData(domain)
