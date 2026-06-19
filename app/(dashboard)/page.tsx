@@ -471,7 +471,7 @@ function AlertCard({
         {isPlaceholder || !hasAlerts ? (
           <p className="text-xs text-gray-400">{empty}</p>
         ) : (
-          <div className="space-y-0.5">
+          <div className="max-h-24 overflow-y-auto space-y-0.5 pr-1">
             {children}
           </div>
         )}
@@ -515,6 +515,7 @@ function CompareChart({
           tickLine={false}
           axisLine={false}
           width={46}
+          tickCount={4}
           tickFormatter={(v: number) => yFormatter(v)}
         />
         <Tooltip
