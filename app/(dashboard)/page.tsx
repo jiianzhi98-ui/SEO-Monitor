@@ -513,20 +513,27 @@ function SortedTooltip({
     .sort((a, b) => b.value - a.value)
 
   const cols = sorted.length <= 8 ? 1 : sorted.length <= 18 ? 2 : 3
+  // Split into equal column chunks so reading order goes DOWN each column then to the next
+  const perCol = Math.ceil(sorted.length / cols)
+  const chunks = Array.from({ length: cols }, (_, c) => sorted.slice(c * perCol, (c + 1) * perCol))
+
+  const renderItem = (p: { name: string; value: number; color: string }, i: number) => (
+    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 0' }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: p.color, flexShrink: 0 }} />
+      <span style={{ color: '#374151', whiteSpace: 'nowrap' }}>
+        {siteMap.get(p.name)?.domain ?? p.name}
+        <span style={{ color: '#9ca3af' }}> : </span>
+        {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
+      </span>
+    </div>
+  )
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', fontSize: 12, maxWidth: cols === 1 ? 260 : cols === 2 ? 520 : 760 }}>
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
       <p style={{ color: '#6b7280', marginBottom: 6, fontWeight: 500 }}>日期：{label}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, columnGap: 20, rowGap: 2 }}>
-        {sorted.map((p, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: p.color, flexShrink: 0 }} />
-            <span style={{ color: '#374151', whiteSpace: 'nowrap' }}>
-              {siteMap.get(p.name)?.domain ?? p.name}
-              <span style={{ color: '#6b7280' }}> : </span>
-              {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
-            </span>
-          </div>
+      <div style={{ display: 'flex', gap: 20 }}>
+        {chunks.map((chunk, ci) => (
+          <div key={ci}>{chunk.map((p, i) => renderItem(p, i))}</div>
         ))}
       </div>
     </div>
