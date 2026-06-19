@@ -175,6 +175,14 @@ export async function GET(request: Request) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('rank_changes') as any).insert(rankRows)
         }
+        // Upsert rankup keywords to permanent keyword_volume store (deduped by keyword)
+        const kwVolumeRows = rankupEntries
+          .filter((e) => e.volume > 0)
+          .map((e) => ({ keyword: e.keyword, volume: e.volume, last_seen: today }))
+        if (kwVolumeRows.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('keyword_volume') as any).upsert(kwVolumeRows, { onConflict: 'keyword' })
+        }
       } catch {
         // rank fetch failure does not block other processing
       }

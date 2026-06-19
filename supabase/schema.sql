@@ -67,32 +67,17 @@ CREATE TABLE IF NOT EXISTS index_snapshots (
 CREATE INDEX IF NOT EXISTS idx_index_snapshots_site_id ON index_snapshots(site_id);
 CREATE INDEX IF NOT EXISTS idx_index_snapshots_snapshot_date ON index_snapshots(snapshot_date);
 
--- Hot keywords table (auto-delete after 90 days)
-CREATE TABLE IF NOT EXISTS hot_keywords (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  keyword TEXT NOT NULL,
-  site_count INTEGER NOT NULL DEFAULT 0,
-  site_list TEXT[] DEFAULT '{}',
-  suggestions TEXT[] DEFAULT '{}',
-  suggestion_count INTEGER NOT NULL DEFAULT 0,
-  priority TEXT NOT NULL DEFAULT 'queue' CHECK (priority IN ('urgent', 'today', 'queue')),
-  period_start DATE NOT NULL DEFAULT CURRENT_DATE,
-  period_end DATE NOT NULL DEFAULT CURRENT_DATE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Keyword volume table (permanent, deduped by keyword)
+-- Collects all rankup keywords from all sites; each keyword stored once with latest volume
+CREATE TABLE IF NOT EXISTS keyword_volume (
+  keyword TEXT PRIMARY KEY,
+  volume INTEGER NOT NULL DEFAULT 0,
+  last_seen DATE NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_hot_keywords_keyword ON hot_keywords(keyword);
-CREATE INDEX IF NOT EXISTS idx_hot_keywords_priority ON hot_keywords(priority);
-CREATE INDEX IF NOT EXISTS idx_hot_keywords_period_start ON hot_keywords(period_start);
-CREATE INDEX IF NOT EXISTS idx_hot_keywords_site_count ON hot_keywords(site_count DESC);
-
--- Function to auto-delete hot_keywords older than 90 days
-CREATE OR REPLACE FUNCTION delete_old_hot_keywords()
-RETURNS void AS $$
-BEGIN
-  DELETE FROM hot_keywords WHERE created_at < NOW() - INTERVAL '90 days';
-END;
-$$ LANGUAGE plpgsql;
+CREATE INDEX IF NOT EXISTS idx_keyword_volume_volume ON keyword_volume(volume DESC);
+CREATE INDEX IF NOT EXISTS idx_keyword_volume_last_seen ON keyword_volume(last_seen DESC);
 
 -- Weight history table (permanent)
 CREATE TABLE IF NOT EXISTS weight_history (

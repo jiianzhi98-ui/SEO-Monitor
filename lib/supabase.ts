@@ -64,6 +64,16 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['weight_history']['Row'], 'id'>
         Update: Partial<Database['public']['Tables']['weight_history']['Insert']>
       }
+      keyword_volume: {
+        Row: {
+          keyword: string
+          volume: number
+          last_seen: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['keyword_volume']['Row'], 'updated_at'>
+        Update: Partial<Database['public']['Tables']['keyword_volume']['Insert']>
+      }
     }
   }
 }

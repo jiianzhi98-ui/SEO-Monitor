@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { type ReactNode } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import {
@@ -447,6 +447,146 @@ export default function DashboardPage() {
           </div>
 
         </div>
+      </div>
+
+      {/* ── Keyword Volume Search ───────────────────────────────────────── */}
+      <KeywordSearch />
+
+    </div>
+  )
+}
+
+// ─── KeywordSearch ────────────────────────────────────────────────────────────
+
+interface KwVolRow { keyword: string; volume: number; last_seen: string }
+
+function KeywordSearch() {
+  const [query, setQuery] = useState('')
+  const [rows, setRows] = useState<KwVolRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const fetchRows = useCallback(async (q: string) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      setRows(data.keywords || [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchRows('')
+  }, [fetchRows])
+
+  function handleInput(val: string) {
+    setQuery(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => fetchRows(val), 300)
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/keyword-volume?export=1')
+      const data = await res.json()
+      const all: KwVolRow[] = data.keywords || []
+      const header = '关键词,搜索量,最近记录日期'
+      const csvRows = all.map(r => `"${r.keyword}",${r.volume},${r.last_seen}`)
+      const csv = [header, ...csvRows].join('\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `keywords-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">关键词搜索量查询</p>
+          <p className="text-xs text-gray-400 mt-0.5">收录全部竞品涨排名关键词及百度搜索量，永久保留</p>
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition-colors disabled:opacity-50"
+        >
+          {exporting ? (
+            <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          )}
+          导出全部数据
+        </button>
+      </div>
+
+      <div className="px-5 py-3 border-b border-gray-100">
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => handleInput(e.target.value)}
+            placeholder="搜索关键词..."
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-10 text-gray-400 gap-2 text-sm">
+            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            查询中...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="py-10 text-center text-gray-400 text-sm">
+            {query ? `未找到包含"${query}"的关键词` : '暂无数据，待每日 Cron 写入后显示'}
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="table-th w-8">#</th>
+                <th className="table-th">关键词</th>
+                <th className="table-th text-right">搜索量</th>
+                <th className="table-th text-right">最近记录</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((r, i) => (
+                <tr key={r.keyword} className="hover:bg-gray-50 transition-colors">
+                  <td className="table-td text-gray-400 text-xs">{i + 1}</td>
+                  <td className="table-td font-medium text-gray-900">{r.keyword}</td>
+                  <td className="table-td text-right text-gray-700 font-medium tabular-nums">
+                    {r.volume > 0 ? r.volume.toLocaleString() : '—'}
+                  </td>
+                  <td className="table-td text-right text-xs text-gray-400">{r.last_seen}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
