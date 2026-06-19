@@ -42,7 +42,11 @@ const TIME_OPTIONS: { value: TimeRange; label: string }[] = [
   { value: 'year', label: '全年' },
 ]
 
-const LINE_COLORS = ['#22c55e', '#f97316']
+// Color palette for multiple sites
+const SITE_COLORS = [
+  '#22c55e', '#3b82f6', '#f97316', '#a855f7',
+  '#ec4899', '#14b8a6', '#f59e0b', '#ef4444',
+]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -82,8 +86,9 @@ export default function DashboardPage() {
 
   const [timeRange, setTimeRange] = useState<TimeRange>('3m')
   const [activeCategory, setActiveCategory] = useState<Category>('large')
-  const [chartSites, setChartSites] = useState<Record<Category, [string, string]>>({
-    large: ['', ''], medium: ['', ''], small: ['', ''],
+  // selected = focused sites; empty = show all
+  const [selected, setSelected] = useState<Record<Category, string[]>>({
+    large: [], medium: [], small: [],
   })
 
   useEffect(() => { load() }, [])
@@ -169,14 +174,6 @@ export default function DashboardPage() {
       }
       setKwAlerts(kAlerts)
 
-      // Auto-select first two sites per category
-      const auto: Record<Category, [string, string]> = { large: ['', ''], medium: ['', ''], small: ['', ''] }
-      for (const cat of ['large', 'medium', 'small'] as Category[]) {
-        const cs = siteList.filter(s => s.category === cat)
-        auto[cat] = [cs[0]?.id ?? '', cs[1]?.id ?? '']
-      }
-      setChartSites(auto)
-
       const firstCat = (['large', 'medium', 'small'] as Category[]).find(
         c => siteList.some(s => s.category === c)
       )
@@ -197,10 +194,30 @@ export default function DashboardPage() {
 
   const siteMap = useMemo(() => new Map(sites.map(s => [s.id, s])), [sites])
 
+  // Color index by site within category
+  function siteColor(cat: Category, siteId: string): string {
+    const idx = catSites[cat].findIndex(s => s.id === siteId)
+    return SITE_COLORS[idx % SITE_COLORS.length]
+  }
+
+  // Which sites to draw: selected ones, or all if nothing selected
+  function activeSiteIds(cat: Category): string[] {
+    return selected[cat].length > 0
+      ? selected[cat]
+      : catSites[cat].map(s => s.id)
+  }
+
+  function toggleSite(siteId: string) {
+    setSelected(prev => {
+      const cur = prev[activeCategory]
+      const next = cur.includes(siteId) ? cur.filter(id => id !== siteId) : [...cur, siteId]
+      return { ...prev, [activeCategory]: next }
+    })
+  }
+
   function getIndexData(ids: string[]) {
     const cutoff = getDateCutoff(timeRange)
-    const active = ids.filter(Boolean)
-    const filtered = indexSnaps.filter(r => r.snapshot_date >= cutoff && active.includes(r.site_id))
+    const filtered = indexSnaps.filter(r => r.snapshot_date >= cutoff && ids.includes(r.site_id))
     const map = new Map<string, Record<string, number>>()
     for (const r of filtered) {
       if (!map.has(r.snapshot_date)) map.set(r.snapshot_date, {})
@@ -213,8 +230,7 @@ export default function DashboardPage() {
 
   function getMobileIPData(ids: string[]) {
     const cutoff = getDateCutoff(timeRange)
-    const active = ids.filter(Boolean)
-    const filtered = weightRecs.filter(r => r.record_date >= cutoff && active.includes(r.site_id))
+    const filtered = weightRecs.filter(r => r.record_date >= cutoff && ids.includes(r.site_id))
     const map = new Map<string, Record<string, number>>()
     for (const r of filtered) {
       const avg = Math.round(((r.mobile_ip ?? 0) + (r.mobile_ip_max ?? 0)) / 2)
@@ -250,7 +266,8 @@ export default function DashboardPage() {
   }
 
   const today = getMY()
-  const activeSiteIds = chartSites[activeCategory]
+  const activeIds = activeSiteIds(activeCategory)
+  const activeSelected = selected[activeCategory]
 
   return (
     <div className="p-8 space-y-6">
@@ -343,30 +360,47 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="p-5 space-y-5">
-          {/* Site selectors */}
-          <div className="flex flex-wrap items-center gap-4">
-            {[0, 1].map(idx => (
-              <div key={idx} className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: LINE_COLORS[idx] }} />
-                <select
-                  value={activeSiteIds[idx]}
-                  onChange={e => {
-                    const next = [...activeSiteIds] as [string, string]
-                    next[idx] = e.target.value
-                    setChartSites(prev => ({ ...prev, [activeCategory]: next }))
-                  }}
-                  className="text-sm border border-gray-200 rounded px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-500"
-                >
-                  <option value="">— 选择站点 —</option>
-                  {catSites[activeCategory].map(s => (
-                    <option key={s.id} value={s.id}>{s.domain}</option>
-                  ))}
-                </select>
-              </div>
-            ))}
-            {catSites[activeCategory].length === 0 && (
+        <div className="p-5 space-y-4">
+
+          {/* Site toggle pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            {catSites[activeCategory].length === 0 ? (
               <p className="text-sm text-gray-400">该分类暂无站点，请在网站管理中设置分类</p>
+            ) : (
+              <>
+                {activeSelected.length > 0 && (
+                  <button
+                    onClick={() => setSelected(prev => ({ ...prev, [activeCategory]: [] }))}
+                    className="text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600 transition-colors"
+                  >
+                    全部
+                  </button>
+                )}
+                {catSites[activeCategory].map(s => {
+                  const color = siteColor(activeCategory, s.id)
+                  const isActive = activeSelected.length === 0 || activeSelected.includes(s.id)
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => toggleSite(s.id)}
+                      className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        activeSelected.includes(s.id)
+                          ? 'border-transparent text-white font-medium'
+                          : activeSelected.length > 0
+                            ? 'border-gray-200 text-gray-400 hover:text-gray-600'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                      style={activeSelected.includes(s.id) ? { backgroundColor: color } : {}}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: isActive ? color : '#d1d5db' }}
+                      />
+                      {s.domain}
+                    </button>
+                  )
+                })}
+              </>
             )}
           </div>
 
@@ -375,8 +409,9 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-semibold text-gray-600 mb-3">收录趋势</p>
               <CompareChart
-                data={getIndexData(Array.from(activeSiteIds))}
-                siteIds={Array.from(activeSiteIds)}
+                data={getIndexData(activeIds)}
+                siteIds={activeIds}
+                colorMap={Object.fromEntries(activeIds.map(id => [id, siteColor(activeCategory, id)]))}
                 siteMap={siteMap}
                 yFormatter={fmtNum}
               />
@@ -384,13 +419,15 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-semibold text-gray-600 mb-3">移动 IP 均值趋势</p>
               <CompareChart
-                data={getMobileIPData(Array.from(activeSiteIds))}
-                siteIds={Array.from(activeSiteIds)}
+                data={getMobileIPData(activeIds)}
+                siteIds={activeIds}
+                colorMap={Object.fromEntries(activeIds.map(id => [id, siteColor(activeCategory, id)]))}
                 siteMap={siteMap}
                 yFormatter={fmtNum}
               />
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -430,11 +467,11 @@ function AlertCard({
           {isPlaceholder ? '—' : count}
         </span>
       </div>
-      <div className="min-h-[3.5rem]">
+      <div>
         {isPlaceholder || !hasAlerts ? (
           <p className="text-xs text-gray-400">{empty}</p>
         ) : (
-          <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
+          <div className="space-y-0.5">
             {children}
           </div>
         )}
@@ -446,25 +483,24 @@ function AlertCard({
 // ─── CompareChart ─────────────────────────────────────────────────────────────
 
 function CompareChart({
-  data, siteIds, siteMap, yFormatter,
+  data, siteIds, colorMap, siteMap, yFormatter,
 }: {
   data: Record<string, string | number>[]
   siteIds: string[]
+  colorMap: Record<string, string>
   siteMap: Map<string, Site>
   yFormatter: (v: number) => string
 }) {
-  const active = siteIds.filter(Boolean)
-
-  if (active.length === 0 || data.length === 0) {
+  if (siteIds.length === 0 || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-44 rounded-lg bg-gray-50 text-gray-400 text-sm">
-        {active.length === 0 ? '请选择站点' : '暂无数据'}
+        {siteIds.length === 0 ? '该分类暂无站点' : '暂无数据'}
       </div>
     )
   }
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis
@@ -491,13 +527,13 @@ function CompareChart({
           labelFormatter={(label: any) => `日期：${label}`}
           contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb', padding: '6px 10px' }}
         />
-        {active.map((id, i) => (
+        {siteIds.map(id => (
           <Line
             key={id}
             type="monotone"
             dataKey={id}
             name={id}
-            stroke={LINE_COLORS[i]}
+            stroke={colorMap[id]}
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
