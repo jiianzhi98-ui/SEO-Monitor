@@ -12,7 +12,7 @@ export default function CrawlLogPage() {
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-base font-semibold text-gray-900">主 Cron</h2>
-            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">/api/cron · 每日 06:00</span>
+            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">/api/cron · 每日 05:00</span>
           </div>
           <div className="space-y-4">
 
@@ -75,7 +75,7 @@ export default function CrawlLogPage() {
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-base font-semibold text-gray-900">百度收录 Cron</h2>
-            <span className="text-xs bg-teal-50 text-teal-600 px-2 py-0.5 rounded font-medium">/api/cron/baidu-index · 每日 06:00</span>
+            <span className="text-xs bg-teal-50 text-teal-600 px-2 py-0.5 rounded font-medium">/api/cron/baidu-index · 每日 07:00</span>
           </div>
           <div className="space-y-4">
 
