@@ -68,10 +68,9 @@ export type Database = {
         Row: {
           keyword: string
           volume: number
-          last_seen: string
-          updated_at: string
+          stat_date: string
         }
-        Insert: Omit<Database['public']['Tables']['keyword_volume']['Row'], 'updated_at'>
+        Insert: Database['public']['Tables']['keyword_volume']['Row']
         Update: Partial<Database['public']['Tables']['keyword_volume']['Insert']>
       }
     }

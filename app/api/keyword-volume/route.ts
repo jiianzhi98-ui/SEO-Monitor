@@ -10,7 +10,8 @@ export async function GET(req: Request) {
 
   let query = supabase
     .from('keyword_volume')
-    .select('keyword, volume, last_seen')
+    .select('keyword, volume, stat_date')
+    .order('stat_date', { ascending: false })
     .order('volume', { ascending: false })
 
   if (q) {

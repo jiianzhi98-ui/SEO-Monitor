@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { type ReactNode } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import {
@@ -458,34 +458,34 @@ export default function DashboardPage() {
 
 // ─── KeywordSearch ────────────────────────────────────────────────────────────
 
-interface KwVolRow { keyword: string; volume: number; last_seen: string }
+interface KwVolRow { keyword: string; volume: number; stat_date: string }
 
 function KeywordSearch() {
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<KwVolRow[]>([])
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [searched, setSearched] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchRows = useCallback(async (q: string) => {
     setLoading(true)
     try {
       const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(q)}`)
       const data = await res.json()
       setRows(data.keywords || [])
+      setSearched(true)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    fetchRows('')
-  }, [fetchRows])
+  function handleSearch() {
+    fetchRows(query)
+  }
 
-  function handleInput(val: string) {
-    setQuery(val)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchRows(val), 300)
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') fetchRows(query)
   }
 
   async function handleExport() {
@@ -494,8 +494,8 @@ function KeywordSearch() {
       const res = await fetch('/api/keyword-volume?export=1')
       const data = await res.json()
       const all: KwVolRow[] = data.keywords || []
-      const header = '关键词,搜索量,最近记录日期'
-      const csvRows = all.map(r => `"${r.keyword}",${r.volume},${r.last_seen}`)
+      const header = '关键词,搜索量,记录日期'
+      const csvRows = all.map(r => `"${r.keyword}",${r.volume},${r.stat_date}`)
       const csv = [header, ...csvRows].join('\n')
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
@@ -536,17 +536,27 @@ function KeywordSearch() {
       </div>
 
       <div className="px-5 py-3 border-b border-gray-100">
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => handleInput(e.target.value)}
-            placeholder="搜索关键词..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="输入关键词..."
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            搜索
+          </button>
         </div>
       </div>
 
@@ -559,9 +569,11 @@ function KeywordSearch() {
             </svg>
             查询中...
           </div>
+        ) : !searched ? (
+          <div className="py-10 text-center text-gray-400 text-sm">输入关键词后点击搜索</div>
         ) : rows.length === 0 ? (
           <div className="py-10 text-center text-gray-400 text-sm">
-            {query ? `未找到包含"${query}"的关键词` : '暂无数据，待每日 Cron 写入后显示'}
+            未找到包含「{query}」的关键词
           </div>
         ) : (
           <table className="w-full">
@@ -581,7 +593,7 @@ function KeywordSearch() {
                   <td className="table-td text-right text-gray-700 font-medium tabular-nums">
                     {r.volume > 0 ? r.volume.toLocaleString() : '—'}
                   </td>
-                  <td className="table-td text-right text-xs text-gray-400">{r.last_seen}</td>
+                  <td className="table-td text-right text-xs text-gray-400">{r.stat_date}</td>
                 </tr>
               ))}
             </tbody>

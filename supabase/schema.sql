@@ -67,17 +67,17 @@ CREATE TABLE IF NOT EXISTS index_snapshots (
 CREATE INDEX IF NOT EXISTS idx_index_snapshots_site_id ON index_snapshots(site_id);
 CREATE INDEX IF NOT EXISTS idx_index_snapshots_snapshot_date ON index_snapshots(snapshot_date);
 
--- Keyword volume table (permanent, deduped by keyword)
--- Collects all rankup keywords from all sites; each keyword stored once with latest volume
+-- Keyword volume table (permanent)
+-- One row per (keyword, date): deduped across sites, keeps all daily history
 CREATE TABLE IF NOT EXISTS keyword_volume (
-  keyword TEXT PRIMARY KEY,
-  volume INTEGER NOT NULL DEFAULT 0,
-  last_seen DATE NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  keyword   TEXT    NOT NULL,
+  volume    INTEGER NOT NULL DEFAULT 0,
+  stat_date DATE    NOT NULL,
+  PRIMARY KEY (keyword, stat_date)
 );
 
+CREATE INDEX IF NOT EXISTS idx_keyword_volume_stat_date ON keyword_volume(stat_date DESC);
 CREATE INDEX IF NOT EXISTS idx_keyword_volume_volume ON keyword_volume(volume DESC);
-CREATE INDEX IF NOT EXISTS idx_keyword_volume_last_seen ON keyword_volume(last_seen DESC);
 
 -- Weight history table (permanent)
 CREATE TABLE IF NOT EXISTS weight_history (
