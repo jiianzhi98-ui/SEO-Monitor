@@ -93,7 +93,7 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
   }
 
   function addSource() {
-    if (htmlSources.length < 2) setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '' }])
+    setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '' }])
   }
 
   function removeSource(idx: number) {
@@ -286,15 +286,13 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                   </div>
                 </div>
               ))}
-              {htmlSources.length < 2 && (
-                <button
-                  type="button"
-                  onClick={addSource}
-                  className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-xs text-gray-400 hover:border-green-400 hover:text-green-600 transition-colors"
-                >
-                  + 添加来源 2（不同页面布局）
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={addSource}
+                className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-xs text-gray-400 hover:border-green-400 hover:text-green-600 transition-colors"
+              >
+                + 添加来源（不同页面布局）
+              </button>
             </div>
 
           {/* Version Clean */}
