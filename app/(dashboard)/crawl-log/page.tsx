@@ -116,6 +116,54 @@ export default function CrawlLogPage() {
           </div>
         </div>
 
+        {/* 状态规则 */}
+        <div className="card p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-base font-semibold text-gray-900">状态判断规则</h2>
+          </div>
+          <div className="space-y-5">
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">收录监控</p>
+              <p className="text-xs text-gray-400 mb-2">对比「最新快照」与「7天前快照」的周变化率</p>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">正常</span>
+                  <span className="text-gray-600">周变化率 ≥ −10%，或数据不足 7 天</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">警告</span>
+                  <span className="text-gray-600">周变化率 −20% ~ −10%</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">危险</span>
+                  <span className="text-gray-600">周变化率 &lt; −20%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">竞品日收</p>
+              <p className="text-xs text-gray-400 mb-2">对比「昨日新增」与「近7日均值」的比例</p>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">正常</span>
+                  <span className="text-gray-600">昨日新增 ≥ 7日均值 × 60%，或均值为 0</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">偏低</span>
+                  <span className="text-gray-600">昨日新增在 7日均值 × 30%~60% 之间</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">异常</span>
+                  <span className="text-gray-600">昨日新增 &lt; 7日均值 × 30%</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         {/* 竞品日收手动操作 */}
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
