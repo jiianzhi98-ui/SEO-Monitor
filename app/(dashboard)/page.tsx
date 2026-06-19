@@ -80,7 +80,10 @@ function getDateCutoff(range: TimeRange): string {
 }
 
 function fmtNum(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
+  if (n >= 10000) {
+    const w = n / 10000
+    return (w % 1 === 0 ? w.toFixed(0) : w.toFixed(1)) + 'w'
+  }
   return n.toLocaleString()
 }
 
@@ -533,6 +536,7 @@ function CompareChart({
           width={46}
           domain={domain}
           tickCount={5}
+          allowDataOverflow
           tickFormatter={(v: number) => yFormatter(v)}
         />
         <Tooltip
