@@ -320,7 +320,7 @@ export default function IndexMonitorPage() {
                 </div>
               ) : indexItems.length === 0 ? (
                 <p className="text-center text-gray-400 py-16 text-sm">
-                  {indexNotCrawled ? '今日数据尚未抓取，cron 将在每天凌晨 6 点（马来时间）自动运行' : '无收录数据'}
+                  {indexNotCrawled ? '今日数据尚未抓取，cron 将在每天凌晨 6 点自动运行' : '无收录数据'}
                 </p>
               ) : (
                 <div>
