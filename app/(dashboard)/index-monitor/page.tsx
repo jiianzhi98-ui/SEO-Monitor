@@ -17,13 +17,14 @@ interface IndexRow {
   latest: number
   weeklyChange: number
   trend: { date: string; count: number }[]
-  status: 'normal' | 'warning' | 'danger'
+  status: 'normal' | 'warning' | 'danger' | 'rising'
 }
 
 const statusConfig = {
-  normal: { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
+  normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '警告', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
-  danger: { label: '危险', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
+  danger:  { label: '危险', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
+  rising:  { label: '涨入', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-medium' },
 }
 
 function getMalaysiaDate(offsetDays = 0) {
@@ -77,11 +78,12 @@ export default function IndexMonitorPage() {
         const weekAgo = snap7 ? snap7.index_count : 0
         const weeklyChange = weekAgo > 0 ? latest - weekAgo : 0
 
-        let status: 'normal' | 'warning' | 'danger' = 'normal'
+        let status: 'normal' | 'warning' | 'danger' | 'rising' = 'normal'
         if (siteSnaps.length >= 7 && weekAgo > 0) {
           const rate = weeklyChange / weekAgo
           if (rate < -0.2) status = 'danger'
           else if (rate < -0.1) status = 'warning'
+          else if (rate > 0.1) status = 'rising'
         }
 
         return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, latest, weeklyChange, trend, status }
@@ -91,8 +93,9 @@ export default function IndexMonitorPage() {
         if (r.status === 'danger') return 0
         if (r.status === 'warning') return 1
         if (r.weeklyChange < 0) return 2
-        if (r.weeklyChange > 0) return 3
-        return 4
+        if (r.status === 'rising') return 3
+        if (r.weeklyChange > 0) return 4
+        return 5
       }
       setRows(result.sort((a, b) => {
         if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
