@@ -352,7 +352,19 @@ const BAIDU_SEARCH_HEADERS = {
   'Referer': 'https://www.baidu.com/',
   'Cache-Control': 'no-cache',
 }
-const TBS_MAP: Record<string, string> = { day: 'qdr:d', week: 'qdr:w', month: 'qdr:m' }
+// Baidu changed week/day filtering from tbs=qdr:w to gpc with absolute Unix timestamps.
+// stftype: 1=week, 2=month (tbs still works for month), 0=day (best guess)
+function buildBaiduTimeUrl(domain: string, period: 'month' | 'week' | 'day'): string {
+  const base = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&ie=utf-8`
+  if (period === 'month') {
+    return `${base}&tbs=qdr%3Am`
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const windowSec = period === 'week' ? 604800 : 86400
+  const stftype = period === 'week' ? 1 : 0
+  const gpc = `stf=${now - windowSec},${now}|stftype=${stftype}`
+  return `${base}&ct=2097152&si=${encodeURIComponent(domain)}&gpc=${encodeURIComponent(gpc)}`
+}
 
 async function fetchBaiduPage(url: string): Promise<{ html: string; ok: boolean }> {
   try {
@@ -370,40 +382,14 @@ async function fetchBaiduPage(url: string): Promise<{ html: string; ok: boolean 
 }
 
 // Fetch all Baidu site: search result titles for a given time period.
-// Resolves the actual time-filter URL from the base site: page instead of
-// constructing it manually, so we always follow links Baidu itself generates.
-export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'week' | 'day', siteName: string, filterUrl?: string): Promise<string[]> {
+export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'week' | 'day', siteName: string): Promise<string[]> {
   const escapedName = siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const stripRe = escapedName ? new RegExp(`\\s*[-_|]\\s*${escapedName}\\s*$`) : null
   const titles: string[] = []
-
-  // Resolve the actual Baidu time-filter URL if not provided
-  let startUrl = filterUrl
-  if (!startUrl) {
-    const periodLabel: Record<string, string> = { month: '一月内', week: '一周内', day: '一天内' }
-    const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&ie=utf-8`
-    const { html: baseHtml, ok } = await fetchBaiduPage(baseUrl)
-    if (ok) {
-      const $b = cheerio.load(baseHtml)
-      $b('a').each((_, el) => {
-        if ($b(el).text().trim() === periodLabel[period]) {
-          const href = $b(el).attr('href') || ''
-          if (href) {
-            startUrl = href.startsWith('/') ? `https://www.baidu.com${href}` : href
-            return false
-          }
-        }
-      })
-    }
-    // Fallback to constructed URL if link not found
-    if (!startUrl) {
-      startUrl = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&tbs=${encodeURIComponent(TBS_MAP[period])}&ie=utf-8`
-    }
-    await new Promise((r) => setTimeout(r, 1500))
-  }
+  const startUrl = buildBaiduTimeUrl(domain, period)
 
   for (let page = 0; page < 50; page++) {
-    const url = page === 0 ? startUrl : startUrl.replace(/(&pn=\d+)?$/, `&pn=${page * 10}`)
+    const url = page === 0 ? startUrl : `${startUrl}&pn=${page * 10}`
     const { html, ok } = await fetchBaiduPage(url)
     if (!ok) break
     const $ = cheerio.load(html)
