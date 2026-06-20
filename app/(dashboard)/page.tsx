@@ -168,7 +168,6 @@ export default function DashboardPage() {
       setWeightChanges(wChanges)
 
       // Index alerts: weekly comparison (danger/warning/rising) using full year snaps
-      const d7 = getMY(-7)
       const iAlerts: IndexAlertItem[] = []
       for (const s of siteList) {
         const siteSnaps = ((snapsRaw || []) as IndexSnap[])
