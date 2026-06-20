@@ -37,8 +37,17 @@ jobs:
           DOMAIN="${{ github.event.inputs.domain }}"
           if [ -n "$DOMAIN" ]; then
             echo "Scraping single domain: $DOMAIN"
-            node scripts/baidu-index.mjs "$DOMAIN"
+            node scripts/baidu-index.cjs "$DOMAIN"
           else
             echo "Scraping all enabled sites"
-            node scripts/baidu-index.mjs
+            node scripts/baidu-index.cjs
           fi
+
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: scripts/screenshots/
+          if-no-files-found: ignore
+          retention-days: 3
