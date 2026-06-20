@@ -547,7 +547,7 @@ function KeywordSearchCard() {
 
   return (
     <>
-      <div className="rounded-xl border border-green-100 bg-white p-4">
+      <div className="rounded-xl border border-green-300 bg-white p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-600">搜索量查询</span>
           <button
