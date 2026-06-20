@@ -84,7 +84,12 @@ export async function GET(request: Request) {
   const cutoff3d = getMalaysiaDate(-3)
   const cutoff30d = getMalaysiaDate(-30)
 
-  const { data: sitesRaw } = await supabase.from('sites').select('id, domain, name').eq('is_enabled', true)
+  const { searchParams } = new URL(request.url)
+  const siteFilter = searchParams.get('site')
+
+  let sitesQuery = supabase.from('sites').select('id, domain, name').eq('is_enabled', true)
+  if (siteFilter) sitesQuery = sitesQuery.eq('domain', siteFilter)
+  const { data: sitesRaw } = await sitesQuery
   const sites = (sitesRaw || []) as SiteRecord[]
 
   const results: { site: string; month: number; week: number; day: number; error?: string }[] = []
@@ -93,12 +98,12 @@ export async function GET(request: Request) {
     try {
       // Month: fetch all, store all
       const monthTitles = await storePeriod(supabase, site, 'month', today, new Set())
-      await new Promise((r) => setTimeout(r, 5000))
+      await new Promise((r) => setTimeout(r, 2000))
 
       // Week: fetch all, store only titles not in month
       const monthSet = new Set(monthTitles)
       const weekTitles = await storePeriod(supabase, site, 'week', today, monthSet)
-      await new Promise((r) => setTimeout(r, 5000))
+      await new Promise((r) => setTimeout(r, 2000))
 
       // Day: fetch all, store only titles not in month or week
       const weekExclusiveSet = new Set(weekTitles.filter((t) => !monthSet.has(t)))
@@ -114,7 +119,7 @@ export async function GET(request: Request) {
       results.push({ site: site.domain, month: 0, week: 0, day: 0, error: err instanceof Error ? err.message : '失败' })
     }
 
-    await new Promise((r) => setTimeout(r, 8000))
+    await new Promise((r) => setTimeout(r, 3000))
   }
 
   // Cleanup old data

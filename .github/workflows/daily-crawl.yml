@@ -65,5 +65,10 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
               "$BASE_URL/api/cron?site=$domain" \
               | jq .
+            echo "=== Baidu index for $domain ==="
+            curl -f -s \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "$BASE_URL/api/cron/baidu-index?site=$domain" \
+              | jq .
           done
           echo "=== All sites crawled ==="

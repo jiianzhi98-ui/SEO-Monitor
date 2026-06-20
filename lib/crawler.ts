@@ -361,7 +361,7 @@ export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'w
   const stripRe = escapedName ? new RegExp(`\\s*[-_|]\\s*${escapedName}\\s*$`) : null
   const titles: string[] = []
 
-  for (let page = 0; page < 3; page++) {
+  for (let page = 0; page < 50; page++) {
     const pn = page * 10
     const url = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&tbs=${encodeURIComponent(tbs)}&ie=utf-8${pn > 0 ? `&pn=${pn}` : ''}`
     try {
@@ -384,7 +384,7 @@ export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'w
       titles.push(...pageTitles)
       const hasNext = $('a').filter((_, el) => $(el).text().trim() === '下一页>').length > 0
       if (!hasNext) break
-      if (page < 2) await new Promise((r) => setTimeout(r, 4000))
+      if (page < 49) await new Promise((r) => setTimeout(r, 1500))
     } catch { break }
   }
   return titles
