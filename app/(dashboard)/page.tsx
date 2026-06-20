@@ -31,6 +31,7 @@ interface WeightRec {
 interface DailyStat { site_id: string; stat_date: string; new_count: number }
 interface WeightChangeItem { domain: string; pcChange: number; mobileChange: number }
 interface AlertItem { domain: string }
+interface IndexAlertItem { domain: string; status: 'danger' | 'warning' | 'rising' }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -95,7 +96,7 @@ export default function DashboardPage() {
   const [indexSnaps, setIndexSnaps] = useState<IndexSnap[]>([])
   const [weightRecs, setWeightRecs] = useState<WeightRec[]>([])
   const [weightChanges, setWeightChanges] = useState<WeightChangeItem[]>([])
-  const [indexAlerts, setIndexAlerts] = useState<AlertItem[]>([])
+  const [indexAlerts, setIndexAlerts] = useState<IndexAlertItem[]>([])
   const [kwAlerts, setKwAlerts] = useState<AlertItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -166,16 +167,27 @@ export default function DashboardPage() {
       }
       setWeightChanges(wChanges)
 
-      // Index drop alerts (today vs yesterday, >10% drop)
-      type SRow = { site_id: string; index_count: number }
-      const snapTMap = new Map((snapTRaw || []).map((r: SRow) => [r.site_id, r.index_count]))
-      const snapYMap = new Map((snapYRaw || []).map((r: SRow) => [r.site_id, r.index_count]))
-      const iAlerts: AlertItem[] = []
+      // Index alerts: weekly comparison (danger/warning/rising) using full year snaps
+      const d7 = getMY(-7)
+      const iAlerts: IndexAlertItem[] = []
       for (const s of siteList) {
-        const t = snapTMap.get(s.id) ?? 0
-        const y = snapYMap.get(s.id) ?? 0
-        if (y > 0 && (t - y) / y < -0.1) iAlerts.push({ domain: s.domain })
+        const siteSnaps = ((snapsRaw || []) as IndexSnap[])
+          .filter(r => r.site_id === s.id)
+          .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+        if (siteSnaps.length < 3) continue
+        const latest = siteSnaps[siteSnaps.length - 1].index_count
+        const snap7 = [...siteSnaps].reverse().find(r => r.snapshot_date <= d7)
+        if (!snap7 || snap7.index_count === 0) continue
+        const rate = (latest - snap7.index_count) / snap7.index_count
+        if (rate < -0.2) iAlerts.push({ domain: s.domain, status: 'danger' })
+        else if (rate < -0.1) iAlerts.push({ domain: s.domain, status: 'warning' })
+        else if (rate > 0.1) iAlerts.push({ domain: s.domain, status: 'rising' })
       }
+      // Sort: danger first, then warning, then rising
+      iAlerts.sort((a, b) => {
+        const order = { danger: 0, warning: 1, rising: 2 }
+        return order[a.status] - order[b.status]
+      })
       setIndexAlerts(iAlerts)
 
       // Keyword anomaly alerts (yesterday < 30% of 7-day avg)
@@ -321,9 +333,23 @@ export default function DashboardPage() {
           ))}
         </AlertCard>
 
-        <AlertCard title="收录异常" count={indexAlerts.length} color="red" empty="各站收录正常">
+        <AlertCard
+          title="收录异常"
+          count={indexAlerts.length}
+          color={indexAlerts.some(a => a.status === 'danger') ? 'red' : indexAlerts.some(a => a.status === 'warning') ? 'orange' : indexAlerts.some(a => a.status === 'rising') ? 'teal' : 'gray'}
+          empty="各站收录正常"
+        >
           {indexAlerts.map((a, i) => (
-            <p key={i} className="text-xs text-gray-700 truncate py-0.5">{a.domain}</p>
+            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
+              <p className="text-xs text-gray-700 truncate">{a.domain}</p>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
+                a.status === 'danger' ? 'bg-red-50 text-red-500' :
+                a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
+                'bg-blue-50 text-blue-600'
+              }`}>
+                {a.status === 'danger' ? '危险' : a.status === 'warning' ? '警告' : '涨入'}
+              </span>
+            </div>
           ))}
         </AlertCard>
 
@@ -522,7 +548,7 @@ function KeywordSearchCard() {
 
   return (
     <>
-      <div className="rounded-xl border border-gray-100 bg-white p-4">
+      <div className="rounded-xl border border-green-100 bg-white p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-600">搜索量查询</span>
           <button
@@ -635,6 +661,8 @@ const PALETTE = {
   yellow: { border: 'border-yellow-100', count: 'text-yellow-500', pulse: 'bg-yellow-400' },
   orange: { border: 'border-orange-100', count: 'text-orange-500', pulse: 'bg-orange-400' },
   red:    { border: 'border-red-100',    count: 'text-red-500',    pulse: 'bg-red-400'    },
+  teal:   { border: 'border-teal-100',   count: 'text-teal-500',   pulse: 'bg-teal-400'   },
+  green:  { border: 'border-green-100',  count: 'text-green-500',  pulse: 'bg-green-400'  },
   gray:   { border: 'border-gray-100',   count: 'text-gray-300',   pulse: 'bg-gray-300'   },
 }
 
