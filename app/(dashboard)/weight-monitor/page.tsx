@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
 
-interface SiteRow { id: string; domain: string; name: string; focus_level: number }
+interface SiteRow { id: string; domain: string; name: string; focus_level: number; category: string }
 interface HistoryRow {
   site_id: string
   record_date: string
@@ -21,6 +21,8 @@ interface WeightRow {
   domain: string
   name: string
   focus_level: number
+  category: string
+  avgIp: number
   pcWeight: number
   mobileWeight: number
   pcWeightChange: number
@@ -93,7 +95,7 @@ export default function WeightMonitorPage() {
       const d30ago = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
       const [{ data: sitesRaw }, { data: historyRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level, category').eq('is_enabled', true),
         supabase.from('weight_history')
           .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max')
           .gte('record_date', d30ago)
@@ -114,11 +116,15 @@ export default function WeightMonitorPage() {
         const prevAvgPc = prev ? Math.round((prev.pc_ip + prev.pc_ip_max) / 2) : 0
         const prevAvgMobile = prev ? Math.round((prev.mobile_ip + prev.mobile_ip_max) / 2) : 0
 
+        const avgIp = Math.round((latestAvgPc + latestAvgMobile) / 2)
+
         return {
           site_id: site.id,
           domain: site.domain,
           name: site.name,
           focus_level: site.focus_level ?? 3,
+          category: site.category ?? 'small',
+          avgIp,
           pcWeight: latest?.pc_weight ?? 0,
           mobileWeight: latest?.mobile_weight ?? 0,
           pcWeightChange: prev ? (latest?.pc_weight ?? 0) - prev.pc_weight : 0,
@@ -137,7 +143,14 @@ export default function WeightMonitorPage() {
         }
       })
 
-      setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.pcWeight - a.pcWeight))
+      const catOrder: Record<string, number> = { large: 1, medium: 2, small: 3 }
+      setRows(result.sort((a, b) => {
+        if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
+        const ca = catOrder[a.category] ?? 3
+        const cb = catOrder[b.category] ?? 3
+        if (ca !== cb) return ca - cb
+        return b.avgIp - a.avgIp
+      }))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
