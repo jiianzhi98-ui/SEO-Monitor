@@ -361,11 +361,11 @@ export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'w
   const stripRe = escapedName ? new RegExp(`\\s*[-_|]\\s*${escapedName}\\s*$`) : null
   const titles: string[] = []
 
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < 3; page++) {
     const pn = page * 10
     const url = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&tbs=${encodeURIComponent(tbs)}&ie=utf-8${pn > 0 ? `&pn=${pn}` : ''}`
     try {
-      const res = await fetch(url, { headers: BAIDU_SEARCH_HEADERS, signal: AbortSignal.timeout(8000), next: { revalidate: 0 } })
+      const res = await fetch(url, { headers: BAIDU_SEARCH_HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
       if (!res.ok) break
       const buffer = Buffer.from(await res.arrayBuffer())
       const peek = buffer.subarray(0, 2000).toString('ascii')
@@ -384,7 +384,7 @@ export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'w
       titles.push(...pageTitles)
       const hasNext = $('a').filter((_, el) => $(el).text().trim() === '下一页>').length > 0
       if (!hasNext) break
-      if (page < 19) await new Promise((r) => setTimeout(r, 400))
+      if (page < 2) await new Promise((r) => setTimeout(r, 4000))
     } catch { break }
   }
   return titles

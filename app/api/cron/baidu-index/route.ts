@@ -93,18 +93,18 @@ export async function GET(request: Request) {
     try {
       // Month: fetch all, store all
       const monthTitles = await storePeriod(supabase, site, 'month', today, new Set())
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, 5000))
 
       // Week: fetch all, store only titles not in month
       const monthSet = new Set(monthTitles)
       const weekTitles = await storePeriod(supabase, site, 'week', today, monthSet)
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, 5000))
 
       // Day: fetch all, store only titles not in month or week
       const weekExclusiveSet = new Set(weekTitles.filter((t) => !monthSet.has(t)))
       const combined = new Set(Array.from(monthSet).concat(Array.from(weekExclusiveSet)))
       const dayTitles = await storePeriod(supabase, site, 'day', today, combined)
-      await new Promise((r) => setTimeout(r, 500))
+      await new Promise((r) => setTimeout(r, 1000))
 
       // Generate change records vs yesterday
       await generateChanges(supabase, site.id, today)
@@ -114,7 +114,7 @@ export async function GET(request: Request) {
       results.push({ site: site.domain, month: 0, week: 0, day: 0, error: err instanceof Error ? err.message : '失败' })
     }
 
-    await new Promise((r) => setTimeout(r, 2000))
+    await new Promise((r) => setTimeout(r, 8000))
   }
 
   // Cleanup old data
