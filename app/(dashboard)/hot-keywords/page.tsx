@@ -25,22 +25,19 @@ interface CrossEntry {
 interface RadarData {
   newWords: WordEntry[]
   rankWords: RankEntry[]
-  indexWords: WordEntry[]
 }
 
-type Tab = 'cross' | 'new' | 'rank' | 'index'
+type Tab = 'cross' | 'new' | 'rank'
 
 const TAB_CONFIG: { key: Tab; label: string }[] = [
   { key: 'cross', label: '交叉词' },
   { key: 'new', label: '共新增词' },
   { key: 'rank', label: '竞品涨排名' },
-  { key: 'index', label: '共收录词' },
 ]
 
 const DIM_LABELS: Record<string, { label: string; cls: string }> = {
   new: { label: '新增', cls: 'bg-blue-50 text-blue-600' },
   rank: { label: '涨排', cls: 'bg-orange-50 text-orange-600' },
-  index: { label: '收录', cls: 'bg-purple-50 text-purple-600' },
 }
 
 function fmtVolume(v: number): string {
@@ -90,25 +87,22 @@ export default function HotRadarPage() {
     if (!data) return null
     const nw = data.newWords.filter((w) => w.siteCount >= minSites)
     const rw = data.rankWords.filter((w) => w.siteCount >= minSites)
-    const iw = data.indexWords.filter((w) => w.siteCount >= minSites)
 
     const nwSet = new Set(nw.map((w) => w.keyword))
     const rwMap = new Map(rw.map((w) => [w.keyword, w]))
-    const iwSet = new Set(iw.map((w) => w.keyword))
 
-    const allKws = new Set(Array.from(nwSet).concat(Array.from(rwMap.keys())).concat(Array.from(iwSet)))
+    const allKws = new Set(Array.from(nwSet).concat(Array.from(rwMap.keys())))
     const cw: CrossEntry[] = Array.from(allKws)
       .map((keyword) => {
         const dims: string[] = []
         if (nwSet.has(keyword)) dims.push('new')
         if (rwMap.has(keyword)) dims.push('rank')
-        if (iwSet.has(keyword)) dims.push('index')
         return { keyword, dims, volume: rwMap.get(keyword)?.volume ?? null }
       })
       .filter((w) => w.dims.length >= 2)
       .sort((a, b) => b.dims.length - a.dims.length)
 
-    return { newWords: nw, rankWords: rw, indexWords: iw, crossWords: cw }
+    return { newWords: nw, rankWords: rw, crossWords: cw }
   }, [data, minSites])
 
   async function copyKw(kw: string) {
@@ -118,8 +112,8 @@ export default function HotRadarPage() {
   }
 
   const counts = filtered
-    ? { cross: filtered.crossWords.length, new: filtered.newWords.length, rank: filtered.rankWords.length, index: filtered.indexWords.length }
-    : { cross: 0, new: 0, rank: 0, index: 0 }
+    ? { cross: filtered.crossWords.length, new: filtered.newWords.length, rank: filtered.rankWords.length }
+    : { cross: 0, new: 0, rank: 0 }
 
   return (
     <div className="p-8">
@@ -315,46 +309,6 @@ export default function HotRadarPage() {
               </table>
             )}
 
-            {activeTab === 'index' && (
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="table-th w-8">#</th>
-                    <th className="table-th">关键词</th>
-                    <th className="table-th text-center">出现次数</th>
-                    <th className="table-th text-center">站点数</th>
-                    <th className="table-th">出现站点</th>
-                    <th className="table-th text-right w-16"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filtered?.indexWords.length === 0 ? (
-                    <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
-                  ) : (
-                    filtered?.indexWords.map((w, i) => (
-                      <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                        <td className="table-td text-gray-400 text-xs">{i + 1}</td>
-                        <td className="table-td font-medium text-gray-900">{w.keyword}</td>
-                        <td className="table-td text-center text-gray-600">{w.count}次</td>
-                        <td className="table-td text-center">
-                          <span className="font-semibold text-gray-900">{w.siteCount}</span>
-                          <span className="text-gray-400 text-xs">站</span>
-                        </td>
-                        <td className="table-td"><SiteBadges sites={w.sites} /></td>
-                        <td className="table-td text-right">
-                          <button
-                            onClick={() => copyKw(w.keyword)}
-                            className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                          >
-                            {copiedKw === w.keyword ? '✓' : '复制'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
           </div>
         )}
       </div>

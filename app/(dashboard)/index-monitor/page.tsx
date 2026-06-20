@@ -20,14 +20,6 @@ interface IndexRow {
   status: 'normal' | 'warning' | 'danger'
 }
 
-interface ChangeRecord {
-  id: number
-  title: string
-  change_date: string
-  change_type: 'appeared' | 'dropped'
-  period: 'day' | 'week' | 'month'
-}
-
 const statusConfig = {
   normal: { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '警告', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
@@ -54,18 +46,6 @@ export default function IndexMonitorPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedSite, setSelectedSite] = useState<IndexRow | null>(null)
-
-  // 收录 modal
-  const [indexSite, setIndexSite] = useState<IndexRow | null>(null)
-  const [indexPeriod, setIndexPeriod] = useState<'day' | 'week' | 'month'>('month')
-  const [indexItems, setIndexItems] = useState<{ title: string; exclusive: boolean }[]>([])
-  const [indexLoading, setIndexLoading] = useState(false)
-  const [indexNotCrawled, setIndexNotCrawled] = useState(false)
-
-  // 收录变动 modal
-  const [changeSite, setChangeSite] = useState<IndexRow | null>(null)
-  const [changeData, setChangeData] = useState<ChangeRecord[]>([])
-  const [changeLoading, setChangeLoading] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -112,39 +92,6 @@ export default function IndexMonitorPage() {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function openIndexModal(site: IndexRow, period: 'day' | 'week' | 'month') {
-    setIndexSite(site)
-    setIndexPeriod(period)
-    setIndexLoading(true)
-    setIndexItems([])
-    setIndexNotCrawled(false)
-    try {
-      const res = await fetch(`/api/baidu-site?siteId=${encodeURIComponent(site.site_id)}&period=${period}`)
-      const data = await res.json()
-      setIndexItems(data.items || [])
-      setIndexNotCrawled(!!data.notCrawled)
-    } catch {
-      setIndexItems([])
-    } finally {
-      setIndexLoading(false)
-    }
-  }
-
-  async function openChangeModal(site: IndexRow) {
-    setChangeSite(site)
-    setChangeLoading(true)
-    setChangeData([])
-    try {
-      const res = await fetch(`/api/baidu-site/changes?siteId=${encodeURIComponent(site.site_id)}`)
-      const data = await res.json()
-      setChangeData(data.changes || [])
-    } catch {
-      setChangeData([])
-    } finally {
-      setChangeLoading(false)
     }
   }
 
@@ -216,30 +163,6 @@ export default function IndexMonitorPage() {
                             >
                               详情
                             </button>
-                            <button
-                              onClick={() => openIndexModal(row, 'month')}
-                              className="text-xs text-teal-500 hover:text-teal-700 px-2 py-1 rounded hover:bg-teal-50 transition-colors"
-                            >
-                              月收录
-                            </button>
-                            <button
-                              onClick={() => openIndexModal(row, 'week')}
-                              className="text-xs text-teal-500 hover:text-teal-700 px-2 py-1 rounded hover:bg-teal-50 transition-colors"
-                            >
-                              周收录
-                            </button>
-                            <button
-                              onClick={() => openIndexModal(row, 'day')}
-                              className="text-xs text-teal-500 hover:text-teal-700 px-2 py-1 rounded hover:bg-teal-50 transition-colors"
-                            >
-                              日收录
-                            </button>
-                            <button
-                              onClick={() => openChangeModal(row)}
-                              className="text-xs text-indigo-500 hover:text-indigo-700 px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
-                            >
-                              收录变动
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -290,122 +213,6 @@ export default function IndexMonitorPage() {
         </div>
       )}
 
-      {/* 收录 Modal */}
-      {indexSite && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
-                <h3 className="font-semibold text-gray-900">
-                  {indexSite.domain} · {indexPeriod === 'month' ? '月收录' : indexPeriod === 'week' ? '周收录' : '日收录'}
-                </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  百度 site: 搜索结果（{indexPeriod === 'month' ? '近30天' : indexPeriod === 'week' ? '近7天' : '今天'}）
-                </p>
-              </div>
-              <button onClick={() => setIndexSite(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {indexLoading ? (
-                <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  <span className="text-sm">抓取中，请稍候...</span>
-                </div>
-              ) : indexItems.length === 0 ? (
-                <p className="text-center text-gray-400 py-16 text-sm">
-                  {indexNotCrawled ? '今日数据尚未抓取，cron 将在每天凌晨 6 点自动运行' : '无收录数据'}
-                </p>
-              ) : (
-                <div>
-                  <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-500 flex gap-3">
-                    <span>共 <span className="font-semibold text-gray-700">{indexItems.length}</span> 条</span>
-                    {indexPeriod !== 'month' && indexItems.some((it) => it.exclusive) && (
-                      <span className="text-green-600">
-                        其中 <span className="font-semibold">{indexItems.filter((it) => it.exclusive).length}</span> 条为{indexPeriod === 'week' ? '周' : '日'}独有
-                      </span>
-                    )}
-                  </div>
-                  <ul className="divide-y divide-gray-50">
-                    {indexItems.map((item, i) => (
-                      <li key={i} className={`px-5 py-2.5 text-sm hover:bg-gray-50 ${item.exclusive ? 'text-green-600 font-medium' : 'text-gray-800'}`}>
-                        {item.title}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 收录变动 Modal */}
-      {changeSite && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
-                <h3 className="font-semibold text-gray-900">{changeSite.domain} · 收录变动</h3>
-                <p className="text-xs text-gray-400 mt-0.5">与昨日相比的收录变化（近30天记录）</p>
-              </div>
-              <button onClick={() => setChangeSite(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {changeLoading ? (
-                <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  <span className="text-sm">计算中...</span>
-                </div>
-              ) : changeData.length === 0 ? (
-                <p className="text-center text-gray-400 py-16 text-sm">暂无变动记录（需至少两天数据对比）</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-5 py-2.5 text-left font-medium text-gray-500">标题</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-gray-500 w-16">类型</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-gray-500 w-12">级别</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-500 w-24">日期</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {changeData.map((row) => (
-                      <tr key={row.id} className="hover:bg-gray-50">
-                        <td className={`px-5 py-2 ${row.change_type === 'appeared' ? 'text-green-600' : 'text-red-500'}`}>
-                          {row.title}
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${row.change_type === 'appeared' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
-                            {row.change_type === 'appeared' ? '新增' : '消失'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-center text-xs text-gray-400">
-                          {row.period === 'day' ? '日' : row.period === 'week' ? '周' : '月'}
-                        </td>
-                        <td className="px-4 py-2 text-right text-xs text-gray-400">{row.change_date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

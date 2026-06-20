@@ -10,7 +10,6 @@ function getMY(offsetDays = 0) {
 interface SiteRow { id: string; domain: string }
 interface RawKwRow { keyword: string; site_id: string }
 interface RankRow { keyword: string; site_id: string; volume: number }
-interface IndexRow { title: string; site_id: string }
 
 export async function GET() {
   const supabase = createServiceClient()
@@ -66,29 +65,5 @@ export async function GET() {
     }))
     .sort((a, b) => b.siteCount - a.siteCount || b.volume - a.volume)
 
-  // 共收录词
-  const { data: indexRows } = await supabase
-    .from('baidu_index_changes')
-    .select('title, site_id')
-    .eq('change_type', 'appeared')
-    .gte('change_date', since)
-
-  const indexAgg = new Map<string, { siteIds: Set<string>; count: number }>()
-  for (const row of (indexRows || []) as IndexRow[]) {
-    if (!indexAgg.has(row.title)) indexAgg.set(row.title, { siteIds: new Set(), count: 0 })
-    const e = indexAgg.get(row.title)!
-    e.siteIds.add(row.site_id)
-    e.count++
-  }
-  const indexWords = Array.from(indexAgg.entries())
-    .filter(([, v]) => v.siteIds.size >= 2)
-    .map(([keyword, v]) => ({
-      keyword,
-      count: v.count,
-      siteCount: v.siteIds.size,
-      sites: Array.from(v.siteIds).map((id) => siteMap.get(id) ?? id),
-    }))
-    .sort((a, b) => b.siteCount - a.siteCount || b.count - a.count)
-
-  return NextResponse.json({ newWords, rankWords, indexWords })
+  return NextResponse.json({ newWords, rankWords })
 }
