@@ -30,7 +30,7 @@ interface WeightRec {
 }
 interface DailyStat { site_id: string; stat_date: string; new_count: number }
 interface WeightChangeItem { domain: string; pcChange: number; mobileChange: number }
-interface AlertItem { domain: string }
+interface AlertItem { domain: string; status: 'danger' | 'warning' | 'high' }
 interface IndexAlertItem { domain: string; status: 'danger' | 'warning' | 'rising' }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -198,8 +198,17 @@ export default function DashboardPage() {
         const yStat = ss.find(r => r.stat_date === yesterday)
         const yVal = yStat?.new_count ?? 0
         const avg = ss.reduce((a, r) => a + r.new_count, 0) / ss.length
-        if (avg > 0 && yVal / avg < 0.3) kAlerts.push({ domain: s.domain })
+        if (avg > 0) {
+          const ratio = yVal / avg
+          if (ratio < 0.3) kAlerts.push({ domain: s.domain, status: 'danger' })
+          else if (ratio < 0.6) kAlerts.push({ domain: s.domain, status: 'warning' })
+          else if (ratio > 1.5) kAlerts.push({ domain: s.domain, status: 'high' })
+        }
       }
+      kAlerts.sort((a, b) => {
+        const order = { danger: 0, warning: 1, high: 2 }
+        return order[a.status] - order[b.status]
+      })
       setKwAlerts(kAlerts)
 
       const firstCat = (['large', 'medium', 'small'] as Category[]).find(
@@ -327,9 +336,23 @@ export default function DashboardPage() {
           ))}
         </AlertCard>
 
-        <AlertCard title="新增异常" count={kwAlerts.length} color="orange" empty="各站新增正常">
+        <AlertCard
+          title="新增异常"
+          count={kwAlerts.length}
+          color={kwAlerts.some(a => a.status === 'danger') ? 'red' : kwAlerts.some(a => a.status === 'warning') ? 'orange' : kwAlerts.some(a => a.status === 'high') ? 'teal' : 'gray'}
+          empty="各站新增正常"
+        >
           {kwAlerts.map((a, i) => (
-            <p key={i} className="text-xs text-gray-700 truncate py-0.5">{a.domain}</p>
+            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
+              <p className="text-xs text-gray-700 truncate">{a.domain}</p>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
+                a.status === 'danger' ? 'bg-red-50 text-red-500' :
+                a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
+                'bg-blue-50 text-blue-600'
+              }`}>
+                {a.status === 'danger' ? '异常' : a.status === 'warning' ? '偏低' : '偏高'}
+              </span>
+            </div>
           ))}
         </AlertCard>
 
