@@ -1,0 +1,16 @@
+name: Baidu Index Crawl
+
+on:
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Trigger baidu index crawl
+        run: |
+          curl -f -s \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://seo-monitor-iota.vercel.app/api/cron/baidu-index \
+            | jq .
