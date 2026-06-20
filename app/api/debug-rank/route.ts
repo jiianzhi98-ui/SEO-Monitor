@@ -17,29 +17,47 @@ export async function GET(req: Request) {
   const url = `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${date}/`
 
   try {
-    const res = await fetch(url, {
+    // Step 1: first request
+    const res1 = await fetch(url, {
       headers: RANK_HEADERS,
       signal: AbortSignal.timeout(10000),
       next: { revalidate: 0 },
     })
+    const status1 = res1.status
+    const html1 = await res1.text()
+    const cookieMatch = html1.match(/\.cookie\s*=\s*"([^"]+)"/)
+    const challengeCookie = cookieMatch ? cookieMatch[1].split(';')[0] : null
 
-    const status = res.status
-    const contentType = res.headers.get('content-type') || ''
-    const rawText = await res.text()
-    const preview = rawText.slice(0, 2000)
+    if (!challengeCookie) {
+      // No challenge — return result directly
+      return NextResponse.json({
+        url, step: 1, status: status1,
+        hasTbody: html1.includes('<tbody'),
+        trCount: (html1.match(/<tr/g) || []).length,
+        preview: html1.slice(0, 2000),
+      })
+    }
 
-    const hasCookieChallenge = /\.cookie\s*=\s*"([^"]+)"/.test(rawText)
-    const hasTbody = rawText.includes('<tbody')
-    const trCount = (rawText.match(/<tr/g) || []).length
+    // Step 2: retry with cookie
+    const res2 = await fetch(url, {
+      headers: { ...RANK_HEADERS, Cookie: challengeCookie },
+      signal: AbortSignal.timeout(10000),
+      next: { revalidate: 0 },
+    })
+    const status2 = res2.status
+    const html2 = await res2.text()
+    const hasCookieChallenge2 = /\.cookie\s*=\s*"([^"]+)"/.test(html2)
 
     return NextResponse.json({
       url,
-      status,
-      contentType,
-      hasCookieChallenge,
-      hasTbody,
-      trCount,
-      preview,
+      step1: { status: status1, hasCookieChallenge: true, challengeCookie },
+      step2: {
+        status: status2,
+        hasCookieChallenge: hasCookieChallenge2,
+        hasTbody: html2.includes('<tbody'),
+        trCount: (html2.match(/<tr/g) || []).length,
+        preview: html2.slice(0, 2000),
+      },
     })
   } catch (err) {
     return NextResponse.json({ url, error: String(err) }, { status: 500 })
