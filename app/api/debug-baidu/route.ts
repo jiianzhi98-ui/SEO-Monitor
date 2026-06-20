@@ -43,14 +43,31 @@ export async function GET(req: Request) {
       extractedTitles.push(linkText || fullText || '[empty]')
     })
 
+    // Check pagination — find all <a> tags near the bottom that look like page nav
+    const allATexts = $('a').map((_, el) => $(el).text().trim()).get().filter(Boolean)
+    const hasNextExact = allATexts.includes('下一页>')
+    const pageNavLinks = allATexts.filter(t => /下一页|next|›|»|第\d+页/.test(t))
+
+    // Also check week results
+    const weekUrl = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&tbs=qdr%3Aw&ie=utf-8`
+    let weekCount = -1
+    try {
+      await new Promise(r => setTimeout(r, 3000))
+      const res2 = await fetch(weekUrl, { headers: HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+      const buf2 = Buffer.from(await res2.arrayBuffer())
+      const html2 = iconv.decode(buf2, 'utf-8')
+      const $2 = cheerio.load(html2)
+      weekCount = $2('h3.t').length
+    } catch { weekCount = -1 }
+
     return NextResponse.json({
       url, status, charset,
       pageTitle: title,
-      hasH3t,
       hasVerify,
-      h3Tags: h3matches,
       h3Count: $('h3.t').length,
-      extractedTitles: extractedTitles.slice(0, 10),
+      extractedTitles: extractedTitles.slice(0, 5),
+      pagination: { hasNextExact, pageNavLinks },
+      weekH3Count: weekCount,
     })
   } catch (err) {
     return NextResponse.json({ url, error: String(err) }, { status: 500 })
