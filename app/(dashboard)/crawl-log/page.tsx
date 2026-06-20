@@ -97,16 +97,20 @@ export default function CrawlLogPage() {
               <p className="text-xs text-gray-400 mb-2">对比「昨日新增」与「近7日均值」的比例</p>
               <div className="space-y-1.5 text-sm">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">正常</span>
-                  <span className="text-gray-600">昨日新增 ≥ 7日均值 × 60%，或均值为 0</span>
+                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">异常</span>
+                  <span className="text-gray-600">昨日新增 &lt; 7日均值 × 30%</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">偏低</span>
                   <span className="text-gray-600">昨日新增在 7日均值 × 30%~60% 之间</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">异常</span>
-                  <span className="text-gray-600">昨日新增 &lt; 7日均值 × 30%</span>
+                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">偏高</span>
+                  <span className="text-gray-600">昨日新增 &gt; 7日均值 × 150%</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">正常</span>
+                  <span className="text-gray-600">昨日新增在 7日均值 × 60%~150% 之间，或均值为 0</span>
                 </div>
               </div>
             </div>

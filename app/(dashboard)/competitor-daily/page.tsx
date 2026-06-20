@@ -10,7 +10,7 @@ interface CompetitorRow {
   focus_level: number
   yesterday: number
   avg7d: number
-  status: 'normal' | 'warning' | 'danger'
+  status: 'normal' | 'warning' | 'danger' | 'high'
   hasHtml: boolean
 }
 
@@ -55,9 +55,10 @@ interface UnstableEntry {
 }
 
 const statusConfig = {
-  normal: { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
+  normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '偏低', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
-  danger: { label: '异常', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
+  danger:  { label: '异常', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
+  high:    { label: '偏高', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-medium' },
 }
 
 // Client-side version of cleanTitle — strips standalone suffix from end of title
@@ -127,16 +128,30 @@ export default function CompetitorDailyPage() {
           ? Math.round(siteStats.reduce((sum, s) => sum + s.new_count, 0) / siteStats.length)
           : 0
         const yesterdayVal = yesterdayStat?.new_count ?? 0
-        let status: 'normal' | 'warning' | 'danger' = 'normal'
+        let status: 'normal' | 'warning' | 'danger' | 'high' = 'normal'
         if (avg7d > 0) {
           const ratio = yesterdayVal / avg7d
           if (ratio < 0.3) status = 'danger'
           else if (ratio < 0.6) status = 'warning'
+          else if (ratio > 1.5) status = 'high'
         }
         return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url }
       })
 
-      setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.yesterday - a.yesterday))
+      const statusPriority = (r: CompetitorRow) => {
+        if (r.status === 'danger') return 0
+        if (r.status === 'warning') return 1
+        if (r.status === 'high') return 2
+        return 3
+      }
+      setRows(result.sort((a, b) => {
+        if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
+        if (a.focus_level >= 3) {
+          const pd = statusPriority(a) - statusPriority(b)
+          if (pd !== 0) return pd
+        }
+        return b.yesterday - a.yesterday
+      }))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
