@@ -34,21 +34,38 @@ export async function GET(req: Request) {
   const weekTbsUrl = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&ie=utf-8&tbs=qdr%3Aw&si=${encodeURIComponent(domain)}`
 
   try {
-    const month1 = await fetchAndParse(monthUrl)
+    // Fetch month page 1 and extract next-page href + rsv_pq
+    const res1 = await fetch(monthUrl, { headers: HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+    const html1 = iconv.decode(Buffer.from(await res1.arrayBuffer()), 'utf-8')
+    const $1 = cheerio.load(html1)
+    const month1Titles = $1('h3.t').map((_, el) => $1(el).find('a').first().text().trim()).get().filter(Boolean)
+    const nextHref = $1('a').filter((_, el) => /下一页\s*>/.test($1(el).text().trim())).first().attr('href')
+    const nextPageUrl = nextHref ? (nextHref.startsWith('/') ? `https://www.baidu.com${nextHref}` : nextHref) : null
+
+    // Extract rsv_pq from page source
+    const rsvPqMatch = html1.match(/rsv_pq[=:]["']?([a-f0-9]+)/i)
+    const rsvPq = rsvPqMatch ? rsvPqMatch[1] : null
+
     await new Promise(r => setTimeout(r, 2000))
-    const month2 = await fetchAndParse(monthPage2Url)
+
+    // Try following actual next-page link
+    let month2Result = { h3Count: -1, titles: [] as string[] }
+    if (nextPageUrl) {
+      const res2 = await fetch(nextPageUrl, { headers: HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+      const html2 = iconv.decode(Buffer.from(await res2.arrayBuffer()), 'utf-8')
+      const $2 = cheerio.load(html2)
+      month2Result = { h3Count: $2('h3.t').length, titles: $2('h3.t').map((_, el) => $2(el).text().trim()).get().slice(0, 3) }
+    }
+
     await new Promise(r => setTimeout(r, 2000))
     const weekGpcResult = await fetchAndParse(weekGpcUrl)
-    await new Promise(r => setTimeout(r, 2000))
-    const weekTbsResult = await fetchAndParse(weekTbsUrl)
 
     return NextResponse.json({
       domain,
-      month_page1: month1,
-      month_page2: month2,
+      month_page1: { h3Count: month1Titles.length, titles: month1Titles.slice(0, 3), nextPageUrl, rsvPq },
+      month_page2_via_href: month2Result,
       week_gpc: weekGpcResult,
-      week_tbs_with_si: weekTbsResult,
-      urls: { monthUrl, monthPage2Url, weekGpcUrl, weekTbsUrl }
+      urls: { monthUrl, weekGpcUrl }
     })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

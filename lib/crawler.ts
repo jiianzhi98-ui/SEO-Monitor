@@ -388,9 +388,9 @@ export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'w
   const titles: string[] = []
   const startUrl = buildBaiduTimeUrl(domain, period)
 
-  for (let page = 0; page < 50; page++) {
-    const url = page === 0 ? startUrl : `${startUrl}&pn=${page * 10}`
-    const { html, ok } = await fetchBaiduPage(url)
+  let currentUrl: string | null = startUrl
+  for (let page = 0; page < 50 && currentUrl; page++) {
+    const { html, ok } = await fetchBaiduPage(currentUrl)
     if (!ok) break
     const $ = cheerio.load(html)
     const pageTitles: string[] = []
@@ -401,9 +401,10 @@ export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'w
     })
     if (pageTitles.length === 0) break
     titles.push(...pageTitles)
-    const hasNext = $('a').filter((_, el) => /下一页\s*>/.test($(el).text().trim())).length > 0
-    if (!hasNext) break
-    if (page < 49) await new Promise((r) => setTimeout(r, 1500))
+    // Follow Baidu's actual next-page href (contains rsv_pq session params)
+    const nextHref = $('a').filter((_, el) => /下一页\s*>/.test($(el).text().trim())).first().attr('href')
+    currentUrl = nextHref ? (nextHref.startsWith('/') ? `https://www.baidu.com${nextHref}` : nextHref) : null
+    if (currentUrl) await new Promise((r) => setTimeout(r, 1500))
   }
   return titles
 }
