@@ -51,7 +51,7 @@ const DOWNLOAD_KEYWORDS = [
 // Fetch HTML with automatic charset detection (handles GBK/GB2312 sites)
 async function fetchHtmlDecoded(url: string, headers: Record<string, string>): Promise<{ ok: boolean; html: string; status?: number }> {
   try {
-    const res = await fetch(url, { headers, next: { revalidate: 0 } })
+    const res = await fetch(url, { headers, next: { revalidate: 0 }, signal: AbortSignal.timeout(10000) })
     if (!res.ok) return { ok: false, html: '', status: res.status }
     const buffer = Buffer.from(await res.arrayBuffer())
     // ASCII-safe peek to detect charset without corrupting data

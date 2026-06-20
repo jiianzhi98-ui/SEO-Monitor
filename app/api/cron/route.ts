@@ -85,12 +85,13 @@ export async function GET(request: Request) {
       try {
         type RawEntry = { title: string; content_date: string | null }
         let rawEntries: RawEntry[] = []
+        const hasCrawlConfig = !!(site.list_url && site.title_selector)
 
-        if (site.list_url && site.title_selector) {
+        if (hasCrawlConfig) {
           const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
           const htmlCutoff = getMalaysiaDate(-cutoffDays)
           const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
-          const urls = site.list_url.split('\n').map((u: string) => u.trim()).filter(Boolean)
+          const urls = site.list_url!.split('\n').map((u: string) => u.trim()).filter(Boolean)
           const titleSels = (site.title_selector || '').split('\n').map((s: string) => s.trim())
           const dateSels = (site.date_selector || '').split('\n').map((s: string) => s.trim())
           const sources: HtmlSource[] = urls.map((url: string, i: number) => ({
@@ -112,43 +113,43 @@ export async function GET(request: Request) {
           }))
           .filter((e) => e.keyword.length > 0)
 
-        if (cleanedEntries.length === 0) {
-          results.push({ site: site.domain, count: 0 })
-          continue
+        let newCount = 0
+
+        if (cleanedEntries.length > 0) {
+          // Dedup against keywords found in this crawl run
+          const { data: existing } = await supabase
+            .from('raw_keywords')
+            .select('keyword')
+            .eq('site_id', site.id)
+            .gte('discovered_at', new Date(Date.now() - 7 * 86400000).toISOString())
+
+          const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
+          const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
+          newCount = newEntries.length
+
+          if (newEntries.length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('raw_keywords') as any).insert(
+              newEntries.map((e) => ({
+                keyword: e.keyword,
+                site_id: site.id,
+                discovered_at: new Date().toISOString(),
+                content_date: e.content_date,
+              }))
+            )
+          }
         }
 
-        // Dedup against keywords found in this crawl run
-        const { data: existing } = await supabase
-          .from('raw_keywords')
-          .select('keyword')
-          .eq('site_id', site.id)
-          .gte('discovered_at', new Date(Date.now() - 7 * 86400000).toISOString())
-
-        const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
-        const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
-
-        if (newEntries.length === 0) {
-          results.push({ site: site.domain, count: 0 })
-          continue
+        // Always write daily_stats for sites with crawl config (even if 0 new)
+        if (hasCrawlConfig) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('daily_stats') as any).upsert(
+            { site_id: site.id, stat_date: today, new_count: newCount },
+            { onConflict: 'site_id,stat_date' }
+          )
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('raw_keywords') as any).insert(
-          newEntries.map((e) => ({
-            keyword: e.keyword,
-            site_id: site.id,
-            discovered_at: new Date().toISOString(),
-            content_date: e.content_date,
-          }))
-        )
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('daily_stats') as any).upsert(
-          { site_id: site.id, stat_date: today, new_count: newEntries.length },
-          { onConflict: 'site_id,stat_date' }
-        )
-
-        results.push({ site: site.domain, count: newEntries.length })
+        results.push({ site: site.domain, count: newCount })
       } catch (siteErr: unknown) {
         results.push({
           site: site.domain,
