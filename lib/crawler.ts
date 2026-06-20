@@ -305,6 +305,21 @@ async function fetchRankPage(
   }
 }
 
+// Pre-fetch the JS challenge cookie for a domain so all subsequent requests
+// can skip the challenge round-trip (aizhan added this protection ~2026-06-19).
+// Cookie has path=/ and max-age=300, so it's valid for all pages of the same domain.
+async function prefetchRankCookie(domain: string, type: string, date: string): Promise<string> {
+  try {
+    const url = `https://baidurank.aizhan.com/mobile/${domain}/${type}/1/${date}/`
+    const res = await fetch(url, { headers: RANK_HEADERS, signal: AbortSignal.timeout(8000), next: { revalidate: 0 } })
+    const html = await res.text()
+    const m = html.match(/\.cookie\s*=\s*"([^"]+)"/)
+    return m ? m[1].split(';')[0] : ''
+  } catch {
+    return ''
+  }
+}
+
 // Fetch all rank changes (涨入 or 跌出) for a domain on a given date
 // Covers rank positions 1-5, up to 15 sub-pages each, filters 0-volume
 export async function fetchRankChanges(
@@ -312,11 +327,14 @@ export async function fetchRankChanges(
   date: string,
   type: 'rankup' | 'rankdown'
 ): Promise<{ keyword: string; volume: number }[]> {
+  // Obtain challenge cookie once and reuse — avoids 2x requests per page
+  const sharedCookie = await prefetchRankCookie(domain, type, date)
+
   const allResults = await Promise.all(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
       const entries: { keyword: string; volume: number }[] = []
       for (let page = 1; page <= 15; page++) {
-        const pageEntries = await fetchRankPage(domain, type, rankPos, date, page)
+        const pageEntries = await fetchRankPage(domain, type, rankPos, date, page, sharedCookie)
         if (pageEntries.length === 0) break
         entries.push(...pageEntries.filter((e) => e.volume > 0))
         if (page < 15) await new Promise((r) => setTimeout(r, 500))
