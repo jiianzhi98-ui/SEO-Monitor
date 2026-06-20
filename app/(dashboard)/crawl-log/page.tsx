@@ -66,55 +66,6 @@ export default function CrawlLogPage() {
           </div>
         </div>
 
-        {/* 百度收录 cron */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">百度收录 Cron</h2>
-            <span className="text-xs bg-teal-50 text-teal-600 px-2 py-0.5 rounded font-medium">/api/cron/baidu-index · 每日 06:00</span>
-          </div>
-          <div className="space-y-4">
-
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">抓取内容</p>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">月收录</span>
-                  <span>抓取百度 <code className="text-xs bg-gray-100 px-1 rounded">site:</code> 近30天全量结果，覆盖当日 month 记录，存入 <code className="text-xs bg-gray-100 px-1 rounded">baidu_index</code></span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">周收录</span>
-                  <span>抓取近7天结果，仅存入月收录中没有的标题（week 独有）</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">日收录</span>
-                  <span>抓取今日结果，仅存入月/周均没有的标题（day 独有）</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">收录变动</span>
-                  <span>对比今日与昨日全量标题，新增/消失记录写入 <code className="text-xs bg-gray-100 px-1 rounded">baidu_index_changes</code></span>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">自动删除</p>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-24 text-center flex-shrink-0">3 天</span>
-                  <code className="text-xs bg-gray-100 px-1 rounded">baidu_index</code>
-                  <span className="text-gray-500">— stat_date 早于 3 天（仅作对比用，不需长期保留）</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-24 text-center flex-shrink-0">30 天</span>
-                  <code className="text-xs bg-gray-100 px-1 rounded">baidu_index_changes</code>
-                  <span className="text-gray-500">— change_date 早于 30 天</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
         {/* 状态规则 */}
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
@@ -183,12 +134,8 @@ export default function CrawlLogPage() {
                   <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">rank_changes</code>（type=rankup），找出多个竞品同时涨排名的关键词及最高搜索量</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-medium flex-shrink-0">共收录词</span>
-                  <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">baidu_index_changes</code>（change_type=appeared），找出多个竞品同时新增百度收录的标题</span>
-                </div>
-                <div className="flex gap-3">
                   <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium flex-shrink-0">交叉词</span>
-                  <span>同一关键词命中以上 2 个或以上维度，为最强趋势信号；页面默认展示此 Tab</span>
+                  <span>同一关键词同时命中共新增词与竞品涨排名，为最强趋势信号；页面默认展示此 Tab</span>
                 </div>
               </div>
             </div>
