@@ -354,38 +354,70 @@ const BAIDU_SEARCH_HEADERS = {
 }
 const TBS_MAP: Record<string, string> = { day: 'qdr:d', week: 'qdr:w', month: 'qdr:m' }
 
-// Fetch all Baidu site: search result titles for a given time period
-export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'week' | 'day', siteName: string): Promise<string[]> {
-  const tbs = TBS_MAP[period] || 'qdr:m'
+async function fetchBaiduPage(url: string): Promise<{ html: string; ok: boolean }> {
+  try {
+    const res = await fetch(url, { headers: BAIDU_SEARCH_HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+    if (!res.ok) return { html: '', ok: false }
+    const buffer = Buffer.from(await res.arrayBuffer())
+    const peek = buffer.subarray(0, 2000).toString('ascii')
+    const ctCharset = (res.headers.get('content-type') || '').match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase()
+    const metaCharset = peek.match(/<meta[^>]+charset=["']?\s*([^"'\s;>]+)/i)?.[1]?.toLowerCase()
+    const raw = ctCharset || metaCharset || 'utf-8'
+    return { html: iconv.decode(buffer, (raw === 'gb2312' || raw === 'gb18030') ? 'gbk' : raw), ok: true }
+  } catch {
+    return { html: '', ok: false }
+  }
+}
+
+// Fetch all Baidu site: search result titles for a given time period.
+// Resolves the actual time-filter URL from the base site: page instead of
+// constructing it manually, so we always follow links Baidu itself generates.
+export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'week' | 'day', siteName: string, filterUrl?: string): Promise<string[]> {
   const escapedName = siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const stripRe = escapedName ? new RegExp(`\\s*[-_|]\\s*${escapedName}\\s*$`) : null
   const titles: string[] = []
 
-  for (let page = 0; page < 50; page++) {
-    const pn = page * 10
-    const url = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&tbs=${encodeURIComponent(tbs)}&ie=utf-8${pn > 0 ? `&pn=${pn}` : ''}`
-    try {
-      const res = await fetch(url, { headers: BAIDU_SEARCH_HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
-      if (!res.ok) break
-      const buffer = Buffer.from(await res.arrayBuffer())
-      const peek = buffer.subarray(0, 2000).toString('ascii')
-      const ctCharset = (res.headers.get('content-type') || '').match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase()
-      const metaCharset = peek.match(/<meta[^>]+charset=["']?\s*([^"'\s;>]+)/i)?.[1]?.toLowerCase()
-      const raw = ctCharset || metaCharset || 'utf-8'
-      const html = iconv.decode(buffer, (raw === 'gb2312' || raw === 'gb18030') ? 'gbk' : raw)
-      const $ = cheerio.load(html)
-      const pageTitles: string[] = []
-      $('h3.t').each((_, el) => {
-        let title = $(el).find('a').first().text().trim() || $(el).text().trim()
-        if (stripRe) title = title.replace(stripRe, '').trim()
-        if (title) pageTitles.push(title)
+  // Resolve the actual Baidu time-filter URL if not provided
+  let startUrl = filterUrl
+  if (!startUrl) {
+    const periodLabel: Record<string, string> = { month: '一月内', week: '一周内', day: '一天内' }
+    const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&ie=utf-8`
+    const { html: baseHtml, ok } = await fetchBaiduPage(baseUrl)
+    if (ok) {
+      const $b = cheerio.load(baseHtml)
+      $b('a').each((_, el) => {
+        if ($b(el).text().trim() === periodLabel[period]) {
+          const href = $b(el).attr('href') || ''
+          if (href) {
+            startUrl = href.startsWith('/') ? `https://www.baidu.com${href}` : href
+            return false
+          }
+        }
       })
-      if (pageTitles.length === 0) break
-      titles.push(...pageTitles)
-      const hasNext = $('a').filter((_, el) => /下一页\s*>/.test($(el).text().trim())).length > 0
-      if (!hasNext) break
-      if (page < 49) await new Promise((r) => setTimeout(r, 1500))
-    } catch { break }
+    }
+    // Fallback to constructed URL if link not found
+    if (!startUrl) {
+      startUrl = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&tbs=${encodeURIComponent(TBS_MAP[period])}&ie=utf-8`
+    }
+    await new Promise((r) => setTimeout(r, 1500))
+  }
+
+  for (let page = 0; page < 50; page++) {
+    const url = page === 0 ? startUrl : startUrl.replace(/(&pn=\d+)?$/, `&pn=${page * 10}`)
+    const { html, ok } = await fetchBaiduPage(url)
+    if (!ok) break
+    const $ = cheerio.load(html)
+    const pageTitles: string[] = []
+    $('h3.t').each((_, el) => {
+      let title = $(el).find('a').first().text().trim() || $(el).text().trim()
+      if (stripRe) title = title.replace(stripRe, '').trim()
+      if (title) pageTitles.push(title)
+    })
+    if (pageTitles.length === 0) break
+    titles.push(...pageTitles)
+    const hasNext = $('a').filter((_, el) => /下一页\s*>/.test($(el).text().trim())).length > 0
+    if (!hasNext) break
+    if (page < 49) await new Promise((r) => setTimeout(r, 1500))
   }
   return titles
 }
