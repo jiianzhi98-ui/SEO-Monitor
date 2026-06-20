@@ -382,7 +382,7 @@ export async function fetchBaiduIndexTitles(domain: string, period: 'month' | 'w
       })
       if (pageTitles.length === 0) break
       titles.push(...pageTitles)
-      const hasNext = $('a').filter((_, el) => $(el).text().trim() === '下一页>').length > 0
+      const hasNext = $('a').filter((_, el) => /下一页\s*>/.test($(el).text().trim())).length > 0
       if (!hasNext) break
       if (page < 49) await new Promise((r) => setTimeout(r, 1500))
     } catch { break }
