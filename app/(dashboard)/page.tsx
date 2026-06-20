@@ -194,10 +194,11 @@ export default function DashboardPage() {
       const kAlerts: AlertItem[] = []
       for (const s of siteList) {
         const ss = stats.filter(r => r.site_id === s.id)
+        if (ss.length === 0) continue
         const yStat = ss.find(r => r.stat_date === yesterday)
-        if (!yStat) continue
-        const avg = ss.length > 0 ? ss.reduce((a, r) => a + r.new_count, 0) / ss.length : 0
-        if (avg > 0 && yStat.new_count / avg < 0.3) kAlerts.push({ domain: s.domain })
+        const yVal = yStat?.new_count ?? 0
+        const avg = ss.reduce((a, r) => a + r.new_count, 0) / ss.length
+        if (avg > 0 && yVal / avg < 0.3) kAlerts.push({ domain: s.domain })
       }
       setKwAlerts(kAlerts)
 
