@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as cheerio from 'cheerio'
 import * as iconv from 'iconv-lite'
 
 const HEADERS = {
@@ -33,13 +34,23 @@ export async function GET(req: Request) {
     // Find any h3 tags to see what classes they have
     const h3matches = Array.from(html.matchAll(/<h3[^>]*>/g)).slice(0, 5).map(m => m[0])
 
+    // Try cheerio extraction the same way fetchBaiduIndexTitles does
+    const $ = cheerio.load(html)
+    const extractedTitles: string[] = []
+    $('h3.t').each((_, el) => {
+      const linkText = $(el).find('a').first().text().trim()
+      const fullText = $(el).text().trim()
+      extractedTitles.push(linkText || fullText || '[empty]')
+    })
+
     return NextResponse.json({
       url, status, charset,
       pageTitle: title,
       hasH3t,
       hasVerify,
       h3Tags: h3matches,
-      preview: html.slice(0, 3000),
+      h3Count: $('h3.t').length,
+      extractedTitles: extractedTitles.slice(0, 10),
     })
   } catch (err) {
     return NextResponse.json({ url, error: String(err) }, { status: 500 })
