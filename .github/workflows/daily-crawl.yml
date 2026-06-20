@@ -35,6 +35,14 @@ jobs:
             https://seo-monitor-iota.vercel.app/api/cron \
             | jq .
 
+      - name: Trigger baidu index crawl
+        if: github.event.inputs.staggered != 'true'
+        run: |
+          curl -f -s \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://seo-monitor-iota.vercel.app/api/cron/baidu-index \
+            | jq .
+
       - name: Trigger crawl (staggered, one site at a time)
         if: github.event.inputs.staggered == 'true'
         run: |
@@ -56,6 +64,11 @@ jobs:
             curl -f -s \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
               "$BASE_URL/api/cron?site=$domain" \
+              | jq .
+            echo "=== Baidu index for $domain ==="
+            curl -f -s \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "$BASE_URL/api/cron/baidu-index?site=$domain" \
               | jq .
           done
           echo "=== All sites crawled ==="
