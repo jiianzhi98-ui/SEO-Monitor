@@ -87,7 +87,22 @@ export default function IndexMonitorPage() {
         return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, latest, weeklyChange, trend, status }
       })
 
-      setRows(result.sort((a, b) => a.focus_level - b.focus_level || b.latest - a.latest))
+      const statusPriority = (r: IndexRow) => {
+        if (r.status === 'danger') return 0
+        if (r.status === 'warning') return 1
+        if (r.weeklyChange < 0) return 2
+        if (r.weeklyChange > 0) return 3
+        return 4
+      }
+      setRows(result.sort((a, b) => {
+        if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
+        if (a.focus_level >= 3) {
+          const pd = statusPriority(a) - statusPriority(b)
+          if (pd !== 0) return pd
+          return a.weeklyChange - b.weeklyChange
+        }
+        return b.latest - a.latest
+      }))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
