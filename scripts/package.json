@@ -1,0 +1,9 @@
+{
+  "name": "baidu-index-scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "puppeteer": "^22.15.0",
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
