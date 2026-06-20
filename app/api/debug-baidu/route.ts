@@ -34,38 +34,49 @@ export async function GET(req: Request) {
   const weekTbsUrl = `https://www.baidu.com/s?wd=${encodeURIComponent('site:' + domain)}&ie=utf-8&tbs=qdr%3Aw&si=${encodeURIComponent(domain)}`
 
   try {
-    // Fetch month page 1 and extract next-page href + rsv_pq
-    const res1 = await fetch(monthUrl, { headers: HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+    // Step 1: fetch Baidu homepage to get session cookies
+    const homeRes = await fetch('https://www.baidu.com/', { headers: HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+    const setCookieHeader = homeRes.headers.get('set-cookie') || ''
+    // Extract key cookies: BAIDUID, BDORZ
+    const cookiePairs = setCookieHeader.split(/,(?=[A-Z])/).map(s => s.split(';')[0].trim()).filter(Boolean)
+    const sessionCookie = cookiePairs.join('; ')
+
+    await new Promise(r => setTimeout(r, 1500))
+
+    // Step 2: fetch month page with session cookie
+    const headersWithCookie = { ...HEADERS, ...(sessionCookie ? { Cookie: sessionCookie } : {}) }
+    const res1 = await fetch(monthUrl, { headers: headersWithCookie, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
     const html1 = iconv.decode(Buffer.from(await res1.arrayBuffer()), 'utf-8')
     const $1 = cheerio.load(html1)
     const month1Titles = $1('h3.t').map((_, el) => $1(el).find('a').first().text().trim()).get().filter(Boolean)
     const nextHref = $1('a').filter((_, el) => /下一页\s*>/.test($1(el).text().trim())).first().attr('href')
     const nextPageUrl = nextHref ? (nextHref.startsWith('/') ? `https://www.baidu.com${nextHref}` : nextHref) : null
 
-    // Extract rsv_pq from page source
-    const rsvPqMatch = html1.match(/rsv_pq[=:]["']?([a-f0-9]+)/i)
-    const rsvPq = rsvPqMatch ? rsvPqMatch[1] : null
-
     await new Promise(r => setTimeout(r, 2000))
 
-    // Try following actual next-page link
+    // Step 3: follow next page link with cookie
     let month2Result = { h3Count: -1, titles: [] as string[] }
     if (nextPageUrl) {
-      const res2 = await fetch(nextPageUrl, { headers: HEADERS, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+      const res2 = await fetch(nextPageUrl, { headers: headersWithCookie, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
       const html2 = iconv.decode(Buffer.from(await res2.arrayBuffer()), 'utf-8')
       const $2 = cheerio.load(html2)
       month2Result = { h3Count: $2('h3.t').length, titles: $2('h3.t').map((_, el) => $2(el).text().trim()).get().slice(0, 3) }
     }
 
     await new Promise(r => setTimeout(r, 2000))
-    const weekGpcResult = await fetchAndParse(weekGpcUrl)
+
+    // Step 4: try week with cookie
+    const weekRes = await fetch(weekGpcUrl, { headers: headersWithCookie, signal: AbortSignal.timeout(10000), next: { revalidate: 0 } })
+    const weekHtml = iconv.decode(Buffer.from(await weekRes.arrayBuffer()), 'utf-8')
+    const $w = cheerio.load(weekHtml)
+    const weekResult = { h3Count: $w('h3.t').length, titles: $w('h3.t').map((_, el) => $w(el).text().trim()).get().slice(0, 3) }
 
     return NextResponse.json({
       domain,
-      month_page1: { h3Count: month1Titles.length, titles: month1Titles.slice(0, 3), nextPageUrl, rsvPq },
-      month_page2_via_href: month2Result,
-      week_gpc: weekGpcResult,
-      urls: { monthUrl, weekGpcUrl }
+      sessionCookie: sessionCookie.slice(0, 100),
+      month_page1: { h3Count: month1Titles.length, titles: month1Titles.slice(0, 3), nextPageUrl },
+      month_page2_with_cookie: month2Result,
+      week_gpc_with_cookie: weekResult,
     })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
