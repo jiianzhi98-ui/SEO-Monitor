@@ -25,7 +25,7 @@ export async function GET() {
 
     // Keywords appear just before {"via":N},"service=...scenes=热搜
     const pattern = /"([^"]{1,80})",(?:0,)?\{"via":\d+\},"service=[^"]*scenes=热搜/g
-    const items: { rank: number; name: string }[] = []
+    const items: { rank: number; name: string; labels: string[] }[] = []
     let m: RegExpExecArray | null
     while ((m = pattern.exec(chunk)) !== null) {
       items.push({ rank: items.length + 1, name: m[1], labels: [] })
