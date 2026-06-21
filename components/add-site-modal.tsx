@@ -12,6 +12,7 @@ interface Site {
   list_url: string
   title_selector: string
   date_selector: string
+  source_types: string
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
   enable_version_clean: boolean
   version_suffixes: string[]
@@ -22,6 +23,7 @@ interface HtmlSource {
   url: string
   titleSelector: string
   dateSelector: string
+  contentType: 'game' | 'app'
 }
 
 interface PreviewRow {
@@ -44,6 +46,7 @@ const defaultForm: Site = {
   list_url: '',
   title_selector: '',
   date_selector: '',
+  source_types: '',
   crawl_frequency: 'daily',
   enable_version_clean: false,
   version_suffixes: [],
@@ -51,15 +54,17 @@ const defaultForm: Site = {
 }
 
 function sitToSources(s: Site | null): HtmlSource[] {
-  if (!s) return [{ url: '', titleSelector: '', dateSelector: '' }]
+  if (!s) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
   const urls = (s.list_url || '').split('\n').map((u) => u.trim()).filter(Boolean)
   const titles = (s.title_selector || '').split('\n').map((t) => t.trim())
   const dates = (s.date_selector || '').split('\n').map((d) => d.trim())
-  if (urls.length === 0) return [{ url: '', titleSelector: '', dateSelector: '' }]
+  const types = (s.source_types || '').split('\n').map((t) => t.trim())
+  if (urls.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
   return urls.map((url, i) => ({
     url,
     titleSelector: titles[i] ?? titles[0] ?? '',
     dateSelector: dates[i] ?? dates[0] ?? '',
+    contentType: (types[i] === 'game' ? 'game' : 'app') as 'game' | 'app',
   }))
 }
 
@@ -89,11 +94,12 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
       list_url: valid.map((s) => s.url).join('\n'),
       title_selector: valid.map((s) => s.titleSelector).join('\n'),
       date_selector: valid.map((s) => s.dateSelector).join('\n'),
+      source_types: valid.map((s) => s.contentType).join('\n'),
     }))
   }
 
   function addSource() {
-    setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '' }])
+    setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '', contentType: 'app' }])
   }
 
   function removeSource(idx: number) {
@@ -105,6 +111,7 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
       list_url: valid.map((s) => s.url).join('\n'),
       title_selector: valid.map((s) => s.titleSelector).join('\n'),
       date_selector: valid.map((s) => s.dateSelector).join('\n'),
+      source_types: valid.map((s) => s.contentType).join('\n'),
     }))
   }
 
@@ -246,11 +253,25 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                 <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">来源 {idx + 1}</span>
-                    {idx > 0 && (
-                      <button type="button" onClick={() => removeSource(idx)} className="text-xs text-red-400 hover:text-red-600">
-                        移除
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex rounded-md overflow-hidden border border-gray-200 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => updateSource(idx, 'contentType', 'app')}
+                          className={`px-2.5 py-1 font-medium transition-colors ${src.contentType === 'app' ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                        >应用</button>
+                        <button
+                          type="button"
+                          onClick={() => updateSource(idx, 'contentType', 'game')}
+                          className={`px-2.5 py-1 font-medium transition-colors ${src.contentType === 'game' ? 'bg-purple-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                        >游戏</button>
+                      </div>
+                      {idx > 0 && (
+                        <button type="button" onClick={() => removeSource(idx)} className="text-xs text-red-400 hover:text-red-600">
+                          移除
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">列表页URL</label>

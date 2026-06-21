@@ -16,6 +16,7 @@ interface SiteRecord {
   list_url: string | null
   title_selector: string | null
   date_selector: string | null
+  source_types: string | null
   enable_version_clean: boolean
   version_suffixes: string[]
   created_at: string
@@ -83,7 +84,7 @@ export async function GET(request: Request) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
 
       try {
-        type RawEntry = { title: string; content_date: string | null }
+        type RawEntry = { title: string; content_date: string | null; content_type?: string }
         let rawEntries: RawEntry[] = []
         const hasCrawlConfig = !!(site.list_url && site.title_selector)
 
@@ -94,22 +95,27 @@ export async function GET(request: Request) {
           const urls = site.list_url!.split('\n').map((u: string) => u.trim()).filter(Boolean)
           const titleSels = (site.title_selector || '').split('\n').map((s: string) => s.trim())
           const dateSels = (site.date_selector || '').split('\n').map((s: string) => s.trim())
-          const sources: HtmlSource[] = urls.map((url: string, i: number) => ({
-            url,
-            titleSelector: titleSels[i] || titleSels[0] || '',
-            dateSelector: dateSels[i] || dateSels[0] || '',
-          }))
-          const entries = await fetchHtmlListPages(sources, htmlCutoff, maxPg)
-          rawEntries = entries.map((e) => ({
-            title: e.title,
-            content_date: parseContentDate(e.date),
-          }))
+          const sourceTypesList = (site.source_types || '').split('\n').map((s: string) => s.trim())
+          // Process each source separately to track content_type
+          for (let i = 0; i < urls.length; i++) {
+            const src: HtmlSource = {
+              url: urls[i],
+              titleSelector: titleSels[i] || titleSels[0] || '',
+              dateSelector: dateSels[i] || dateSels[0] || '',
+            }
+            const srcEntries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
+            const srcType = sourceTypesList[i] === 'game' ? 'game' : 'app'
+            for (const e of srcEntries) {
+              rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType })
+            }
+          }
         }
 
         const cleanedEntries = rawEntries
           .map((e) => ({
             keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
             content_date: e.content_date,
+            content_type: e.content_type || 'app',
           }))
           .filter((e) => e.keyword.length > 0)
 
@@ -135,6 +141,7 @@ export async function GET(request: Request) {
                 site_id: site.id,
                 discovered_at: new Date().toISOString(),
                 content_date: e.content_date,
+                content_type: e.content_type || 'app',
               }))
             )
           }

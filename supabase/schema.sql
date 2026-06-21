@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS sites (
   list_url TEXT,
   title_selector TEXT,
   date_selector TEXT,
+  source_types TEXT,
   crawl_frequency TEXT NOT NULL DEFAULT 'daily' CHECK (crawl_frequency IN ('daily', 'every3days', 'weekly')),
   enable_version_clean BOOLEAN NOT NULL DEFAULT FALSE,
   version_suffixes TEXT[] DEFAULT '{}',
@@ -28,7 +29,8 @@ CREATE TABLE IF NOT EXISTS raw_keywords (
   keyword TEXT NOT NULL,
   site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
   source_url TEXT,
-  discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  content_type TEXT NOT NULL DEFAULT 'app'
 );
 
 CREATE INDEX IF NOT EXISTS idx_raw_keywords_site_id ON raw_keywords(site_id);

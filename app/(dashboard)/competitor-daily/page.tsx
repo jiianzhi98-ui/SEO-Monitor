@@ -33,6 +33,7 @@ interface Keyword {
   source_url: string | null
   discovered_at: string
   content_date: string | null
+  content_type: string | null
 }
 
 interface CleanedEntry {
@@ -79,6 +80,7 @@ export default function CompetitorDailyPage() {
   const [siteKeywords, setSiteKeywords] = useState<Keyword[]>([])
   const [kwLoading, setKwLoading] = useState(false)
   const [kwDate, setKwDate] = useState('')
+  const [kwTab, setKwTab] = useState<'app' | 'game'>('app')
 
   // 更新词库 modal
   const [cleanSite, setCleanSite] = useState<CompetitorRow | null>(null)
@@ -166,7 +168,7 @@ export default function CompetitorDailyPage() {
       const supabase = getBrowserClient()
       const { data, error: err } = await supabase
         .from('raw_keywords')
-        .select('keyword, source_url, discovered_at, content_date')
+        .select('keyword, source_url, discovered_at, content_date, content_type')
         .eq('site_id', site.site_id)
         .eq('content_date', date)
         .order('keyword', { ascending: true })
@@ -184,6 +186,7 @@ export default function CompetitorDailyPage() {
     const date = getMalaysiaDate(-1)
     setSelectedSite(site)
     setKwDate(date)
+    setKwTab('app')
     fetchKeywordsForDate(site, date)
   }
 
@@ -441,53 +444,83 @@ export default function CompetitorDailyPage() {
       </div>
 
       {/* 昨日新词 Modal */}
-      {selectedSite && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 新词</h3>
-                <input
-                  type="date"
-                  value={kwDate}
-                  max={getMalaysiaDate(0)}
-                  onChange={(e) => handleKwDateChange(e.target.value)}
-                  className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
-                />
-              </div>
-              <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {kwLoading ? (
-                <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  加载中...
+      {selectedSite && (() => {
+        const appKeywords = siteKeywords.filter((kw) => (kw.content_type || 'app') === 'app')
+        const gameKeywords = siteKeywords.filter((kw) => kw.content_type === 'game')
+        const filteredKeywords = kwTab === 'app' ? appKeywords : gameKeywords
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 新词</h3>
+                  <input
+                    type="date"
+                    value={kwDate}
+                    max={getMalaysiaDate(0)}
+                    onChange={(e) => handleKwDateChange(e.target.value)}
+                    className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
                 </div>
-              ) : siteKeywords.length === 0 ? (
-                <p className="text-center text-gray-400 py-10 text-sm">该日期暂无新词</p>
-              ) : (
-                <ul className="space-y-2">
-                  {siteKeywords.map((kw, i) => (
-                    <li key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50">
-                      <span className="text-sm text-gray-900">{kw.keyword}</span>
-                      <span className="text-xs text-gray-400 flex-shrink-0">
-                        {(kw.content_date ?? kwDate).slice(5).replace('-', '/')}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {/* Tabs */}
+              <div className="flex border-b border-gray-200 px-5">
+                {(['app', 'game'] as const).map((t) => {
+                  const isActive = kwTab === t
+                  const label = t === 'app' ? '应用' : '游戏'
+                  const count = t === 'app' ? appKeywords.length : gameKeywords.length
+                  const activeClass = t === 'app' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setKwTab(t)}
+                      className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${
+                        isActive ? activeClass : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {label}
+                      {!kwLoading && count > 0 && (
+                        <span className="ml-1.5 text-xs text-gray-400">({count})</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                {kwLoading ? (
+                  <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    加载中...
+                  </div>
+                ) : filteredKeywords.length === 0 ? (
+                  <p className="text-center text-gray-400 py-10 text-sm">该日期暂无新词</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {filteredKeywords.map((kw, i) => (
+                      <li key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50">
+                        <span className="text-sm text-gray-900">{kw.keyword}</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">
+                          {(kw.content_date ?? kwDate).slice(5).replace('-', '/')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* 更新词库 Modal */}
       {cleanSite && (
