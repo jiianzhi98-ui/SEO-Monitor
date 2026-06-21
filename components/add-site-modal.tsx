@@ -53,8 +53,31 @@ const defaultForm: Site = {
   is_enabled: true,
 }
 
+const SRC_SEP = '|||'
+
+function splitSources(str: string | null | undefined): string[] {
+  if (!str) return []
+  return str.includes(SRC_SEP) ? str.split(SRC_SEP) : str.split('\n').map(s => s.trim()).filter(Boolean).map(s => s)
+}
+
 function sitToSources(s: Site | null): HtmlSource[] {
   if (!s) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+  // New format: ||| separates sources; old format: \n separates sources (each has 1 URL)
+  const isNew = (s.list_url || '').includes(SRC_SEP)
+  if (isNew) {
+    const urlBlocks = (s.list_url || '').split(SRC_SEP)
+    const titles = (s.title_selector || '').split(SRC_SEP)
+    const dates = (s.date_selector || '').split(SRC_SEP)
+    const types = (s.source_types || '').split(SRC_SEP)
+    if (urlBlocks.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+    return urlBlocks.map((urlBlock, i) => ({
+      url: urlBlock.trim(),
+      titleSelector: (titles[i] ?? titles[0] ?? '').trim(),
+      dateSelector: (dates[i] ?? dates[0] ?? '').trim(),
+      contentType: ((types[i] ?? '').trim() === 'game' ? 'game' : 'app') as 'game' | 'app',
+    }))
+  }
+  // Old format: each \n is a separate source with one URL
   const urls = (s.list_url || '').split('\n').map((u) => u.trim()).filter(Boolean)
   const titles = (s.title_selector || '').split('\n').map((t) => t.trim())
   const dates = (s.date_selector || '').split('\n').map((d) => d.trim())
@@ -91,10 +114,10 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
     const valid = next.filter((s) => s.url.trim())
     setForm((prev) => ({
       ...prev,
-      list_url: valid.map((s) => s.url).join('\n'),
-      title_selector: valid.map((s) => s.titleSelector).join('\n'),
-      date_selector: valid.map((s) => s.dateSelector).join('\n'),
-      source_types: valid.map((s) => s.contentType).join('\n'),
+      list_url: valid.map((s) => s.url).join(SRC_SEP),
+      title_selector: valid.map((s) => s.titleSelector).join(SRC_SEP),
+      date_selector: valid.map((s) => s.dateSelector).join(SRC_SEP),
+      source_types: valid.map((s) => s.contentType).join(SRC_SEP),
     }))
   }
 
@@ -108,10 +131,10 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
     const valid = next.filter((s) => s.url.trim())
     setForm((prev) => ({
       ...prev,
-      list_url: valid.map((s) => s.url).join('\n'),
-      title_selector: valid.map((s) => s.titleSelector).join('\n'),
-      date_selector: valid.map((s) => s.dateSelector).join('\n'),
-      source_types: valid.map((s) => s.contentType).join('\n'),
+      list_url: valid.map((s) => s.url).join(SRC_SEP),
+      title_selector: valid.map((s) => s.titleSelector).join(SRC_SEP),
+      date_selector: valid.map((s) => s.dateSelector).join(SRC_SEP),
+      source_types: valid.map((s) => s.contentType).join(SRC_SEP),
     }))
   }
 
@@ -136,11 +159,12 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
     setPreviewError(null)
     try {
       const src = htmlSources[0]
+      const previewUrl = src.url.split('\n').map((u: string) => u.trim()).filter(Boolean)[0] || src.url
       const res = await fetch('/api/crawl/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: src.url,
+          url: previewUrl,
           type: 'html',
           titleSelector: src.titleSelector,
           dateSelector: src.dateSelector,
@@ -274,13 +298,13 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">列表页URL</label>
-                    <input
-                      type="url"
+                    <label className="block text-xs font-medium text-gray-600 mb-1">列表页URL（多页用换行分隔）</label>
+                    <textarea
                       value={src.url}
                       onChange={(e) => updateSource(idx, 'url', e.target.value)}
-                      placeholder="https://example.com/new/"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                      placeholder={"https://example.com/new/\nhttps://example.com/new-2/"}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white resize-none"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">

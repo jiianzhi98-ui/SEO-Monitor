@@ -92,21 +92,29 @@ export async function GET(request: Request) {
           const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
           const htmlCutoff = getMalaysiaDate(-cutoffDays)
           const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
-          const urls = site.list_url!.split('\n').map((u: string) => u.trim()).filter(Boolean)
-          const titleSels = (site.title_selector || '').split('\n').map((s: string) => s.trim())
-          const dateSels = (site.date_selector || '').split('\n').map((s: string) => s.trim())
-          const sourceTypesList = (site.source_types || '').split('\n').map((s: string) => s.trim())
+          const SRC_SEP = '|||'
+          const listUrl = site.list_url!
+          const isNew = listUrl.includes(SRC_SEP)
+          const urlBlocks = isNew ? listUrl.split(SRC_SEP) : listUrl.split('\n').map((u: string) => u.trim()).filter(Boolean)
+          const titleSels = (site.title_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
+          const dateSels = (site.date_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
+          const sourceTypesList = (site.source_types || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
           // Process each source separately to track content_type
-          for (let i = 0; i < urls.length; i++) {
-            const src: HtmlSource = {
-              url: urls[i],
-              titleSelector: titleSels[i] || titleSels[0] || '',
-              dateSelector: dateSels[i] || dateSels[0] || '',
-            }
-            const srcEntries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
+          for (let i = 0; i < urlBlocks.length; i++) {
             const srcType = sourceTypesList[i] === 'game' ? 'game' : 'app'
-            for (const e of srcEntries) {
-              rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType })
+            const srcUrls = isNew
+              ? urlBlocks[i].split('\n').map((u: string) => u.trim()).filter(Boolean)
+              : [urlBlocks[i]]
+            for (const url of srcUrls) {
+              const src: HtmlSource = {
+                url,
+                titleSelector: titleSels[i] || titleSels[0] || '',
+                dateSelector: dateSels[i] || dateSels[0] || '',
+              }
+              const srcEntries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
+              for (const e of srcEntries) {
+                rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType })
+              }
             }
           }
         }
