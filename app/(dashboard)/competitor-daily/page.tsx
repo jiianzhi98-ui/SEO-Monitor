@@ -668,12 +668,18 @@ export default function CompetitorDailyPage() {
                   <tbody className="divide-y divide-gray-50">
                     {rankData.map((entry, i) => {
                       const isUnstable = rankUnstableSet.has(entry.keyword)
+                      const isHidden = entry.volume === 0
                       return (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className={`px-5 py-2 ${isUnstable ? 'text-red-500 font-medium' : 'text-gray-900'}`}>
+                        <tr key={i} className={`hover:bg-gray-50 ${isHidden ? 'opacity-40' : ''}`}>
+                          <td className={`px-5 py-2 ${isUnstable ? 'text-red-500 font-medium' : isHidden ? 'text-gray-400' : 'text-gray-900'}`}>
                             {entry.keyword}
                           </td>
-                          <td className="px-5 py-2 text-right text-gray-600">{entry.volume.toLocaleString()}</td>
+                          <td className="px-5 py-2 text-right">
+                            {isHidden
+                              ? <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">隐藏</span>
+                              : <span className="text-gray-600">{entry.volume.toLocaleString()}</span>
+                            }
+                          </td>
                         </tr>
                       )
                     })}
