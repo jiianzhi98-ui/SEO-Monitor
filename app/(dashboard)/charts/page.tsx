@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 // ── Helper components ─────────────────────────────────────────────────────────
 
@@ -336,7 +336,25 @@ function ShowMoreList({ items, initialCount = 10 }: { items: React.ReactNode[]; 
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+interface HotItem { rank: number; name: string; labels: string[] }
+
 export default function ChartsPage() {
+  const [hotItems, setHotItems] = useState<HotItem[]>([])
+  const [hotLoading, setHotLoading] = useState(true)
+  const [hotUpdatedAt, setHotUpdatedAt] = useState('')
+
+  useEffect(() => {
+    fetch('/api/charts/taptap-hot')
+      .then((r) => r.json())
+      .then((d) => {
+        setHotItems(d.items ?? [])
+        const now = new Date()
+        setHotUpdatedAt(`${String(now.getMonth() + 1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`)
+      })
+      .catch(() => {})
+      .finally(() => setHotLoading(false))
+  }, [])
+
   return (
     <div className="p-8 space-y-10">
       <div className="mb-2">
@@ -346,7 +364,7 @@ export default function ChartsPage() {
 
       {/* ── TapTap ── */}
       <div>
-        <SectionHeader title="TapTap" color="bg-teal-500" updatedAt="06/21 15:17" />
+        <SectionHeader title="TapTap" color="bg-teal-500" updatedAt={hotUpdatedAt || '加载中…'} />
         <div className="grid grid-cols-3 gap-5">
 
           {/* 今日游戏 */}
@@ -364,10 +382,22 @@ export default function ChartsPage() {
           </Card>
 
           {/* 热搜榜 */}
-          <Card title="热搜榜 TOP 20" subtitle="实时热搜词" icon="🔥" accent="bg-teal-50">
-            <ShowMoreList initialCount={10} items={taptapHotSearch.map((g) => (
-              <RankListItem key={g.rank} rank={g.rank} name={g.name} isNew={g.isNew} />
-            ))} />
+          <Card title="热搜榜 TOP 20" subtitle="每 20 分钟更新" icon="🔥" accent="bg-teal-50">
+            {hotLoading ? (
+              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+            ) : hotItems.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+            ) : (
+              <ShowMoreList initialCount={10} items={hotItems.map((g) => (
+                <li key={g.rank} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                  <RankBadge rank={g.rank} />
+                  <p className="flex-1 text-xs font-medium text-gray-800 truncate">{g.name}</p>
+                  {g.labels.length > 0 && (
+                    <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full flex-shrink-0">{g.labels[0]}</span>
+                  )}
+                </li>
+              ))} />
+            )}
           </Card>
 
         </div>
