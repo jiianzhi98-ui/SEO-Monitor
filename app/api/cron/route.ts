@@ -198,12 +198,16 @@ export async function GET(request: Request) {
           await (supabase.from('rank_changes') as any).insert(rankRows)
         }
         // Upsert rankup keywords to permanent keyword_volume store (one record per keyword)
-        const kwVolumeRows = rankupEntries
-          .filter((e) => e.volume > 0)
-          .map((e) => ({ keyword: e.keyword, volume: e.volume }))
-        if (kwVolumeRows.length > 0) {
+        const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume }))
+        const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0 }))
+        if (kwWithVol.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('keyword_volume') as any).upsert(kwVolumeRows, { onConflict: 'keyword' })
+          await (supabase.from('keyword_volume') as any).upsert(kwWithVol, { onConflict: 'keyword' })
+        }
+        if (kwNoVol.length > 0) {
+          // Insert only — don't overwrite existing volume with 0
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('keyword_volume') as any).upsert(kwNoVol, { onConflict: 'keyword', ignoreDuplicates: true })
         }
       } catch {
         // rank fetch failure does not block other processing
