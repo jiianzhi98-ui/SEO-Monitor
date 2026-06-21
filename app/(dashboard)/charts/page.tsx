@@ -350,14 +350,33 @@ const tagColors2: Record<string, string> = {
   '活动': 'bg-pink-100 text-pink-700',
 }
 
+function GameIcon({ icon, title }: { icon: string; title: string }) {
+  const [failed, setFailed] = useState(false)
+  const initial = title.charAt(0) || '?'
+  const colors = ['bg-teal-100 text-teal-600', 'bg-blue-100 text-blue-600', 'bg-purple-100 text-purple-600', 'bg-orange-100 text-orange-600', 'bg-pink-100 text-pink-600']
+  const color = colors[initial.charCodeAt(0) % colors.length]
+  if (!icon || failed) {
+    return (
+      <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center ${color}`}>
+        <span className="text-xs font-bold">{initial}</span>
+      </div>
+    )
+  }
+  return (
+    <img
+      src={icon}
+      alt={title}
+      className="w-8 h-8 rounded-lg flex-shrink-0 object-cover"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
   return (
     <li className="flex items-center gap-2.5 py-2 border-b border-gray-50 last:border-0">
-      {g.icon ? (
-        <img src={g.icon} alt={g.title} className="w-8 h-8 rounded-lg flex-shrink-0 object-cover" />
-      ) : (
-        <div className="w-8 h-8 bg-gradient-to-br from-gray-200 to-gray-300 rounded-lg flex-shrink-0" />
-      )}
+      <GameIcon icon={g.icon} title={g.title} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           <p className="text-xs font-semibold text-gray-900 truncate">{g.title}</p>
@@ -368,9 +387,7 @@ function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
           {g.labels.length > 0 && ` · ${g.labels[0]}`}
         </p>
       </div>
-      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${tagColors2[g.tag] || 'bg-gray-100 text-gray-500'}`}>{g.tag}</span>
-      </div>
+      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${tagColors2[g.tag] || 'bg-gray-100 text-gray-500'}`}>{g.tag}</span>
     </li>
   )
 }
@@ -379,10 +396,12 @@ export default function ChartsPage() {
   const [hotItems, setHotItems] = useState<HotItem[]>([])
   const [hotLoading, setHotLoading] = useState(true)
   const [todayGames, setTodayGames] = useState<TodayGame[]>([])
+  const [upcomingGames, setUpcomingGames] = useState<TodayGame[]>([])
   const [topEvents, setTopEvents] = useState<TodayGame[]>([])
   const [todayLoading, setTodayLoading] = useState(true)
   const [topExpanded, setTopExpanded] = useState(false)
   const [todayExpanded, setTodayExpanded] = useState(false)
+  const [upcomingExpanded, setUpcomingExpanded] = useState(false)
   const [hotUpdatedAt, setHotUpdatedAt] = useState('')
 
   useEffect(() => {
@@ -396,13 +415,17 @@ export default function ChartsPage() {
 
     fetch('/api/charts/taptap-today')
       .then((r) => r.json())
-      .then((d) => { setTodayGames(d.todayGames ?? []); setTopEvents(d.topEvents ?? []) })
+      .then((d) => {
+        setTodayGames(d.todayGames ?? [])
+        setUpcomingGames(d.upcomingGames ?? [])
+        setTopEvents(d.topEvents ?? [])
+      })
       .catch(() => {})
       .finally(() => setTodayLoading(false))
   }, [])
 
   const visibleToday = todayExpanded ? todayGames : todayGames.slice(0, 5)
-  const visibleTop = topExpanded ? topEvents : topEvents.slice(0, 3)
+  const visibleUpcoming = upcomingExpanded ? upcomingGames : upcomingGames.slice(0, 6)
 
   return (
     <div className="p-8 space-y-10">
@@ -416,36 +439,58 @@ export default function ChartsPage() {
         <SectionHeader title="TapTap" color="bg-teal-500" updatedAt={hotUpdatedAt || '加载中…'} />
         <div className="grid grid-cols-3 gap-5">
 
-          {/* 今日游戏 */}
+          {/* 今日游戏（含近期焦点折叠） */}
           <Card title={`今日游戏${todayGames.length ? ` · ${todayGames.length} 款` : ''}`} subtitle="首发 / 新游预约 / 测试" icon="🎮" accent="bg-teal-50">
             {todayLoading ? (
               <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : todayGames.length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
               <>
-                <ul>{visibleToday.map((g, i) => <GameItem key={i} g={g} />)}</ul>
-                {todayGames.length > 5 && (
-                  <button onClick={() => setTodayExpanded(!todayExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
-                    {todayExpanded ? '收起' : `查看更多 (${todayGames.length - 5} 款)`}
-                  </button>
+                {/* 近期焦点 折叠区 */}
+                {topEvents.length > 0 && (
+                  <div className="mb-3 border border-teal-100 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setTopExpanded(!topExpanded)}
+                      className="w-full flex items-center justify-between px-3 py-2 bg-teal-50 hover:bg-teal-100 transition-colors"
+                    >
+                      <span className="text-[11px] font-semibold text-teal-700">近期焦点 · {topEvents.length} 条</span>
+                      <span className="text-[10px] text-teal-500">{topExpanded ? '▲ 收起' : '▼ 展开'}</span>
+                    </button>
+                    {topExpanded && (
+                      <ul className="px-3">
+                        {topEvents.map((g, i) => <GameItem key={i} g={g} showDate />)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {/* 今日游戏列表 */}
+                {todayGames.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
+                ) : (
+                  <>
+                    <ul>{visibleToday.map((g, i) => <GameItem key={i} g={g} />)}</ul>
+                    {todayGames.length > 5 && (
+                      <button onClick={() => setTodayExpanded(!todayExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
+                        {todayExpanded ? '收起' : `查看更多 (${todayGames.length - 5} 款)`}
+                      </button>
+                    )}
+                  </>
                 )}
               </>
             )}
           </Card>
 
-          {/* 近期焦点 */}
-          <Card title="近期焦点" subtitle="重点预约 / 测试招募" icon="📅" accent="bg-teal-50">
+          {/* 即将上线 */}
+          <Card title={`即将上线${upcomingGames.length ? ` · ${upcomingGames.length} 款` : ''}`} subtitle="未来 3 天预约 / 首发" icon="📅" accent="bg-teal-50">
             {todayLoading ? (
               <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : topEvents.length === 0 ? (
+            ) : upcomingGames.length === 0 ? (
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
               <>
-                <ul>{visibleTop.map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>
-                {topEvents.length > 3 && (
-                  <button onClick={() => setTopExpanded(!topExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
-                    {topExpanded ? '收起' : `展开更多 (${topEvents.length - 3} 条)`}
+                <ul>{visibleUpcoming.map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>
+                {upcomingGames.length > 6 && (
+                  <button onClick={() => setUpcomingExpanded(!upcomingExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
+                    {upcomingExpanded ? '收起' : `查看更多 (${upcomingGames.length - 6} 款)`}
                   </button>
                 )}
               </>
