@@ -355,10 +355,10 @@ function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
   const subParts = [timeStr, g.labels.length > 0 ? g.labels[0] : ''].filter(Boolean).join(' · ')
   return (
     <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-900 truncate">{g.title}</p>
-        {subParts && <p className="text-[10px] text-gray-400 truncate">{subParts}</p>}
-      </div>
+      <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
+        {g.title}
+        {subParts && <span className="text-gray-400 font-normal"> · {subParts}</span>}
+      </p>
       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${tagColors2[g.tag] || 'bg-gray-100 text-gray-500'}`}>{g.tag}</span>
     </li>
   )
