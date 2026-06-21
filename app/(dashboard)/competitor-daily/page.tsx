@@ -161,11 +161,12 @@ export default function CompetitorDailyPage() {
     }
   }
 
+  // Malaysia day D = UTC [D-1 16:00, D 15:59]
   function utcRangeForMalaysiaDate(date: string) {
-    const startMs = new Date(date + 'T16:00:00.000Z').getTime()
+    const nextMidnightMYT = new Date(date + 'T16:00:00.000Z').getTime() // D+1 00:00 MYT = D 16:00 UTC
     return {
-      start: new Date(startMs).toISOString(),
-      end: new Date(startMs + 86400000 - 1).toISOString(),
+      start: new Date(nextMidnightMYT - 86400000).toISOString(), // D 00:00 MYT = D-1 16:00 UTC
+      end: new Date(nextMidnightMYT - 1).toISOString(),          // D 23:59:59 MYT = D 15:59:59 UTC
     }
   }
 
