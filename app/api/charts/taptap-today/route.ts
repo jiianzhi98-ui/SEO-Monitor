@@ -99,7 +99,28 @@ async function fetchAllUpcoming() {
   }
 }
 
-export async function GET() {
+async function diagFetch(url: string) {
+  try {
+    const res = await fetch(url, { headers: HEADERS, cache: 'no-store' })
+    const text = await res.text()
+    return { status: res.status, ok: res.ok, body: text.slice(0, 200) }
+  } catch (e) {
+    return { error: String(e) }
+  }
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  if (searchParams.get('diag')) {
+    const dayTs = todayDayTs()
+    const [r1, r2, r3] = await Promise.all([
+      diagFetch(`${BASE}/webapiv2/calendar/v1/event-list?${UA}&day=${dayTs}`),
+      diagFetch(`${BASE}/webapiv2/calendar/v1/upcoming?${UA}&limit=5&type=1`),
+      diagFetch(`${BASE}/webapiv2/calendar/v1/top-events?${UA}`),
+    ])
+    return NextResponse.json({ event_list: r1, upcoming: r2, top_events: r3 })
+  }
+
   const [todayGames, upcomingGames, topEvents] = await Promise.all([
     fetchTodayGames(),
     fetchAllUpcoming(),
