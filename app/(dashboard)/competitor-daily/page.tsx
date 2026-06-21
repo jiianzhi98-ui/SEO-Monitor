@@ -118,13 +118,15 @@ export default function CompetitorDailyPage() {
       const yesterday = getMalaysiaDate(-1)
       const d7ago = getMalaysiaDate(-7)
 
-      const [{ data: sitesRaw }, { data: statsRaw }, rankIdsRes] = await Promise.all([
+      const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url, created_at').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
-        fetch('/api/rank-site-ids').then(r => r.json()).catch(() => ({ ids: [] })),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
       const stats = (statsRaw || []) as StatRow[]
+
+      const rankIdsRes = await fetch(`/api/rank-site-ids?ids=${sites.map(s => s.id).join(',')}`)
+        .then(r => r.json()).catch(() => ({ ids: [] }))
       const rankSiteIds = new Set<string>((rankIdsRes as { ids: string[] }).ids || [])
 
       const result: CompetitorRow[] = (sites || []).map((site) => {
