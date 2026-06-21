@@ -1,35 +1,35 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 
-// One-time backfill: copy all rankup keywords from rank_changes into keyword_volume
 export async function GET() {
   const supabase = createServiceClient()
 
   const { data: rankRows, error } = await supabase
     .from('rank_changes')
-    .select('keyword, volume')
+    .select('keyword, volume, stat_date')
     .eq('type', 'rankup')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = (rankRows || []) as { keyword: string; volume: number }[]
+  const rows = (rankRows || []) as { keyword: string; volume: number; stat_date: string }[]
 
-  // Deduplicate: keep max volume per keyword
-  const map = new Map<string, number>()
+  // Deduplicate: keep max volume per keyword, and most recent stat_date
+  const map = new Map<string, { volume: number; stat_date: string }>()
   for (const r of rows) {
     const v = r.volume ?? 0
-    map.set(r.keyword, Math.max(map.get(r.keyword) ?? 0, v))
+    const existing = map.get(r.keyword)
+    if (!existing || v > existing.volume || (!existing.stat_date && r.stat_date)) {
+      map.set(r.keyword, { volume: Math.max(v, existing?.volume ?? 0), stat_date: r.stat_date ?? existing?.stat_date ?? '' })
+    }
   }
 
-  const insertRows = Array.from(map.entries()).map(([keyword, volume]) => ({ keyword, volume }))
+  const insertRows = Array.from(map.entries()).map(([keyword, { volume, stat_date }]) => ({ keyword, volume, stat_date }))
 
-  // Clear existing data first, then insert deduplicated rows
   const { error: delErr } = await supabase.from('keyword_volume').delete().gte('volume', -1)
   if (delErr) return NextResponse.json({ error: 'delete failed: ' + delErr.message }, { status: 500 })
 
   if (insertRows.length === 0) return NextResponse.json({ total: 0 })
 
-  // Insert in batches of 500
   const errors: string[] = []
   for (let i = 0; i < insertRows.length; i += 500) {
     const batch = insertRows.slice(i, i + 500)
