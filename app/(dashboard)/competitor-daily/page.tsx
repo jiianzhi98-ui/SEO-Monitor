@@ -142,7 +142,7 @@ export default function CompetitorDailyPage() {
           else if (ratio > 1.5) status = 'high'
         }
         const ageDays = Math.floor((Date.now() - new Date(site.created_at).getTime()) / 86400000)
-        const hasRankData = rankSiteIds.has(site.id) || ageDays < 10
+        const hasRankData = rankSiteIds.has(site.id) || ageDays < 3
         return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url, hasRankData }
       })
 
