@@ -452,7 +452,7 @@ export default function ChartsPage() {
           </Card>
 
           {/* 即将上线 */}
-          <Card title={`即将上线${upcomingGames.length ? ` · ${upcomingGames.length} 款` : ''}`} subtitle="未来 3 天预约 / 首发" icon="📅" accent="bg-teal-50">
+          <Card title={`即将上线${upcomingGames.length ? ` · ${upcomingGames.length} 款` : ''}`} subtitle="未来 30 天预约 / 首发" icon="📅" accent="bg-teal-50">
             {todayLoading ? (
               <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
             ) : upcomingGames.length === 0 ? (
