@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 
 // One-time backfill: copy all rankup keywords from rank_changes into keyword_volume
-// Existing entries with volume>0 are preserved (ignoreDuplicates for volume=0 rows)
 export async function GET() {
   const supabase = createServiceClient()
 
@@ -22,25 +21,26 @@ export async function GET() {
     map.set(r.keyword, Math.max(map.get(r.keyword) ?? 0, v))
   }
 
-  const withVol = Array.from(map.entries()).filter(([, v]) => v > 0).map(([keyword, volume]) => ({ keyword, volume }))
-  const noVol = Array.from(map.entries()).filter(([, v]) => v <= 0).map(([keyword]) => ({ keyword, volume: 0 }))
+  const insertRows = Array.from(map.entries()).map(([keyword, volume]) => ({ keyword, volume }))
 
-  let withVolResult = null, noVolResult = null
+  // Clear existing data first, then insert deduplicated rows
+  const { error: delErr } = await supabase.from('keyword_volume').delete().gte('volume', -1)
+  if (delErr) return NextResponse.json({ error: 'delete failed: ' + delErr.message }, { status: 500 })
 
-  if (withVol.length > 0) {
-    const res = await (supabase.from('keyword_volume') as any).upsert(withVol, { onConflict: 'keyword' })
-    withVolResult = res.error?.message ?? `${withVol.length} rows upserted`
-  }
-  if (noVol.length > 0) {
-    const res = await (supabase.from('keyword_volume') as any).upsert(noVol, { onConflict: 'keyword', ignoreDuplicates: true })
-    noVolResult = res.error?.message ?? `${noVol.length} rows inserted (no overwrite)`
+  if (insertRows.length === 0) return NextResponse.json({ total: 0 })
+
+  // Insert in batches of 500
+  const errors: string[] = []
+  for (let i = 0; i < insertRows.length; i += 500) {
+    const batch = insertRows.slice(i, i + 500)
+    const res = await (supabase.from('keyword_volume') as any).insert(batch)
+    if (res.error) errors.push(res.error.message)
   }
 
   return NextResponse.json({
-    total: map.size,
-    withVolume: withVol.length,
-    withoutVolume: noVol.length,
-    withVolResult,
-    noVolResult,
+    total: insertRows.length,
+    withVolume: insertRows.filter(r => r.volume > 0).length,
+    withoutVolume: insertRows.filter(r => r.volume === 0).length,
+    errors: errors.length > 0 ? errors : null,
   })
 }
