@@ -53,12 +53,12 @@ const SITE_COLORS = [
 const INDEX_DOMAIN: Record<Category, [number, number]> = {
   large:  [0, 10_000_000],  // 0 – 1000w
   medium: [0,  5_000_000],  // 0 – 500w
-  small:  [0,  2_000_000],  // 0 – 200w
+  small:  [0,  1_000_000],  // 0 – 100w
 }
 const MOBILE_IP_DOMAIN: Record<Category, [number, number]> = {
   large:  [0, 150_000],  // 0 – 15w
   medium: [0,  80_000],  // 0 – 8w
-  small:  [0,  30_000],  // 0 – 3w
+  small:  [0,  10_000],  // 0 – 1w
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
