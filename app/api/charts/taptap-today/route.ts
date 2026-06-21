@@ -28,36 +28,47 @@ function fmtTime(ts: number): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseItem(x: any, dateLabel?: string) {
   const a = x.app_card_info ?? {}
-  const score = a.stat?.rating?.score
   return {
     title: a.title ?? '',
     tag: x.sub_event_type_title ?? '',
     startDate: dateLabel ?? fmtDate(x.start_time),
     startTime: fmtTime(x.start_time),
-    endDate: x.end_time ? fmtDate(x.end_time) : '',
-    rating: score && parseFloat(score) > 0 ? parseFloat(score) : null,
     labels: (a.title_labels ?? []) as string[],
-    icon: a.icon?.small_url ?? '',
   }
 }
 
-async function safeFetch(url: string) {
-  const res = await fetch(url, { headers: HEADERS, cache: 'no-store' })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
+async function fetchDay(offset: number): Promise<ReturnType<typeof parseItem>[]> {
+  try {
+    const ts = todayDayTs() + offset * 86400
+    const label = fmtDate(ts)
+    const res = await fetch(`${BASE}/webapiv2/calendar/v1/event-list?X-UA=${UA}&day=${ts}`, {
+      headers: HEADERS,
+      next: { revalidate: 3600 },
+    })
+    const json = await res.json()
+    const data = json?.data ?? {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return [...(data.list_a ?? []), ...(data.list_b ?? []), ...(data.list_c ?? [])].map((x: any) =>
+      parseItem(x, label)
+    )
+  } catch {
+    return []
+  }
 }
 
 async function fetchTodayGames() {
   try {
-    const dayTs = todayDayTs()
-    const json = await safeFetch(`${BASE}/webapiv2/calendar/v1/event-list?X-UA=${UA}&day=${dayTs}`)
-    const evData = json?.data ?? {}
-    return [
-      ...(evData.list_a ?? []),
-      ...(evData.list_b ?? []),
-      ...(evData.list_c ?? []),
+    const ts = todayDayTs()
+    const res = await fetch(`${BASE}/webapiv2/calendar/v1/event-list?X-UA=${UA}&day=${ts}`, {
+      headers: HEADERS,
+      next: { revalidate: 3600 },
+    })
+    const json = await res.json()
+    const data = json?.data ?? {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ].map((x: any) => parseItem(x))
+    return [...(data.list_a ?? []), ...(data.list_b ?? []), ...(data.list_c ?? [])].map((x: any) =>
+      parseItem(x)
+    )
   } catch {
     return []
   }
@@ -65,7 +76,11 @@ async function fetchTodayGames() {
 
 async function fetchTopEvents() {
   try {
-    const json = await safeFetch(`${BASE}/webapiv2/calendar/v1/top-events?X-UA=${UA}`)
+    const res = await fetch(`${BASE}/webapiv2/calendar/v1/top-events?X-UA=${UA}`, {
+      headers: HEADERS,
+      next: { revalidate: 3600 },
+    })
+    const json = await res.json()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return ((json?.data?.list ?? []) as any[]).map((x) => parseItem(x))
   } catch {
@@ -73,57 +88,21 @@ async function fetchTopEvents() {
   }
 }
 
-async function fetchAllUpcoming() {
-  try {
-    const results: ReturnType<typeof parseItem>[] = []
-    let url: string | null = `${BASE}/webapiv2/calendar/v1/upcoming?X-UA=${UA}&limit=10&type=1`
-    let page = 0
-    while (url && page < 10) {
-      const json = await safeFetch(url)
-      const data = json?.data ?? {}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const dayGroup of data.list ?? [] as any[]) {
-        const dayLabel = fmtDate(dayGroup.day)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const x of dayGroup.list ?? [] as any[]) {
-          results.push(parseItem(x, dayLabel))
-        }
-      }
-      const nextPath: string = data.next_page ?? ''
-      url = nextPath ? `${BASE}${nextPath}&${UA}` : null
-      page++
-    }
-    return results
-  } catch {
-    return []
+async function fetchUpcoming30Days(): Promise<ReturnType<typeof parseItem>[]> {
+  // Fetch days 1–30 in batches of 5 to avoid overwhelming the server
+  const results: ReturnType<typeof parseItem>[] = []
+  for (let batch = 0; batch < 6; batch++) {
+    const offsets = [1, 2, 3, 4, 5].map((i) => batch * 5 + i)
+    const batchResults = await Promise.all(offsets.map((o) => fetchDay(o)))
+    for (const r of batchResults) results.push(...r)
   }
+  return results.filter((g) => g.title)
 }
 
-async function diagFetch(url: string) {
-  try {
-    const res = await fetch(url, { headers: HEADERS, cache: 'no-store' })
-    const text = await res.text()
-    return { status: res.status, ok: res.ok, body: text.slice(0, 200) }
-  } catch (e) {
-    return { error: String(e) }
-  }
-}
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  if (searchParams.get('diag')) {
-    const dayTs = todayDayTs()
-    const [r1, r2, r3] = await Promise.all([
-      diagFetch(`${BASE}/webapiv2/calendar/v1/event-list?X-UA=${UA}&day=${dayTs}`),
-      diagFetch(`${BASE}/webapiv2/calendar/v1/upcoming?X-UA=${UA}&limit=5&type=1`),
-      diagFetch(`${BASE}/webapiv2/calendar/v1/top-events?X-UA=${UA}`),
-    ])
-    return NextResponse.json({ event_list: r1, upcoming: r2, top_events: r3 })
-  }
-
+export async function GET() {
   const [todayGames, upcomingGames, topEvents] = await Promise.all([
     fetchTodayGames(),
-    fetchAllUpcoming(),
+    fetchUpcoming30Days(),
     fetchTopEvents(),
   ])
   return NextResponse.json({ todayGames, upcomingGames, topEvents })
