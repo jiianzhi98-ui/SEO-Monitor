@@ -17,6 +17,7 @@ export type Database = {
           enable_version_clean: boolean
           version_suffixes: string[]
           is_enabled: boolean
+          has_rank_data: boolean
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['sites']['Row'], 'id' | 'created_at'>

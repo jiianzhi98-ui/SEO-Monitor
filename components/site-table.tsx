@@ -15,6 +15,7 @@ interface Site {
   enable_version_clean: boolean
   version_suffixes: string[]
   is_enabled: boolean
+  has_rank_data: boolean
   created_at: string
 }
 
@@ -23,6 +24,7 @@ interface SiteTableProps {
   onEdit: (site: Site) => void
   onDelete: (site: Site) => void
   onToggle: (site: Site) => void
+  onToggleRank: (site: Site) => void
 }
 
 const categoryLabel: Record<string, string> = {
@@ -43,7 +45,7 @@ const frequencyLabel: Record<string, string> = {
   weekly: '每周',
 }
 
-export default function SiteTable({ sites, onEdit, onDelete, onToggle }: SiteTableProps) {
+export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
   const sorted = [...sites].sort((a, b) => a.focus_level - b.focus_level)
 
   if (sorted.length === 0) {
@@ -65,6 +67,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle }: SiteTab
             <th className="table-th">关注</th>
             <th className="table-th">频率</th>
             <th className="table-th text-center">版本清洗</th>
+            <th className="table-th text-center">排名数据</th>
             <th className="table-th text-center">状态</th>
             <th className="table-th text-right">操作</th>
           </tr>
@@ -100,6 +103,18 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle }: SiteTab
                 ) : (
                   <span className="text-gray-400 text-xs">关闭</span>
                 )}
+              </td>
+              <td className="table-td text-center">
+                <button
+                  onClick={() => onToggleRank(site)}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    site.has_rank_data ? 'bg-purple-500' : 'bg-gray-300'
+                  }`}
+                >
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    site.has_rank_data ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
               </td>
               <td className="table-td text-center">
                 <button

@@ -196,6 +196,8 @@ export async function GET(request: Request) {
           await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('rank_changes') as any).insert(rankRows)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
         }
         // Upsert rankup keywords to permanent keyword_volume store (one record per keyword)
         const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))

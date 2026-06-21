@@ -20,6 +20,7 @@ interface Site {
   enable_version_clean: boolean
   version_suffixes: string[]
   is_enabled: boolean
+  has_rank_data: boolean
   created_at: string
 }
 
@@ -93,6 +94,25 @@ export default function SitesPage() {
     }
   }
 
+  async function handleToggleRank(site: Site) {
+    try {
+      const res = await fetch('/api/sites', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...site, has_rank_data: !site.has_rank_data }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '更新失败')
+      }
+      setSites((prev) =>
+        prev.map((s) => s.id === site.id ? { ...s, has_rank_data: !s.has_rank_data } : s)
+      )
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : '更新失败')
+    }
+  }
+
   function handleModalClose() {
     setShowModal(false)
     setEditSite(null)
@@ -140,6 +160,7 @@ export default function SitesPage() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onToggle={handleToggle}
+            onToggleRank={handleToggleRank}
           />
         )}
       </div>

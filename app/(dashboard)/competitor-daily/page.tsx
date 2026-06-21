@@ -21,7 +21,7 @@ interface SiteRow {
   name: string
   focus_level: number
   list_url: string | null
-  created_at: string
+  has_rank_data: boolean
 }
 
 interface StatRow {
@@ -119,15 +119,11 @@ export default function CompetitorDailyPage() {
       const d7ago = getMalaysiaDate(-7)
 
       const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level, list_url, created_at').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
       const stats = (statsRaw || []) as StatRow[]
-
-      const rankIdsRes = await fetch(`/api/rank-site-ids?ids=${sites.map(s => s.id).join(',')}`)
-        .then(r => r.json()).catch(() => ({ ids: [] }))
-      const rankSiteIds = new Set<string>((rankIdsRes as { ids: string[] }).ids || [])
 
       const result: CompetitorRow[] = (sites || []).map((site) => {
         const siteStats = stats.filter((s) => s.site_id === site.id)
@@ -143,9 +139,7 @@ export default function CompetitorDailyPage() {
           else if (ratio < 0.6) status = 'warning'
           else if (ratio > 1.5) status = 'high'
         }
-        const ageDays = Math.floor((Date.now() - new Date(site.created_at).getTime()) / 86400000)
-        const hasRankData = rankSiteIds.has(site.id) || ageDays < 3
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url, hasRankData }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url, hasRankData: site.has_rank_data ?? true }
       })
 
       const statusPriority = (r: CompetitorRow) => {
