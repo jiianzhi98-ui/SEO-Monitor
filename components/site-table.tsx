@@ -10,6 +10,7 @@ interface Site {
   list_url: string
   title_selector: string
   date_selector: string
+  source_types: string
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
   enable_version_clean: boolean
   version_suffixes: string[]
