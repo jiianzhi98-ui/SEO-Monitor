@@ -50,7 +50,7 @@ async function safeFetch(url: string) {
 async function fetchTodayGames() {
   try {
     const dayTs = todayDayTs()
-    const json = await safeFetch(`${BASE}/webapiv2/calendar/v1/event-list?${UA}&day=${dayTs}`)
+    const json = await safeFetch(`${BASE}/webapiv2/calendar/v1/event-list?X-UA=${UA}&day=${dayTs}`)
     const evData = json?.data ?? {}
     return [
       ...(evData.list_a ?? []),
@@ -65,7 +65,7 @@ async function fetchTodayGames() {
 
 async function fetchTopEvents() {
   try {
-    const json = await safeFetch(`${BASE}/webapiv2/calendar/v1/top-events?${UA}`)
+    const json = await safeFetch(`${BASE}/webapiv2/calendar/v1/top-events?X-UA=${UA}`)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return ((json?.data?.list ?? []) as any[]).map((x) => parseItem(x))
   } catch {
@@ -76,7 +76,7 @@ async function fetchTopEvents() {
 async function fetchAllUpcoming() {
   try {
     const results: ReturnType<typeof parseItem>[] = []
-    let url: string | null = `${BASE}/webapiv2/calendar/v1/upcoming?${UA}&limit=10&type=1`
+    let url: string | null = `${BASE}/webapiv2/calendar/v1/upcoming?X-UA=${UA}&limit=10&type=1`
     let page = 0
     while (url && page < 10) {
       const json = await safeFetch(url)
@@ -114,9 +114,9 @@ export async function GET(request: Request) {
   if (searchParams.get('diag')) {
     const dayTs = todayDayTs()
     const [r1, r2, r3] = await Promise.all([
-      diagFetch(`${BASE}/webapiv2/calendar/v1/event-list?${UA}&day=${dayTs}`),
-      diagFetch(`${BASE}/webapiv2/calendar/v1/upcoming?${UA}&limit=5&type=1`),
-      diagFetch(`${BASE}/webapiv2/calendar/v1/top-events?${UA}`),
+      diagFetch(`${BASE}/webapiv2/calendar/v1/event-list?X-UA=${UA}&day=${dayTs}`),
+      diagFetch(`${BASE}/webapiv2/calendar/v1/upcoming?X-UA=${UA}&limit=5&type=1`),
+      diagFetch(`${BASE}/webapiv2/calendar/v1/top-events?X-UA=${UA}`),
     ])
     return NextResponse.json({ event_list: r1, upcoming: r2, top_events: r3 })
   }
