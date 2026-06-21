@@ -350,33 +350,9 @@ const tagColors2: Record<string, string> = {
   '活动': 'bg-pink-100 text-pink-700',
 }
 
-function GameIcon({ icon, title }: { icon: string; title: string }) {
-  const [failed, setFailed] = useState(false)
-  const initial = title.charAt(0) || '?'
-  const colors = ['bg-teal-100 text-teal-600', 'bg-blue-100 text-blue-600', 'bg-purple-100 text-purple-600', 'bg-orange-100 text-orange-600', 'bg-pink-100 text-pink-600']
-  const color = colors[initial.charCodeAt(0) % colors.length]
-  if (!icon || failed) {
-    return (
-      <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center ${color}`}>
-        <span className="text-xs font-bold">{initial}</span>
-      </div>
-    )
-  }
-  return (
-    <img
-      src={icon}
-      alt={title}
-      className="w-8 h-8 rounded-lg flex-shrink-0 object-cover"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-    />
-  )
-}
-
 function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
   return (
     <li className="flex items-center gap-2.5 py-2 border-b border-gray-50 last:border-0">
-      <GameIcon icon={g.icon} title={g.title} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           <p className="text-xs font-semibold text-gray-900 truncate">{g.title}</p>
