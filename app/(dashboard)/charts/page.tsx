@@ -48,58 +48,6 @@ function CardHeader({ title, subtitle, icon }: { title: string; subtitle?: strin
 
 // ── Mock Data ─────────────────────────────────────────────────────────────────
 
-const taptapToday = [
-  { name: '大牌英雄', genre: '卡牌', tag: '新游预约', time: '09:00', rating: null },
-  { name: '雪松', genre: '策略·军事·剧情', tag: '首发', time: '12:00', rating: 6.7 },
-  { name: '失控进化', genre: '射击·科幻', tag: '限量测试', time: '10:00', rating: null },
-  { name: '童话师', genre: '模拟经营', tag: '首发', time: '', rating: 9.0 },
-  { name: '洛克王国：世界', genre: 'RPG·开放世界', tag: '首发', time: '', rating: null },
-  { name: '初音未来：缤纷舞台', genre: '音乐·节奏', tag: '更新', time: '', rating: 8.2 },
-  { name: '卡厄思梦境', genre: '二次元·RPG', tag: '新游预约', time: '', rating: null },
-  { name: '我的花园世界', genre: '休闲·模拟', tag: '活动', time: '', rating: 7.5 },
-]
-
-const tagColors: Record<string, string> = {
-  '首发': 'bg-green-100 text-green-700',
-  '新游预约': 'bg-blue-100 text-blue-700',
-  '限量测试': 'bg-purple-100 text-purple-700',
-  '测试招募': 'bg-orange-100 text-orange-700',
-  '更新': 'bg-gray-100 text-gray-600',
-  '活动': 'bg-pink-100 text-pink-700',
-}
-
-const taptapUpcoming = [
-  { name: '雪松', genre: '策略·军事', date: '06/22 周一', tag: '首发', time: '12:00', rating: 6.7 },
-  { name: '失控进化', genre: '射击·科幻', date: '06/22 周一', tag: '限量测试', time: '10:00', rating: null },
-  { name: '大牌英雄', genre: '卡牌', date: '06/21 今天', tag: '新游预约', time: '09:00', rating: null },
-  { name: '诡秘之主·图谋', genre: 'RPG', date: '06/17', tag: '新游预约', time: '', rating: null },
-  { name: '凯村守护者', genre: '塔防', date: '06/14', tag: '新游预约', time: '', rating: null },
-  { name: '诡秘之主·图谋', genre: 'RPG·策略', date: '06/18-06/21', tag: '测试招募', time: '', rating: null },
-]
-
-const taptapHotSearch = [
-  { rank: 1, name: '我的世界：移动版', isNew: false },
-  { rank: 2, name: '三角洲行动', isNew: false },
-  { rank: 3, name: '超自然行动组', isNew: true },
-  { rank: 4, name: '第五人格', isNew: false },
-  { rank: 5, name: '蛋仔派对', isNew: false },
-  { rank: 6, name: 'Phigros', isNew: false },
-  { rank: 7, name: '龙岛异曾起源', isNew: true },
-  { rank: 8, name: '心动小镇', isNew: false },
-  { rank: 9, name: '绝区零', isNew: false },
-  { rank: 10, name: '光遇', isNew: false },
-  { rank: 11, name: '原神', isNew: false },
-  { rank: 12, name: '王者荣耀', isNew: false },
-  { rank: 13, name: '香肠派对', isNew: false },
-  { rank: 14, name: '米加小镇世界', isNew: false },
-  { rank: 15, name: '王者荣耀前瞻版', isNew: true },
-  { rank: 16, name: '鸣潮', isNew: false },
-  { rank: 17, name: '和平精英', isNew: false },
-  { rank: 18, name: '异环', isNew: false },
-  { rank: 19, name: 'Phigrim（TapTap测试版）', isNew: true },
-  { rank: 20, name: '洛克王国：世界', isNew: false },
-]
-
 const foxdataGPGames = [
   { rank: 1, change: 0, name: 'Plague Inc.', cat: 'Simulation', isNew: false },
   { rank: 2, change: 0, name: 'Arrows – Puzzle Escape', cat: 'Puzzle', isNew: false },
@@ -248,49 +196,6 @@ function NewEntryItem({ rank, name, cat, source }: { rank: number; name: string;
         }`}>{source}</span>
       )}
       <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">NEW</span>
-    </li>
-  )
-}
-
-function TodayGameItem({ name, genre, tag, time, rating }: {
-  name: string; genre: string; tag: string; time: string; rating: number | null
-}) {
-  return (
-    <li className="flex items-center gap-2.5 py-2 border-b border-gray-50 last:border-0">
-      <div className="w-8 h-8 bg-gradient-to-br from-gray-200 to-gray-300 rounded-lg flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <p className="text-xs font-semibold text-gray-900 truncate">{name}</p>
-          {rating && <span className="text-[10px] text-amber-500 flex-shrink-0">★{rating}</span>}
-        </div>
-        <p className="text-[10px] text-gray-400 truncate">{genre}</p>
-      </div>
-      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${tagColors[tag] || 'bg-gray-100 text-gray-500'}`}>{tag}</span>
-        {time && <span className="text-[10px] text-gray-400">{time}</span>}
-      </div>
-    </li>
-  )
-}
-
-function UpcomingItem({ name, genre, date, tag, time, rating }: {
-  name: string; genre: string; date: string; tag: string; time: string; rating: number | null
-}) {
-  const isToday = date.includes('今天')
-  return (
-    <li className="flex items-start gap-2.5 py-2 border-b border-gray-50 last:border-0">
-      <div className="flex-shrink-0 text-right w-14">
-        <p className={`text-[10px] font-semibold ${isToday ? 'text-green-600' : 'text-gray-500'}`}>{date}</p>
-        {time && <p className="text-[10px] text-gray-400">{time}</p>}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1">
-          <p className="text-xs font-medium text-gray-900 truncate">{name}</p>
-          {rating && <span className="text-[10px] text-amber-500 flex-shrink-0">★{rating}</span>}
-        </div>
-        <p className="text-[10px] text-gray-400 truncate">{genre}</p>
-      </div>
-      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${tagColors[tag] || 'bg-gray-100 text-gray-500'}`}>{tag}</span>
     </li>
   )
 }
