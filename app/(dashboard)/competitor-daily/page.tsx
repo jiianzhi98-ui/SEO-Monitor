@@ -12,7 +12,6 @@ interface CompetitorRow {
   avg7d: number
   status: 'normal' | 'warning' | 'danger' | 'high'
   hasHtml: boolean
-  hasRankData: boolean
 }
 
 interface SiteRow {
@@ -120,11 +119,9 @@ export default function CompetitorDailyPage() {
       const [{ data: sitesRaw }, { data: statsRaw }, { data: rankSitesRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
-        supabase.from('rank_changes').select('site_id').gte('stat_date', getMalaysiaDate(-30)).limit(100000),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
       const stats = (statsRaw || []) as StatRow[]
-      const rankSiteIds = new Set(((rankSitesRaw || []) as { site_id: string }[]).map(r => r.site_id))
 
       const result: CompetitorRow[] = (sites || []).map((site) => {
         const siteStats = stats.filter((s) => s.site_id === site.id)
@@ -140,7 +137,7 @@ export default function CompetitorDailyPage() {
           else if (ratio < 0.6) status = 'warning'
           else if (ratio > 1.5) status = 'high'
         }
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url, hasRankData: rankSiteIds.has(site.id) }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url }
       })
 
       const statusPriority = (r: CompetitorRow) => {
@@ -435,16 +432,14 @@ export default function CompetitorDailyPage() {
                               更新词库
                             </button>
                             <button
-                              onClick={() => row.hasRankData && openRankModal(row)}
-                              disabled={!row.hasRankData}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasRankData ? 'text-purple-500 hover:text-purple-700 hover:bg-purple-50' : 'text-gray-300 cursor-not-allowed'}`}
+                              onClick={() => openRankModal(row)}
+                              className="text-xs text-purple-500 hover:text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors"
                             >
                               排名变动
                             </button>
                             <button
-                              onClick={() => row.hasRankData && openUnstableModal(row)}
-                              disabled={!row.hasRankData}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasRankData ? 'text-orange-500 hover:text-orange-700 hover:bg-orange-50' : 'text-gray-300 cursor-not-allowed'}`}
+                              onClick={() => openUnstableModal(row)}
+                              className="text-xs text-orange-500 hover:text-orange-700 px-2 py-1 rounded hover:bg-orange-50 transition-colors"
                             >
                               不稳定词
                             </button>
