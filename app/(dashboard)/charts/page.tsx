@@ -375,7 +375,7 @@ export default function ChartsPage() {
 
       {/* ── FoxData · Google Play ── */}
       <div>
-        <SectionHeader title="FoxData · Google Play (马来西亚 · 免费榜)" color="bg-green-500" updatedAt="06/21 15:17" />
+        <SectionHeader title="FoxData · Google Play (中国区 · 免费榜)" color="bg-green-500" updatedAt="06/21 15:17" />
         <div className="grid grid-cols-3 gap-5">
 
           <Card title="应用榜 TOP 15" subtitle="免费 · 全分类" icon="📱" accent="bg-green-50">
@@ -403,7 +403,7 @@ export default function ChartsPage() {
 
       {/* ── FoxData · App Store ── */}
       <div>
-        <SectionHeader title="FoxData · App Store (马来西亚 · 免费榜)" color="bg-blue-500" updatedAt="06/21 15:17" />
+        <SectionHeader title="FoxData · App Store (中国区 · 免费榜)" color="bg-blue-500" updatedAt="06/21 15:17" />
         <div className="grid grid-cols-3 gap-5">
 
           <Card title="应用榜 TOP 10" subtitle="免费 · 全分类" icon="📱" accent="bg-blue-50">
