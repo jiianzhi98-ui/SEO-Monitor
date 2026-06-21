@@ -176,12 +176,13 @@ export default function CompetitorDailyPage() {
     try {
       const supabase = getBrowserClient()
       const { start, end } = utcRangeForMalaysiaDate(date)
-      // content_date = date (has date selector) OR content_date IS NULL + discovered_at in UTC range (no date selector)
+      // Query by discovered_at range to match daily_stats.new_count exactly
       const { data, error: err } = await supabase
         .from('raw_keywords')
         .select('keyword, source_url, discovered_at, content_date, content_type')
         .eq('site_id', site.site_id)
-        .or(`content_date.eq.${date},and(content_date.is.null,discovered_at.gte.${start},discovered_at.lte.${end})`)
+        .gte('discovered_at', start)
+        .lte('discovered_at', end)
         .order('keyword', { ascending: true })
         .limit(500)
       if (err) throw err
