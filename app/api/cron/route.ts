@@ -111,18 +111,24 @@ export async function GET(request: Request) {
           }
         }
 
+        // Dedup within this crawl batch by keyword (first source wins, preserves content_type)
+        const seenInBatch = new Set<string>()
         const cleanedEntries = rawEntries
           .map((e) => ({
             keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
             content_date: e.content_date,
             content_type: e.content_type || 'app',
           }))
-          .filter((e) => e.keyword.length > 0)
+          .filter((e) => {
+            if (e.keyword.length === 0 || seenInBatch.has(e.keyword)) return false
+            seenInBatch.add(e.keyword)
+            return true
+          })
 
         let newCount = 0
 
         if (cleanedEntries.length > 0) {
-          // Dedup against keywords found in this crawl run
+          // Dedup against keywords already in DB within last 7 days
           const { data: existing } = await supabase
             .from('raw_keywords')
             .select('keyword')
