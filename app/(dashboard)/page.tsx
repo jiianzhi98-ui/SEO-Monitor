@@ -788,12 +788,12 @@ function CompareChart({
     )
   }
 
-  const yTicks = Array.from({ length: 5 }, (_, i) =>
-    Math.round(domain[0] + (domain[1] - domain[0]) * i / 4)
+  const yTicks = Array.from({ length: 10 }, (_, i) =>
+    Math.round(domain[0] + (domain[1] - domain[0]) * i / 9)
   )
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={320}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis
