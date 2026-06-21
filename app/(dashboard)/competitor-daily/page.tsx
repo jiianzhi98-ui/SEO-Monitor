@@ -120,7 +120,7 @@ export default function CompetitorDailyPage() {
       const [{ data: sitesRaw }, { data: statsRaw }, { data: rankSitesRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
-        supabase.from('rank_changes').select('site_id, volume').gte('stat_date', getMalaysiaDate(-30)).gt('volume', 0).limit(1000),
+        supabase.from('rank_changes').select('site_id').gte('stat_date', getMalaysiaDate(-30)).limit(100000),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
       const stats = (statsRaw || []) as StatRow[]
