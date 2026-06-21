@@ -116,7 +116,7 @@ export default function CompetitorDailyPage() {
       const yesterday = getMalaysiaDate(-1)
       const d7ago = getMalaysiaDate(-7)
 
-      const [{ data: sitesRaw }, { data: statsRaw }, { data: rankSitesRaw }] = await Promise.all([
+      const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url').eq('is_enabled', true),
         supabase.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7ago),
       ])
