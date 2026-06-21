@@ -184,10 +184,10 @@ export async function GET(request: Request) {
     for (const site of sites) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
       try {
-        const [rankupEntries, rankdownEntries] = await Promise.all([
-          fetchRankChanges(site.domain, today, 'rankup'),
-          fetchRankChanges(site.domain, today, 'rankdown'),
-        ])
+        const rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
+        await new Promise((r) => setTimeout(r, 2000))
+        const rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
+        await new Promise((r) => setTimeout(r, 2000))
         const rankRows = [
           ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
           ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
