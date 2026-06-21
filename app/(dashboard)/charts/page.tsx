@@ -337,23 +337,72 @@ function ShowMoreList({ items, initialCount = 10 }: { items: React.ReactNode[]; 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 interface HotItem { rank: number; name: string; labels: string[] }
+interface TodayGame { title: string; tag: string; startDate: string; startTime: string; endDate: string; rating: number | null; labels: string[]; icon: string }
+
+const tagColors2: Record<string, string> = {
+  '首发': 'bg-green-100 text-green-700',
+  '新游预约': 'bg-blue-100 text-blue-700',
+  '限量测试': 'bg-purple-100 text-purple-700',
+  '测试招募': 'bg-orange-100 text-orange-700',
+  '付费测试': 'bg-orange-100 text-orange-700',
+  '公测': 'bg-teal-100 text-teal-700',
+  '更新': 'bg-gray-100 text-gray-600',
+  '活动': 'bg-pink-100 text-pink-700',
+}
+
+function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
+  return (
+    <li className="flex items-center gap-2.5 py-2 border-b border-gray-50 last:border-0">
+      {g.icon ? (
+        <img src={g.icon} alt={g.title} className="w-8 h-8 rounded-lg flex-shrink-0 object-cover" />
+      ) : (
+        <div className="w-8 h-8 bg-gradient-to-br from-gray-200 to-gray-300 rounded-lg flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1">
+          <p className="text-xs font-semibold text-gray-900 truncate">{g.title}</p>
+          {g.rating && <span className="text-[10px] text-amber-500 flex-shrink-0">★{g.rating}</span>}
+        </div>
+        <p className="text-[10px] text-gray-400 truncate">
+          {showDate && g.startDate ? g.startDate : g.startTime || g.startDate}
+          {g.labels.length > 0 && ` · ${g.labels[0]}`}
+        </p>
+      </div>
+      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${tagColors2[g.tag] || 'bg-gray-100 text-gray-500'}`}>{g.tag}</span>
+      </div>
+    </li>
+  )
+}
 
 export default function ChartsPage() {
   const [hotItems, setHotItems] = useState<HotItem[]>([])
   const [hotLoading, setHotLoading] = useState(true)
+  const [todayGames, setTodayGames] = useState<TodayGame[]>([])
+  const [topEvents, setTopEvents] = useState<TodayGame[]>([])
+  const [todayLoading, setTodayLoading] = useState(true)
+  const [topExpanded, setTopExpanded] = useState(false)
+  const [todayExpanded, setTodayExpanded] = useState(false)
   const [hotUpdatedAt, setHotUpdatedAt] = useState('')
 
   useEffect(() => {
+    const now = new Date()
+    const ts = `${String(now.getMonth() + 1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
     fetch('/api/charts/taptap-hot')
       .then((r) => r.json())
-      .then((d) => {
-        setHotItems(d.items ?? [])
-        const now = new Date()
-        setHotUpdatedAt(`${String(now.getMonth() + 1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`)
-      })
+      .then((d) => { setHotItems(d.items ?? []); setHotUpdatedAt(ts) })
       .catch(() => {})
       .finally(() => setHotLoading(false))
+
+    fetch('/api/charts/taptap-today')
+      .then((r) => r.json())
+      .then((d) => { setTodayGames(d.todayGames ?? []); setTopEvents(d.topEvents ?? []) })
+      .catch(() => {})
+      .finally(() => setTodayLoading(false))
   }, [])
+
+  const visibleToday = todayExpanded ? todayGames : todayGames.slice(0, 5)
+  const visibleTop = topExpanded ? topEvents : topEvents.slice(0, 3)
 
   return (
     <div className="p-8 space-y-10">
@@ -368,17 +417,39 @@ export default function ChartsPage() {
         <div className="grid grid-cols-3 gap-5">
 
           {/* 今日游戏 */}
-          <Card title="今日游戏" subtitle="今日上线 / 首发 / 活动" icon="🎮" accent="bg-teal-50">
-            <ShowMoreList initialCount={6} items={taptapToday.map((g, i) => (
-              <TodayGameItem key={i} {...g} />
-            ))} />
+          <Card title={`今日游戏${todayGames.length ? ` · ${todayGames.length} 款` : ''}`} subtitle="首发 / 新游预约 / 测试" icon="🎮" accent="bg-teal-50">
+            {todayLoading ? (
+              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+            ) : todayGames.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+            ) : (
+              <>
+                <ul>{visibleToday.map((g, i) => <GameItem key={i} g={g} />)}</ul>
+                {todayGames.length > 5 && (
+                  <button onClick={() => setTodayExpanded(!todayExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
+                    {todayExpanded ? '收起' : `查看更多 (${todayGames.length - 5} 款)`}
+                  </button>
+                )}
+              </>
+            )}
           </Card>
 
-          {/* 即将上线 */}
-          <Card title="即将上线" subtitle="近期预约 / 测试计划" icon="📅" accent="bg-teal-50">
-            <ShowMoreList initialCount={6} items={taptapUpcoming.map((g, i) => (
-              <UpcomingItem key={i} {...g} />
-            ))} />
+          {/* 近期焦点 */}
+          <Card title="近期焦点" subtitle="重点预约 / 测试招募" icon="📅" accent="bg-teal-50">
+            {todayLoading ? (
+              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+            ) : topEvents.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+            ) : (
+              <>
+                <ul>{visibleTop.map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>
+                {topEvents.length > 3 && (
+                  <button onClick={() => setTopExpanded(!topExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
+                    {topExpanded ? '收起' : `展开更多 (${topEvents.length - 3} 条)`}
+                  </button>
+                )}
+              </>
+            )}
           </Card>
 
           {/* 热搜榜 */}
