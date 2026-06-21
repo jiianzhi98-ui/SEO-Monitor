@@ -161,16 +161,26 @@ export default function CompetitorDailyPage() {
     }
   }
 
+  function utcRangeForMalaysiaDate(date: string) {
+    const startMs = new Date(date + 'T16:00:00.000Z').getTime()
+    return {
+      start: new Date(startMs).toISOString(),
+      end: new Date(startMs + 86400000 - 1).toISOString(),
+    }
+  }
+
   async function fetchKeywordsForDate(site: CompetitorRow, date: string) {
     setKwLoading(true)
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
+      const { start, end } = utcRangeForMalaysiaDate(date)
+      // content_date = date (has date selector) OR content_date IS NULL + discovered_at in UTC range (no date selector)
       const { data, error: err } = await supabase
         .from('raw_keywords')
         .select('keyword, source_url, discovered_at, content_date, content_type')
         .eq('site_id', site.site_id)
-        .eq('content_date', date)
+        .or(`content_date.eq.${date},and(content_date.is.null,discovered_at.gte.${start},discovered_at.lte.${end})`)
         .order('keyword', { ascending: true })
         .limit(500)
       if (err) throw err
