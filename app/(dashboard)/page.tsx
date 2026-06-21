@@ -788,8 +788,8 @@ function CompareChart({
     )
   }
 
-  const yTicks = Array.from({ length: 10 }, (_, i) =>
-    Math.round(domain[0] + (domain[1] - domain[0]) * i / 9)
+  const yTicks = Array.from({ length: 11 }, (_, i) =>
+    Math.round(domain[0] + (domain[1] - domain[0]) * i / 10)
   )
 
   return (
