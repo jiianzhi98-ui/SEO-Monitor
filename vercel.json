@@ -3,11 +3,5 @@
     "app/api/cron/route.ts": {
       "maxDuration": 300
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron",
-      "schedule": "0 22 * * *"
-    }
-  ]
+  }
 }

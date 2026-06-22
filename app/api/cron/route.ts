@@ -72,6 +72,10 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const siteFilter = searchParams.get('site')
+  const step = searchParams.get('step') // 'keywords' | 'rank' | 'weight' | null (all)
+  const runKeywords = !step || step === 'keywords'
+  const runRank     = !step || step === 'rank'
+  const runWeight   = !step || step === 'weight'
 
   try {
     let query = supabase.from('sites').select('*').eq('is_enabled', true)
@@ -80,7 +84,7 @@ export async function GET(request: Request) {
     if (sitesErr) throw sitesErr
     const sites = (sitesRaw || []) as SiteRecord[]
 
-    for (const site of sites) {
+    if (runKeywords) for (const site of sites) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
 
       try {
@@ -180,8 +184,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // Fetch rank changes for each site (always runs, independent of keyword count)
-    for (const site of sites) {
+    // Fetch rank changes for each site
+    if (runRank) for (const site of sites) {
       if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
       try {
         const rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
@@ -217,7 +221,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch weight + index snapshot from aizhan (today's reading)
-    for (const site of sites) {
+    if (runWeight) for (const site of sites) {
       try {
         const { pc, mobile, indexCount, pcIpMin, pcIpMax, mobileIpMin, mobileIpMax } = await fetchAizhanData(site.domain)
         await Promise.all([
@@ -236,9 +240,12 @@ export async function GET(request: Request) {
       }
     }
 
-    await supabase.rpc('delete_old_raw_keywords').maybeSingle()
-    await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
-    await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
+    // Cleanup old data (only on keywords step to avoid running 3x per day)
+    if (runKeywords) {
+      await supabase.rpc('delete_old_raw_keywords').maybeSingle()
+      await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
+      await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
+    }
 
     return NextResponse.json({ date: today, yesterday, results })
   } catch (err: unknown) {

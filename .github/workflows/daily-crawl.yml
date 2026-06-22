@@ -2,73 +2,77 @@ name: Daily SEO Crawl
 
 on:
   schedule:
-    # 21:00 UTC = 05:00 Malaysia (UTC+8), random delay pushes execution to 05:00~08:00
-    - cron: '0 21 * * *'
+    - cron: '0 18 * * *'   # 02:00 Malaysia (UTC+8) — 关键词抓取
+    - cron: '0 20 * * *'   # 04:00 Malaysia (UTC+8) — 排名变动
+    - cron: '0 22 * * *'   # 06:00 Malaysia (UTC+8) — 权重 + 收录
   workflow_dispatch:
     inputs:
-      staggered:
-        description: '分批抓取（每个站点间隔等待）'
-        type: boolean
-        default: false
-      delay_minutes:
-        description: '每个站点之间的等待分钟数（仅分批模式）'
-        type: number
-        default: 10
+      step:
+        description: '抓取步骤'
+        type: choice
+        options: [all, keywords, rank, weight]
+        default: all
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 120
+    env:
+      BASE_URL: https://seo-monitor-iota.vercel.app
+
     steps:
-      - name: Random delay (scheduled only, 0 to 3 hours)
-        if: github.event_name == 'schedule'
+      - name: Determine step
+        id: vars
         run: |
-          DELAY=$((RANDOM % 10800))
-          echo "Sleeping ${DELAY} seconds before crawl..."
-          sleep $DELAY
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STEP="${{ github.event.inputs.step }}"
+          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+            STEP="keywords"
+          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
+            STEP="rank"
+          else
+            STEP="weight"
+          fi
+          echo "step=$STEP" >> $GITHUB_OUTPUT
+          echo "Running step: $STEP"
 
-      - name: Trigger crawl (all sites at once)
-        if: github.event.inputs.staggered != 'true'
+      - name: Fetch site list
+        id: sites
         run: |
-          curl -f -s \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://seo-monitor-iota.vercel.app/api/cron \
-            | jq .
-
-      - name: Trigger baidu index crawl
-        if: github.event.inputs.staggered != 'true'
-        run: |
-          curl -f -s \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://seo-monitor-iota.vercel.app/api/cron/baidu-index \
-            | jq .
-
-      - name: Trigger crawl (staggered, one site at a time)
-        if: github.event.inputs.staggered == 'true'
-        run: |
-          DELAY_SECONDS=$(( ${{ github.event.inputs.delay_minutes || 10 }} * 60 ))
-          BASE_URL="https://seo-monitor-iota.vercel.app"
-
-          echo "Fetching site list..."
           DOMAINS=$(curl -sf "$BASE_URL/api/sites/domains" | jq -r '.[]')
+          echo "domains<<EOF" >> $GITHUB_OUTPUT
+          echo "$DOMAINS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-          first=true
-          for domain in $DOMAINS; do
-            if [ "$first" = true ]; then
-              first=false
-            else
-              echo "Waiting ${DELAY_SECONDS}s before next site..."
-              sleep $DELAY_SECONDS
-            fi
-            echo "=== Crawling $domain ==="
+      - name: Keywords — per site
+        if: steps.vars.outputs.step == 'keywords' || steps.vars.outputs.step == 'all'
+        run: |
+          echo "${{ steps.sites.outputs.domains }}" | while read domain; do
+            [ -z "$domain" ] && continue
+            echo "=== Keywords: $domain ==="
             curl -f -s \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron?site=$domain" \
-              | jq .
-            echo "=== Baidu index for $domain ==="
-            curl -f -s \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron/baidu-index?site=$domain" \
-              | jq .
+              "$BASE_URL/api/cron?site=$domain&step=keywords" | jq .
           done
-          echo "=== All sites crawled ==="
+
+      - name: Rank changes — per site
+        if: steps.vars.outputs.step == 'rank' || steps.vars.outputs.step == 'all'
+        run: |
+          echo "${{ steps.sites.outputs.domains }}" | while read domain; do
+            [ -z "$domain" ] && continue
+            echo "=== Rank: $domain ==="
+            curl -f -s \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "$BASE_URL/api/cron?site=$domain&step=rank" | jq .
+          done
+
+      - name: Weight + index — per site
+        if: steps.vars.outputs.step == 'weight' || steps.vars.outputs.step == 'all'
+        run: |
+          echo "${{ steps.sites.outputs.domains }}" | while read domain; do
+            [ -z "$domain" ] && continue
+            echo "=== Weight: $domain ==="
+            curl -f -s \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "$BASE_URL/api/cron?site=$domain&step=weight" | jq .
+          done
