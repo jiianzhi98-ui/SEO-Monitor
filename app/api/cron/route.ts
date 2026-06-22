@@ -187,8 +187,7 @@ export async function GET(request: Request) {
     // Fetch rank changes for each site (always daily, independent of crawl_frequency)
     if (runRank) for (const site of sites) {
       try {
-        // Aizhan rank data has a 1-day lag — always query yesterday (reliably available by 04:00 MY)
-        const rankDate = yesterday
+        const rankDate = today
         let rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
         await new Promise((r) => setTimeout(r, 2000))
         let rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')

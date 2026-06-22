@@ -3,7 +3,7 @@ name: Daily SEO Crawl
 on:
   schedule:
     - cron: '0 18 * * *'   # 02:00 Malaysia (UTC+8) — 关键词抓取
-    - cron: '0 20 * * *'   # 04:00 Malaysia (UTC+8) — 排名变动
+    - cron: '0 0 * * *'    # 08:00 Malaysia (UTC+8) — 排名变动
     - cron: '0 22 * * *'   # 06:00 Malaysia (UTC+8) — 权重 + 收录
   workflow_dispatch:
     inputs:
@@ -28,7 +28,7 @@ jobs:
             STEP="${{ github.event.inputs.step }}"
           elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
             STEP="keywords"
-          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then
             STEP="rank"
           else
             STEP="weight"
