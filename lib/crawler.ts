@@ -286,9 +286,11 @@ async function fetchRankPage(
     const html = await res.text()
 
     // Detect anti-bot JS challenge: sets a cookie and redirects
+    // Handle both first-time (no cookie) and cookie-expiry (new challenge with existing cookie)
     const cookieMatch = html.match(/\.cookie\s*=\s*"([^"]+)"/)
-    if (cookieMatch && !cookie) {
+    if (cookieMatch) {
       const challengeCookie = cookieMatch[1].split(';')[0]
+      if (challengeCookie === cookie) return []  // same cookie returned — stuck, bail out
       return fetchRankPage(domain, type, rankPos, date, page, challengeCookie)
     }
 

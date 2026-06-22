@@ -58,8 +58,14 @@ jobs:
       - name: Rank changes — per site
         if: steps.vars.outputs.step == 'rank' || steps.vars.outputs.step == 'all'
         run: |
+          first=true
           echo "${{ steps.sites.outputs.domains }}" | while read domain; do
             [ -z "$domain" ] && continue
+            if [ "$first" = true ]; then
+              first=false
+            else
+              sleep 10
+            fi
             echo "=== Rank: $domain ==="
             curl -f -s \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
