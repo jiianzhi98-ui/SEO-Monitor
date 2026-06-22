@@ -79,7 +79,7 @@ export async function fetchHtmlList(
   const entries: PageEntry[] = []
   const titleEls = $(titleSelector)
 
-  titleEls.each((i, el) => {
+  titleEls.each((_, el) => {
     const title = $(el).text().trim()
     const href = $(el).attr('href') || $(el).closest('a').attr('href') || ''
     const fullUrl = href.startsWith('http') ? href : new URL(href, url).href
@@ -342,7 +342,14 @@ export async function fetchRankChanges(
       return entries
     })
   )
-  return allResults.flat()
+  // Dedup by keyword — same keyword can rank in multiple positions, keep highest volume
+  const seen = new Map<string, number>()
+  for (const e of allResults.flat()) {
+    if (!seen.has(e.keyword) || e.volume > (seen.get(e.keyword) ?? 0)) {
+      seen.set(e.keyword, e.volume)
+    }
+  }
+  return Array.from(seen.entries()).map(([keyword, volume]) => ({ keyword, volume }))
 }
 
 // @deprecated use fetchAizhanData instead

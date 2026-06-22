@@ -184,9 +184,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // Fetch rank changes for each site
+    // Fetch rank changes for each site (always daily, independent of crawl_frequency)
     if (runRank) for (const site of sites) {
-      if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
       try {
         const rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
         await new Promise((r) => setTimeout(r, 2000))
