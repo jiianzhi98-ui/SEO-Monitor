@@ -187,33 +187,35 @@ export async function GET(request: Request) {
     // Fetch rank changes for each site (always daily, independent of crawl_frequency)
     if (runRank) for (const site of sites) {
       try {
-        let rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
+        // Aizhan rank data has a 1-day lag — always query yesterday (reliably available by 04:00 MY)
+        const rankDate = yesterday
+        let rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
         await new Promise((r) => setTimeout(r, 2000))
-        let rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
+        let rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
         await new Promise((r) => setTimeout(r, 2000))
         // Retry up to 2 more times if both returned 0 — likely rate-limited
         for (let retry = 0; retry < 2; retry++) {
           if (rankupEntries.length > 0 || rankdownEntries.length > 0) break
           await new Promise((r) => setTimeout(r, 30000))
-          rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
+          rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
           await new Promise((r) => setTimeout(r, 2000))
-          rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
+          rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
           await new Promise((r) => setTimeout(r, 2000))
         }
         const rankRows = [
-          ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
-          ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
+          ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: rankDate, type: 'rankup', keyword: e.keyword, volume: e.volume })),
+          ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: rankDate, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
         ]
         if (rankRows.length > 0) {
-          await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
+          await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', rankDate)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('rank_changes') as any).insert(rankRows)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
         }
         // Upsert rankup keywords to permanent keyword_volume store (one record per keyword)
-        const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
-        const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: today }))
+        const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: rankDate }))
+        const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: rankDate }))
         if (kwWithVol.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('keyword_volume') as any).upsert(kwWithVol, { onConflict: 'keyword' })
