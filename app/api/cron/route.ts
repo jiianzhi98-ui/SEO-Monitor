@@ -187,10 +187,18 @@ export async function GET(request: Request) {
     // Fetch rank changes for each site (always daily, independent of crawl_frequency)
     if (runRank) for (const site of sites) {
       try {
-        const rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
+        let rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
         await new Promise((r) => setTimeout(r, 2000))
-        const rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
+        let rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
         await new Promise((r) => setTimeout(r, 2000))
+        // Retry once if both returned 0 — likely rate-limited, wait 30s and try again
+        if (rankupEntries.length === 0 && rankdownEntries.length === 0) {
+          await new Promise((r) => setTimeout(r, 30000))
+          rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
+          await new Promise((r) => setTimeout(r, 2000))
+          rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
+          await new Promise((r) => setTimeout(r, 2000))
+        }
         const rankRows = [
           ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
           ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
