@@ -124,7 +124,8 @@ export default function CompetitorDailyPage() {
 
       const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data').eq('is_enabled', true),
-        supabase.from('competitor_kw_stats')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from('competitor_kw_stats') as any)
           .select('site_id, stat_date, app_count, game_count')
           .gte('stat_date', d7ago)
           .lte('stat_date', yesterday),
@@ -205,7 +206,8 @@ export default function CompetitorDailyPage() {
           .gte('discovered_at', start).lte('discovered_at', end)
           .not('keyword', 'like', '%电脑版%'),
       ]).then(([appRes, gameRes]) => {
-        supabase.from('competitor_kw_stats').upsert(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(supabase.from('competitor_kw_stats') as any).upsert(
           { site_id: site.site_id, stat_date: date, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
           { onConflict: 'site_id,stat_date' }
         ).then(() => loadData()).catch(() => {})
