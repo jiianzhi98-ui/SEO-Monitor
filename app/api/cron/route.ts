@@ -169,7 +169,7 @@ export async function GET(request: Request) {
         if (hasCrawlConfig) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('daily_stats') as any).upsert(
-            { site_id: site.id, stat_date: today, new_count: newCount },
+            { site_id: site.id, stat_date: yesterday, new_count: newCount },
             { onConflict: 'site_id,stat_date' }
           )
         }
