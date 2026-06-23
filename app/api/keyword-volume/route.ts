@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       .gte('discovered_at', todayStartUTC)
     if (rawErr) return NextResponse.json({ error: rawErr.message }, { status: 500 })
 
-    const keywords = [...new Set((rawData || []).map((r: { keyword: string }) => r.keyword))]
+    const keywords = Array.from(new Set((rawData || []).map((r: { keyword: string }) => r.keyword)))
     if (keywords.length === 0) return NextResponse.json({ keywords: [] })
 
     const { data: volData } = await supabase
