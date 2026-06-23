@@ -237,9 +237,9 @@ export async function GET(request: Request) {
         await new Promise((r) => setTimeout(r, 2000))
         let rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
         await new Promise((r) => setTimeout(r, 2000))
-        // Retry up to 2 more times if both returned 0 — likely rate-limited
+        // Retry up to 2 more times if either returned 0 — likely rate-limited
         for (let retry = 0; retry < 2; retry++) {
-          if (rankupEntries.length > 0 || rankdownEntries.length > 0) break
+          if (rankupEntries.length > 0 && rankdownEntries.length > 0) break
           await new Promise((r) => setTimeout(r, 30000))
           rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
           await new Promise((r) => setTimeout(r, 2000))

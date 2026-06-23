@@ -272,10 +272,14 @@ async function fetchRankPage(
   date: string,
   page: number,
   cookie = '',
-  ua: string
+  ua: string,
+  isToday = false
 ): Promise<{ keyword: string; volume: number }[]> {
   const suffix = page === 1 ? '' : `${page}/`
-  const url = `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${date}/${suffix}`
+  // Today's rankdown on aizhan omits the date segment; past dates include it
+  const url = (type === 'rankdown' && isToday)
+    ? `https://baidurank.aizhan.com/mobile/${domain}/rankdown/${rankPos}/${suffix}`
+    : `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${date}/${suffix}`
   try {
     const headers: Record<string, string> = { ...getRankHeaders(ua) }
     if (cookie) headers['Cookie'] = cookie
@@ -294,7 +298,7 @@ async function fetchRankPage(
     if (cookieMatch) {
       const challengeCookie = cookieMatch[1].split(';')[0]
       if (challengeCookie === cookie) return []  // same cookie returned — stuck, bail out
-      return fetchRankPage(domain, type, rankPos, date, page, challengeCookie, ua)
+      return fetchRankPage(domain, type, rankPos, date, page, challengeCookie, ua, isToday)
     }
 
     const $ = cheerio.load(html)
@@ -335,13 +339,18 @@ export async function fetchRankChanges(
   type: 'rankup' | 'rankdown'
 ): Promise<{ keyword: string; volume: number }[]> {
   const ua = randomUA()
-  const sharedCookie = await prefetchRankCookie(domain, type, date, ua)
+  const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
+  const isToday = date === todayMY
+  const prefetchOverride = (type === 'rankdown' && isToday)
+    ? `https://baidurank.aizhan.com/mobile/${domain}/rankdown/1/`
+    : undefined
+  const sharedCookie = await prefetchRankCookie(domain, type, date, ua, prefetchOverride)
 
   const allResults = await Promise.all(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
       const entries: { keyword: string; volume: number }[] = []
       for (let page = 1; page <= 15; page++) {
-        const pageEntries = await fetchRankPage(domain, type, rankPos, date, page, sharedCookie, ua)
+        const pageEntries = await fetchRankPage(domain, type, rankPos, date, page, sharedCookie, ua, isToday)
         if (pageEntries.length === 0) break
         entries.push(...pageEntries.filter((e) => e.volume > 0))
         if (page < 15) await new Promise((r) => setTimeout(r, 300))
