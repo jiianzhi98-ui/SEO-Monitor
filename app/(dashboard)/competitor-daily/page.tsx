@@ -210,7 +210,7 @@ export default function CompetitorDailyPage() {
         ;(supabase.from('competitor_kw_stats') as any).upsert(
           { site_id: site.site_id, stat_date: date, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
           { onConflict: 'site_id,stat_date' }
-        ).then(() => loadData()).catch(() => {})
+        ).then(() => loadData()).catch((e: unknown) => { console.error('competitor_kw_stats upsert failed:', e); loadData() })
       }).catch(() => {})
     } catch {
       setSiteKeywords([])
