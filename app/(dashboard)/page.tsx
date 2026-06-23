@@ -512,6 +512,7 @@ function KeywordSearchCard() {
 
   // Export auth dialog
   const [showDialog, setShowDialog] = useState(false)
+  const [exportType, setExportType] = useState<'all' | 'today'>('all')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [verifyError, setVerifyError] = useState<string | null>(null)
@@ -529,7 +530,8 @@ function KeywordSearchCard() {
     }
   }
 
-  function openExportDialog() {
+  function openExportDialog(type: 'all' | 'today' = 'all') {
+    setExportType(type)
     setEmail('')
     setPassword('')
     setVerifyError(null)
@@ -553,7 +555,8 @@ function KeywordSearchCard() {
 
       // Credentials valid — proceed with download
       setShowDialog(false)
-      const res = await fetch('/api/keyword-volume?export=1')
+      const apiUrl = exportType === 'today' ? '/api/keyword-volume?export=today' : '/api/keyword-volume?export=1'
+      const res = await fetch(apiUrl)
       const data = await res.json()
       const all: KwVolRow[] = data.keywords || []
       const csv = ['关键词,搜索量', ...all.map(r => `"${r.keyword}",${r.volume}`)].join('\n')
@@ -561,7 +564,8 @@ function KeywordSearchCard() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `keywords-${new Date().toISOString().slice(0, 10)}.csv`
+      const dateStr = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      a.download = exportType === 'today' ? `keywords-today-${dateStr}.csv` : `keywords-${dateStr}.csv`
       a.click()
       URL.revokeObjectURL(url)
     } finally {
@@ -574,12 +578,21 @@ function KeywordSearchCard() {
       <div className="rounded-xl border border-green-300 bg-white p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-600">搜索量查询</span>
-          <button
-            onClick={openExportDialog}
-            className="text-xs text-gray-400 hover:text-green-600 transition-colors"
-          >
-            导出全部
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => openExportDialog('today')}
+              className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+            >
+              导出今日
+            </button>
+            <span className="text-gray-300 select-none">|</span>
+            <button
+              onClick={() => openExportDialog('all')}
+              className="text-xs text-gray-400 hover:text-green-600 transition-colors"
+            >
+              导出全部
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-1.5 mb-3">
@@ -625,7 +638,7 @@ function KeywordSearchCard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
             <h3 className="text-base font-semibold text-gray-900 mb-1">验证身份</h3>
-            <p className="text-xs text-gray-400 mb-5">导出数据需要验证账号权限</p>
+            <p className="text-xs text-gray-400 mb-5">{exportType === 'today' ? '导出今日新词需要验证账号权限' : '导出全部数据需要验证账号权限'}</p>
 
             <div className="space-y-3">
               <div>
