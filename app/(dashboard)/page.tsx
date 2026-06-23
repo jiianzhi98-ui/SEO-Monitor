@@ -191,7 +191,7 @@ export default function DashboardPage() {
       for (const s of siteList) {
         const ss = stats.filter(r => r.site_id === s.id)
         if (ss.length === 0) continue
-        const yStat = ss.find(r => r.stat_date === yesterday)
+        const yStat = ss.find(r => r.stat_date.slice(0, 10) === yesterday)
         const yVal = yStat?.new_count ?? 0
         const avg = ss.reduce((a, r) => a + r.new_count, 0) / ss.length
         if (avg > 0) {

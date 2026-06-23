@@ -127,7 +127,8 @@ export default function CompetitorDailyPage() {
 
       const result: CompetitorRow[] = (sites || []).map((site) => {
         const siteStats = stats.filter((s) => s.site_id === site.id)
-        const yesterdayStat = siteStats.find((s) => s.stat_date === yesterday)
+        // .slice(0,10) handles both 'date' ('2026-06-22') and 'timestamptz' ('2026-06-22T00:00:00+00:00') column types
+        const yesterdayStat = siteStats.find((s) => s.stat_date.slice(0, 10) === yesterday)
         const avg7d = siteStats.length > 0
           ? Math.round(siteStats.reduce((sum, s) => sum + s.new_count, 0) / siteStats.length)
           : 0
