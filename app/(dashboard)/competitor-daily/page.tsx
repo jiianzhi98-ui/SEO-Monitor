@@ -195,7 +195,6 @@ export default function CompetitorDailyPage() {
       const filtered = ((data || []) as Keyword[]).filter((kw) => !kw.keyword.includes('电脑版'))
       setSiteKeywords(filtered)
       // Upsert counts so the main table stays fresh (fire-and-forget)
-      const { start, end } = utcRangeForMalaysiaDate(date)
       Promise.all([
         supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
           .eq('site_id', site.site_id).eq('content_type', 'app')
