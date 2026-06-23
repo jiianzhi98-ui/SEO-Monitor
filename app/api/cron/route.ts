@@ -149,7 +149,7 @@ export async function GET(request: Request) {
 
           const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
           const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
-          newCount = newEntries.filter((e) => !e.keyword.includes('电脑版')).length
+          newCount = newEntries.length
 
           if (newEntries.length > 0) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,7 +169,27 @@ export async function GET(request: Request) {
         if (hasCrawlConfig) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('daily_stats') as any).upsert(
-            { site_id: site.id, stat_date: today, new_count: newCount },
+            { site_id: site.id, stat_date: yesterday, new_count: newCount },
+            { onConflict: 'site_id,stat_date' }
+          )
+          // Write per-type counts to competitor_kw_stats for the competitor-daily page
+          const kwStart = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 86400000).toISOString()
+          const kwEnd = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 1).toISOString()
+          const [appRes, gameRes] = await Promise.all([
+            supabase.from('raw_keywords')
+              .select('id', { count: 'exact', head: true })
+              .eq('site_id', site.id).eq('content_type', 'app')
+              .gte('discovered_at', kwStart).lte('discovered_at', kwEnd)
+              .not('keyword', 'like', '%电脑版%'),
+            supabase.from('raw_keywords')
+              .select('id', { count: 'exact', head: true })
+              .eq('site_id', site.id).eq('content_type', 'game')
+              .gte('discovered_at', kwStart).lte('discovered_at', kwEnd)
+              .not('keyword', 'like', '%电脑版%'),
+          ])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('competitor_kw_stats') as any).upsert(
+            { site_id: site.id, stat_date: today, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
             { onConflict: 'site_id,stat_date' }
           )
         }
@@ -262,7 +282,8 @@ export async function GET(request: Request) {
     if (runKeywords) {
       await supabase.rpc('delete_old_raw_keywords').maybeSingle()
       await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
-      await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-10))
+      await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
+      await supabase.from('competitor_kw_stats').delete().lt('stat_date', getMalaysiaDate(-10))
     }
 
     return NextResponse.json({ date: today, yesterday, results })

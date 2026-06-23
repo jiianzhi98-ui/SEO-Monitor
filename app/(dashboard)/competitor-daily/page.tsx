@@ -120,27 +120,27 @@ export default function CompetitorDailyPage() {
       const yesterday = getMalaysiaDate(-1)
       const d7ago = getMalaysiaDate(-7)
 
-      interface StatRow { site_id: string; stat_date: string; new_count: number }
+      interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 
       const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data').eq('is_enabled', true),
-        supabase.from('daily_stats')
-          .select('site_id, stat_date, new_count')
+        supabase.from('competitor_kw_stats')
+          .select('site_id, stat_date, app_count, game_count')
           .gte('stat_date', d7ago)
           .lte('stat_date', yesterday),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
-      const stats = (statsRaw || []) as StatRow[]
+      const stats = (statsRaw || []) as KwStatRow[]
 
       const result: CompetitorRow[] = sites.map((site) => {
         const siteStats = stats.filter(s => s.site_id === site.id)
         const ytStat = siteStats.find(s => (s.stat_date ?? '').slice(0, 10) === yesterday)
-        const yesterdayVal = ytStat?.new_count ?? 0
+        const yesterdayVal = (ytStat?.app_count ?? 0) + (ytStat?.game_count ?? 0)
 
         const dayMap = new Map<string, number>()
         for (const s of siteStats) {
           const d = (s.stat_date ?? '').slice(0, 10)
-          if (d) dayMap.set(d, s.new_count ?? 0)
+          if (d) dayMap.set(d, (s.app_count ?? 0) + (s.game_count ?? 0))
         }
         const avg7d = dayMap.size > 0
           ? Math.round(Array.from(dayMap.values()).reduce((a, b) => a + b, 0) / dayMap.size)
@@ -192,7 +192,25 @@ export default function CompetitorDailyPage() {
         .order('keyword', { ascending: true })
         .limit(500)
       if (err) throw err
-      setSiteKeywords(((data || []) as Keyword[]).filter((kw) => !kw.keyword.includes('电脑版')))
+      const filtered = ((data || []) as Keyword[]).filter((kw) => !kw.keyword.includes('电脑版'))
+      setSiteKeywords(filtered)
+      // Upsert counts so the main table stays fresh (fire-and-forget)
+      const { start, end } = utcRangeForMalaysiaDate(date)
+      Promise.all([
+        supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
+          .eq('site_id', site.site_id).eq('content_type', 'app')
+          .gte('discovered_at', start).lte('discovered_at', end)
+          .not('keyword', 'like', '%电脑版%'),
+        supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
+          .eq('site_id', site.site_id).eq('content_type', 'game')
+          .gte('discovered_at', start).lte('discovered_at', end)
+          .not('keyword', 'like', '%电脑版%'),
+      ]).then(([appRes, gameRes]) => {
+        supabase.from('competitor_kw_stats').upsert(
+          { site_id: site.site_id, stat_date: date, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
+          { onConflict: 'site_id,stat_date' }
+        ).then(() => loadData()).catch(() => {})
+      }).catch(() => {})
     } catch {
       setSiteKeywords([])
     } finally {
