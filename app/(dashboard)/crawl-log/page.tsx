@@ -105,8 +105,12 @@ export default function CrawlLogPage() {
                   <span>排名段 1-5 <strong>同时并行</strong>抓取，每段内部按页顺序抓取，每页间隔 <strong>300ms</strong>，某段无数据即停止翻页</span>
                 </div>
                 <div className="flex gap-3">
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">UA 轮换</span>
+                  <span>每个站点、每次重试均随机选取一个新 User-Agent，避免同一 UA 连续请求被识别限流</span>
+                </div>
+                <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">限流保护</span>
-                  <span>涨入抓完后等 <strong>500ms</strong> 再抓跌出；当涨入和跌出均为 0 时视为被限流，等待 <strong>30 秒</strong>后重试，最多重试 <strong>2 次</strong></span>
+                  <span>涨入抓完后等 <strong>500ms</strong> 再抓跌出；当涨入和跌出均为 0 时视为被限流，等待 <strong>30 秒</strong>后重试，最多重试 <strong>2 次</strong>（每次重试换新 UA）</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">去重</span>
