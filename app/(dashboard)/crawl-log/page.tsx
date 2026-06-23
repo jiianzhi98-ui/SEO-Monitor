@@ -98,7 +98,7 @@ export default function CrawlLogPage() {
               <div className="space-y-2 text-sm text-gray-600">
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">数据来源</span>
-                  <span>爱站 baidurank.aizhan.com，抓取当日涨入词与跌出词及搜索量</span>
+                  <span>爱站<strong>移动端</strong> <code className="text-xs bg-gray-100 px-1 rounded">baidurank.aizhan.com/mobile/…</code>（非 PC 端 <code className="text-xs bg-gray-100 px-1 rounded">/baidu/…</code>），抓取当日涨入词与跌出词及搜索量</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">并行策略</span>
