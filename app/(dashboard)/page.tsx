@@ -701,7 +701,7 @@ function RankdownExportButton() {
 
   function openDialog() {
     setDomain('')
-    setStartDate(getMY(-7))
+    setStartDate(getMY(-6))
     setEndDate(getMY())
     setEmail('')
     setPassword('')
@@ -778,6 +778,10 @@ function RankdownExportButton() {
   }
 
   const busy = status === 'verifying' || status === 'crawling'
+  const dayDiff = startDate && endDate
+    ? Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000)
+    : 0
+  const rangeExceeds = dayDiff > 6
 
   return (
     <>
@@ -828,6 +832,9 @@ function RankdownExportButton() {
                   />
                 </div>
               </div>
+              {rangeExceeds && (
+                <p className="text-xs text-red-500">抓取范围超出 7 天（爱站最多保留 7 天数据）</p>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">邮箱</label>
                 <input
@@ -866,7 +873,7 @@ function RankdownExportButton() {
               {status !== 'done' && (
                 <button
                   onClick={handleStart}
-                  disabled={busy || !domain || !email || !password}
+                  disabled={busy || !domain || !email || !password || rangeExceeds}
                   className="flex-1 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 font-medium"
                 >
                   {status === 'verifying' ? '验证中...' : status === 'crawling' ? '抓取中...' : '开始导出'}
