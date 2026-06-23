@@ -2,9 +2,9 @@ name: Daily SEO Crawl
 
 on:
   schedule:
-    - cron: '0 18 * * *'   # 02:00 Malaysia (UTC+8) — 关键词抓取
-    - cron: '0 0 * * *'    # 08:00 Malaysia (UTC+8) — 排名变动
-    - cron: '0 22 * * *'   # 06:00 Malaysia (UTC+8) — 权重 + 收录
+    - cron: '0 16 * * *'   # 00:00 Malaysia (UTC+8) — 关键词抓取
+    - cron: '0 18 * * *'   # 02:00 Malaysia (UTC+8) — 排名变动
+    - cron: '0 23 * * *'   # 07:00 Malaysia (UTC+8) — 权重 + 收录
   workflow_dispatch:
     inputs:
       step:
@@ -26,9 +26,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STEP="${{ github.event.inputs.step }}"
-          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 16 * * *" ]; then
             STEP="keywords"
-          elif [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
             STEP="rank"
           else
             STEP="weight"
@@ -47,8 +47,14 @@ jobs:
       - name: Keywords — per site
         if: steps.vars.outputs.step == 'keywords' || steps.vars.outputs.step == 'all'
         run: |
-          echo "${{ steps.sites.outputs.domains }}" | while read domain; do
+          first=true
+          echo "${{ steps.sites.outputs.domains }}" | shuf | while read domain; do
             [ -z "$domain" ] && continue
+            if [ "$first" = true ]; then
+              first=false
+            else
+              sleep 3
+            fi
             echo "=== Keywords: $domain ==="
             curl -f -s \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
@@ -59,7 +65,7 @@ jobs:
         if: steps.vars.outputs.step == 'rank' || steps.vars.outputs.step == 'all'
         run: |
           first=true
-          echo "${{ steps.sites.outputs.domains }}" | while read domain; do
+          echo "${{ steps.sites.outputs.domains }}" | shuf | while read domain; do
             [ -z "$domain" ] && continue
             if [ "$first" = true ]; then
               first=false
@@ -75,8 +81,14 @@ jobs:
       - name: Weight + index — per site
         if: steps.vars.outputs.step == 'weight' || steps.vars.outputs.step == 'all'
         run: |
-          echo "${{ steps.sites.outputs.domains }}" | while read domain; do
+          first=true
+          echo "${{ steps.sites.outputs.domains }}" | shuf | while read domain; do
             [ -z "$domain" ] && continue
+            if [ "$first" = true ]; then
+              first=false
+            else
+              sleep 10
+            fi
             echo "=== Weight: $domain ==="
             curl -f -s \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \

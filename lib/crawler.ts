@@ -169,7 +169,7 @@ export async function fetchHtmlListPages(
         if (datedEntries.length > 0 && datedEntries.every((d) => d < cutoffDateStr)) break
 
         currentUrl = findNextPageUrl($, currentUrl)
-        if (currentUrl) await randomDelay(2000, 5000)
+        if (currentUrl) await randomDelay(10000, 15000)
       } catch {
         break
       }
@@ -322,14 +322,14 @@ async function prefetchRankCookie(domain: string, type: string, date: string): P
   }
 }
 
-// Fetch all rank changes (涨入 or 跌出) for a domain on a given date
-// Covers rank positions 1-5, up to 15 sub-pages each, filters 0-volume
+// Fetch all rank changes (涨入 or 跌出) for a domain on a given date.
+// The 5 rank positions run in parallel; within each position pages are fetched
+// sequentially with 300ms delay and stop as soon as a page returns empty.
 export async function fetchRankChanges(
   domain: string,
   date: string,
   type: 'rankup' | 'rankdown'
 ): Promise<{ keyword: string; volume: number }[]> {
-  // Obtain challenge cookie once and reuse — avoids 2x requests per page
   const sharedCookie = await prefetchRankCookie(domain, type, date)
 
   const allResults = await Promise.all(
@@ -339,11 +339,12 @@ export async function fetchRankChanges(
         const pageEntries = await fetchRankPage(domain, type, rankPos, date, page, sharedCookie)
         if (pageEntries.length === 0) break
         entries.push(...pageEntries.filter((e) => e.volume > 0))
-        if (page < 15) await new Promise((r) => setTimeout(r, 500))
+        if (page < 15) await new Promise((r) => setTimeout(r, 300))
       }
       return entries
     })
   )
+
   // Dedup by keyword — same keyword can rank in multiple positions, keep highest volume
   const seen = new Map<string, number>()
   for (const e of allResults.flat()) {

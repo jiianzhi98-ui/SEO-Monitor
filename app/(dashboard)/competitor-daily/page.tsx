@@ -94,7 +94,7 @@ export default function CompetitorDailyPage() {
   const [rankSite, setRankSite] = useState<CompetitorRow | null>(null)
   const [rankType, setRankType] = useState<'rankup' | 'rankdown'>('rankup')
   const [rankDate, setRankDate] = useState('')
-  const [rankData, setRankData] = useState<RankEntry[]>([])
+  const [rankDataMap, setRankDataMap] = useState<{ rankup: RankEntry[], rankdown: RankEntry[] }>({ rankup: [], rankdown: [] })
   const [rankLoading, setRankLoading] = useState(false)
   const [rankUnstableSet, setRankUnstableSet] = useState<Set<string>>(new Set())
 
@@ -260,21 +260,25 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  async function fetchRankData(site: CompetitorRow, type: 'rankup' | 'rankdown', date: string) {
+  async function fetchAllRankData(site: CompetitorRow, date: string) {
     setRankLoading(true)
-    setRankData([])
+    setRankDataMap({ rankup: [], rankdown: [] })
     try {
       const supabase = getBrowserClient()
-      const { data } = await supabase
-        .from('rank_changes')
-        .select('keyword, volume')
-        .eq('site_id', site.site_id)
-        .eq('stat_date', date)
-        .eq('type', type)
-        .order('volume', { ascending: false })
-      setRankData((data || []) as RankEntry[])
+      const [upResult, downResult] = await Promise.all([
+        supabase.from('rank_changes').select('keyword, volume')
+          .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup')
+          .order('volume', { ascending: false }),
+        supabase.from('rank_changes').select('keyword, volume')
+          .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown')
+          .order('volume', { ascending: false }),
+      ])
+      setRankDataMap({
+        rankup: (upResult.data || []) as RankEntry[],
+        rankdown: (downResult.data || []) as RankEntry[],
+      })
     } catch {
-      setRankData([])
+      setRankDataMap({ rankup: [], rankdown: [] })
     } finally {
       setRankLoading(false)
     }
@@ -285,7 +289,7 @@ export default function CompetitorDailyPage() {
     setRankType('rankup')
     setRankDate(today)
     setRankSite(site)
-    fetchRankData(site, 'rankup', today)
+    fetchAllRankData(site, today)
 
     // Compute unstable keyword set from last 30 days
     try {
@@ -611,7 +615,7 @@ export default function CompetitorDailyPage() {
                   max={getMalaysiaDate(0)}
                   onChange={(e) => {
                     setRankDate(e.target.value)
-                    fetchRankData(rankSite, rankType, e.target.value)
+                    fetchAllRankData(rankSite, e.target.value)
                   }}
                   className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 />
@@ -630,20 +634,18 @@ export default function CompetitorDailyPage() {
                 const activeClass = t === 'rankup'
                   ? 'border-green-500 text-green-600'
                   : 'border-red-500 text-red-600'
+                const count = rankDataMap[t].length
                 return (
                   <button
                     key={t}
-                    onClick={() => {
-                      setRankType(t)
-                      fetchRankData(rankSite, t, rankDate)
-                    }}
+                    onClick={() => setRankType(t)}
                     className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${
                       isActive ? activeClass : 'border-transparent text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {label}
-                    {isActive && !rankLoading && rankData.length > 0 && (
-                      <span className="ml-1.5 text-xs text-gray-400">({rankData.length})</span>
+                    {!rankLoading && count > 0 && (
+                      <span className="ml-1.5 text-xs text-gray-400">({count})</span>
                     )}
                   </button>
                 )
@@ -659,7 +661,7 @@ export default function CompetitorDailyPage() {
                   </svg>
                   <span className="text-sm">抓取中，请稍候...</span>
                 </div>
-              ) : rankData.length === 0 ? (
+              ) : rankDataMap[rankType].length === 0 ? (
                 <p className="text-center text-gray-400 py-16 text-sm">无数据</p>
               ) : (
                 <table className="w-full text-sm">
@@ -670,7 +672,7 @@ export default function CompetitorDailyPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {rankData.map((entry, i) => {
+                    {rankDataMap[rankType].map((entry, i) => {
                       const isUnstable = rankUnstableSet.has(entry.keyword)
                       return (
                         <tr key={i} className="hover:bg-gray-50">

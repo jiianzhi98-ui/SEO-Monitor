@@ -230,23 +230,32 @@ export async function GET(request: Request) {
     }
 
     // Fetch weight + index snapshot from aizhan (today's reading)
+    // Retries up to 2 times on failure (likely rate-limited) with 30s wait each
     if (runWeight) for (const site of sites) {
-      try {
-        const { pc, mobile, indexCount, pcIpMin, pcIpMax, mobileIpMin, mobileIpMax } = await fetchAizhanData(site.domain)
-        await Promise.all([
-          (supabase.from('weight_history') as any).upsert(
-            { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile, pc_ip: pcIpMin, pc_ip_max: pcIpMax, mobile_ip: mobileIpMin, mobile_ip_max: mobileIpMax },
-            { onConflict: 'site_id,record_date' }
-          ),
-          (supabase.from('index_snapshots') as any).upsert(
-            { site_id: site.id, snapshot_date: today, index_count: indexCount },
-            { onConflict: 'site_id,snapshot_date' }
-          ),
-        ])
-        await new Promise((r) => setTimeout(r, 3000))
-      } catch {
-        // ignore per-site errors
+      let fetched = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 30000))
+          const { pc, mobile, indexCount, pcIpMin, pcIpMax, mobileIpMin, mobileIpMax } = await fetchAizhanData(site.domain)
+          await Promise.all([
+            (supabase.from('weight_history') as any).upsert(
+              { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile, pc_ip: pcIpMin, pc_ip_max: pcIpMax, mobile_ip: mobileIpMin, mobile_ip_max: mobileIpMax },
+              { onConflict: 'site_id,record_date' }
+            ),
+            (supabase.from('index_snapshots') as any).upsert(
+              { site_id: site.id, snapshot_date: today, index_count: indexCount },
+              { onConflict: 'site_id,snapshot_date' }
+            ),
+          ])
+          fetched = true
+          break
+        } catch {
+          // retry on next attempt
+        }
       }
+      // Always pace between sites — skipping delay on failure causes immediate hammering of the next site
+      await new Promise((r) => setTimeout(r, 3000))
+      if (!fetched) results.push({ site: site.domain, count: -1, error: '权重抓取失败（3次重试后放弃）' })
     }
 
     // Cleanup old data (only on keywords step to avoid running 3x per day)
