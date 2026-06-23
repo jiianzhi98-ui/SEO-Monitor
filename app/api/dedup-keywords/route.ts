@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     if (seen.has(row.keyword)) {
       toDelete.push(row.id)
     } else {
-      seen.set(row.keyword)
+      seen.add(row.keyword)
     }
   }
 
