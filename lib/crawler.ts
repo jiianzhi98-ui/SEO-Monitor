@@ -424,7 +424,7 @@ export async function fetchRankdownWithTitle(
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankdownPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
         if (pageEntries.length === 0) break
-        entries.push(...pageEntries)
+        entries.push(...pageEntries.filter(e => e.volume > 0))
         if (page < 15) await new Promise((r) => setTimeout(r, 300))
       }
       return entries
@@ -436,7 +436,9 @@ export async function fetchRankdownWithTitle(
     const cur = seen.get(e.keyword)
     if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title })
   }
-  return Array.from(seen.entries()).map(([keyword, { volume, title }]) => ({ keyword, volume, title }))
+  return Array.from(seen.entries())
+    .map(([keyword, { volume, title }]) => ({ keyword, volume, title }))
+    .sort((a, b) => b.volume - a.volume)
 }
 
 // @deprecated use fetchAizhanData instead

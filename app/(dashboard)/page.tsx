@@ -743,14 +743,26 @@ function RankdownExportButton() {
 
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i]
-      setProgress(`正在抓取 ${date} (${i + 1}/${dates.length})...`)
-      try {
-        const res = await fetch(`/api/export-rank-history?domain=${encodeURIComponent(domain)}&date=${date}`)
-        const data = await res.json()
-        allData[date] = data.items || []
-      } catch {
-        allData[date] = []
+      let items: { keyword: string; volume: number; title: string }[] = []
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+          setProgress(`${date} 无数据，第 ${attempt} 次重试（等待 30 秒）...`)
+          await new Promise(r => setTimeout(r, 30000))
+        } else {
+          setProgress(`正在抓取 ${date} (${i + 1}/${dates.length})...`)
+        }
+        try {
+          const res = await fetch(`/api/export-rank-history?domain=${encodeURIComponent(domain)}&date=${date}`)
+          const data = await res.json()
+          items = data.items || []
+          if (items.length > 0) break
+        } catch {
+          items = []
+        }
       }
+
+      allData[date] = items
       if (i < dates.length - 1) {
         setProgress(`${date} 完成，等待 5 秒...`)
         await new Promise(r => setTimeout(r, 5000))
