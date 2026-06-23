@@ -108,9 +108,10 @@ export async function GET(request: Request) {
             const srcUrls = isNew
               ? urlBlocks[i].split('\n').map((u: string) => u.trim()).filter(Boolean)
               : [urlBlocks[i]]
-            for (const url of srcUrls) {
+            for (let urlIdx = 0; urlIdx < srcUrls.length; urlIdx++) {
+              if (urlIdx > 0) await new Promise((r) => setTimeout(r, 5000 + Math.floor(Math.random() * 3000)))
               const src: HtmlSource = {
-                url,
+                url: srcUrls[urlIdx],
                 titleSelector: titleSels[i] || titleSels[0] || '',
                 dateSelector: dateSels[i] || dateSels[0] || '',
               }
@@ -183,7 +184,7 @@ export async function GET(request: Request) {
                 keyword: e.keyword,
                 site_id: site.id,
                 discovered_at: new Date().toISOString(),
-                content_date: e.content_date,
+                content_date: e.content_date || yesterday,
                 content_type: e.content_type || 'app',
               }))
             )
