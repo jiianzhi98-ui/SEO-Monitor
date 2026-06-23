@@ -386,7 +386,11 @@ export default function ChartsPage() {
                   <RankBadge rank={g.rank} />
                   <p className="flex-1 text-xs font-medium text-gray-800 truncate">{g.name}</p>
                   {g.labels.length > 0 && (
-                    <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full flex-shrink-0">{g.labels[0]}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                      g.labels[0] === '上升' ? 'bg-orange-100 text-orange-600' :
+                      g.labels[0] === '首发' ? 'bg-green-100 text-green-700' :
+                      'bg-purple-100 text-purple-700'
+                    }`}>{g.labels[0]}</span>
                   )}
                 </li>
               ))} />
