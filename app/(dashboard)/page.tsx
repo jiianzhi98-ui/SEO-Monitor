@@ -702,7 +702,7 @@ function RankdownExportButton() {
   function openDialog() {
     setDomain('')
     setStartDate(getMY(-7))
-    setEndDate(getMY(-1))
+    setEndDate(getMY())
     setEmail('')
     setPassword('')
     setStatus('idle')
@@ -802,7 +802,7 @@ function RankdownExportButton() {
                   value={domain}
                   onChange={e => setDomain(e.target.value)}
                   disabled={busy}
-                  placeholder="例如 cssmoban.com"
+                  placeholder="例如 xxx.com"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 disabled:bg-gray-50"
                 />
               </div>
