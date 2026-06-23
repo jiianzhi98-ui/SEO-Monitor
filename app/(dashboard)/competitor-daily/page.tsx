@@ -102,14 +102,6 @@ export default function CompetitorDailyPage() {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
   }
 
-  function utcRangeForMalaysiaDate(date: string) {
-    const nextMidnightMYT = new Date(date + 'T16:00:00.000Z').getTime()
-    return {
-      start: new Date(nextMidnightMYT - 86400000).toISOString(),
-      end: new Date(nextMidnightMYT - 1).toISOString(),
-    }
-  }
-
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
@@ -183,13 +175,11 @@ export default function CompetitorDailyPage() {
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      const { start, end } = utcRangeForMalaysiaDate(date)
       const { data, error: err } = await supabase
         .from('raw_keywords')
         .select('keyword, source_url, discovered_at, content_date, content_type')
         .eq('site_id', site.site_id)
-        .gte('discovered_at', start)
-        .lte('discovered_at', end)
+        .eq('content_date', date)
         .order('keyword', { ascending: true })
         .limit(500)
       if (err) throw err
@@ -199,11 +189,11 @@ export default function CompetitorDailyPage() {
       Promise.all([
         supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
           .eq('site_id', site.site_id).eq('content_type', 'app')
-          .gte('discovered_at', start).lte('discovered_at', end)
+          .eq('content_date', date)
           .not('keyword', 'like', '%电脑版%'),
         supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
           .eq('site_id', site.site_id).eq('content_type', 'game')
-          .gte('discovered_at', start).lte('discovered_at', end)
+          .eq('content_date', date)
           .not('keyword', 'like', '%电脑版%'),
       ]).then(([appRes, gameRes]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

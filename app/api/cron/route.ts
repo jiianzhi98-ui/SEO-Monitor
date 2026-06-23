@@ -66,7 +66,6 @@ export async function GET(request: Request) {
   // All dates use Malaysia time (UTC+8)
   const today = getMalaysiaDate()       // today's snapshot date (for weight/index)
   const yesterday = getMalaysiaDate(-1) // yesterday's content date (for new keywords)
-  const crawlStartedAt = new Date().toISOString() // UTC timestamp for dedup
 
   const results: { site: string; count: number; error?: string }[] = []
 
@@ -140,16 +139,41 @@ export async function GET(request: Request) {
         let newCount = 0
 
         if (cleanedEntries.length > 0) {
-          // Dedup against keywords already in DB within last 7 days
-          const todayMYTStart = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 86400000).toISOString()
-          const { data: existing } = await supabase
-            .from('raw_keywords')
-            .select('keyword')
-            .eq('site_id', site.id)
-            .gte('discovered_at', todayMYTStart)
+          // Dedup by (keyword, content_date): same keyword on the same website date must not be re-inserted
+          const batchDates = Array.from(new Set(cleanedEntries.map(e => e.content_date).filter((d): d is string => !!d)))
+          const hasNullDate = cleanedEntries.some(e => !e.content_date)
+          const existingKeys = new Set<string>()
 
-          const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
-          const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
+          for (const cd of batchDates) {
+            const { data: existing } = await supabase
+              .from('raw_keywords')
+              .select('keyword')
+              .eq('site_id', site.id)
+              .eq('content_date', cd)
+              .limit(10000)
+            for (const row of (existing || []) as { keyword: string }[]) {
+              existingKeys.add(`${cd}|${row.keyword}`)
+            }
+          }
+
+          if (hasNullDate) {
+            // For undated entries, fall back to same-MYT-day dedup
+            const todayMYTStart = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 86400000).toISOString()
+            const { data: existingNull } = await supabase
+              .from('raw_keywords')
+              .select('keyword')
+              .eq('site_id', site.id)
+              .gte('discovered_at', todayMYTStart)
+              .is('content_date', null)
+            for (const row of (existingNull || []) as { keyword: string }[]) {
+              existingKeys.add(`null|${row.keyword}`)
+            }
+          }
+
+          const newEntries = cleanedEntries.filter(e => {
+            const key = e.content_date ? `${e.content_date}|${e.keyword}` : `null|${e.keyword}`
+            return !existingKeys.has(key)
+          })
           newCount = newEntries.length
 
           if (newEntries.length > 0) {
@@ -173,24 +197,22 @@ export async function GET(request: Request) {
             { site_id: site.id, stat_date: yesterday, new_count: newCount },
             { onConflict: 'site_id,stat_date' }
           )
-          // Write per-type counts to competitor_kw_stats for the competitor-daily page
-          const kwStart = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 86400000).toISOString()
-          const kwEnd = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 1).toISOString()
+          // Write per-type counts to competitor_kw_stats, keyed by content_date (website's own date)
           const [appRes, gameRes] = await Promise.all([
             supabase.from('raw_keywords')
               .select('id', { count: 'exact', head: true })
               .eq('site_id', site.id).eq('content_type', 'app')
-              .gte('discovered_at', kwStart).lte('discovered_at', kwEnd)
+              .eq('content_date', yesterday)
               .not('keyword', 'like', '%电脑版%'),
             supabase.from('raw_keywords')
               .select('id', { count: 'exact', head: true })
               .eq('site_id', site.id).eq('content_type', 'game')
-              .gte('discovered_at', kwStart).lte('discovered_at', kwEnd)
+              .eq('content_date', yesterday)
               .not('keyword', 'like', '%电脑版%'),
           ])
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('competitor_kw_stats') as any).upsert(
-            { site_id: site.id, stat_date: today, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
+            { site_id: site.id, stat_date: yesterday, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
             { onConflict: 'site_id,stat_date' }
           )
         }
