@@ -78,6 +78,9 @@ export default function CompetitorDailyPage() {
   const [kwDate, setKwDate] = useState('')
   const [kwTab, setKwTab] = useState<'app' | 'game'>('app')
 
+  const [dedupLoading, setDedupLoading] = useState(false)
+  const [dedupResult, setDedupResult] = useState<number | null>(null)
+
   // 更新词库 modal
   const [cleanSite, setCleanSite] = useState<CompetitorRow | null>(null)
   const [cleanedEntries, setCleanedEntries] = useState<CleanedEntry[]>([])
@@ -219,6 +222,26 @@ export default function CompetitorDailyPage() {
     }
   }
 
+  async function handleDedup() {
+    if (!selectedSite || dedupLoading) return
+    setDedupLoading(true)
+    setDedupResult(null)
+    try {
+      const res = await fetch('/api/dedup-keywords', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site_id: selectedSite.site_id, date: kwDate }),
+      })
+      const json = await res.json()
+      setDedupResult(json.deleted ?? 0)
+      fetchKeywordsForDate(selectedSite, kwDate)
+    } catch {
+      setDedupResult(-1)
+    } finally {
+      setDedupLoading(false)
+    }
+  }
+
   function viewYesterdayKeywords(site: CompetitorRow) {
     const date = getMalaysiaDate(-1)
     setSelectedSite(site)
@@ -229,6 +252,7 @@ export default function CompetitorDailyPage() {
 
   function handleKwDateChange(date: string) {
     setKwDate(date)
+    setDedupResult(null)
     if (selectedSite) fetchKeywordsForDate(selectedSite, date)
   }
 
@@ -506,11 +530,25 @@ export default function CompetitorDailyPage() {
                     className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
                   />
                 </div>
-                <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDedup}
+                    disabled={dedupLoading}
+                    className="text-xs px-2 py-1 rounded border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+                  >
+                    {dedupLoading ? '去重中...' : '去重'}
+                  </button>
+                  {dedupResult !== null && (
+                    <span className="text-xs text-gray-400">
+                      {dedupResult < 0 ? '失败' : `删除 ${dedupResult} 条重复`}
+                    </span>
+                  )}
+                  <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               {/* Tabs */}
               <div className="flex border-b border-gray-200 px-5">
