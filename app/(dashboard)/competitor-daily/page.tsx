@@ -140,9 +140,15 @@ export default function CompetitorDailyPage() {
       const sites = (sitesRaw || []) as SiteRow[]
       const kwRows = (kwRaw || []) as KwRow[]
 
+      const ytStartMs = new Date(ytRange.start).getTime()
+      const ytEndMs = new Date(ytRange.end).getTime()
+
       const result: CompetitorRow[] = (sites || []).map((site) => {
         const siteKw = kwRows.filter(k => k.site_id === site.id && !k.keyword.includes('电脑版'))
-        const yesterdayVal = siteKw.filter(k => k.discovered_at >= ytRange.start && k.discovered_at <= ytRange.end).length
+        const yesterdayVal = siteKw.filter(k => {
+          const t = new Date(k.discovered_at).getTime()
+          return t >= ytStartMs && t <= ytEndMs
+        }).length
 
         // 7-day avg: group by MYT date derived from discovered_at, average over days with data
         const dayMap = new Map<string, number>()
