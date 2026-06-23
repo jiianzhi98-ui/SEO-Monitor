@@ -140,8 +140,12 @@ export default function CrawlLogPage() {
                   <span>爱站 aizhan.com，抓取 PC/移动权重、收录数、预估来路 IP 区间</span>
                 </div>
                 <div className="flex gap-3">
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">UA 轮换</span>
+                  <span>每个站点、每次重试均随机选取一个新 User-Agent，避免同一 UA 连续请求被识别限流</span>
+                </div>
+                <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">限流保护</span>
-                  <span>请求失败时等待 <strong>30 秒</strong>后重试，最多重试 <strong>2 次</strong>（共 3 次尝试）；无论成功与否，每站点后等待 <strong>3 秒</strong>再打下一个</span>
+                  <span>请求失败时等待 <strong>30 秒</strong>后重试，最多重试 <strong>2 次</strong>（共 3 次尝试，每次换新 UA）；无论成功与否，每站点后等待 <strong>3 秒</strong>再打下一个</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">失败记录</span>
