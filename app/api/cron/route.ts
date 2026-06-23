@@ -111,7 +111,6 @@ export async function GET(request: Request) {
               ? urlBlocks[i].split('\n').map((u: string) => u.trim()).filter(Boolean)
               : [urlBlocks[i]]
             for (let urlIdx = 0; urlIdx < srcUrls.length; urlIdx++) {
-              if (urlIdx > 0) await new Promise((r) => setTimeout(r, 3000))
               const src: HtmlSource = {
                 url: srcUrls[urlIdx],
                 titleSelector: titleSels[i] || titleSels[0] || '',
