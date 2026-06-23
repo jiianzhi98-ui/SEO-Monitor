@@ -149,7 +149,7 @@ export async function GET(request: Request) {
 
           const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
           const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
-          newCount = newEntries.length
+          newCount = newEntries.filter((e) => !e.keyword.includes('电脑版')).length
 
           if (newEntries.length > 0) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
         if (hasCrawlConfig) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('daily_stats') as any).upsert(
-            { site_id: site.id, stat_date: yesterday, new_count: newCount },
+            { site_id: site.id, stat_date: today, new_count: newCount },
             { onConflict: 'site_id,stat_date' }
           )
         }
@@ -262,7 +262,7 @@ export async function GET(request: Request) {
     if (runKeywords) {
       await supabase.rpc('delete_old_raw_keywords').maybeSingle()
       await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
-      await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
+      await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-10))
     }
 
     return NextResponse.json({ date: today, yesterday, results })

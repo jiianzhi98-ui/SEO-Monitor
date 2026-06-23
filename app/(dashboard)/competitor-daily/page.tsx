@@ -24,13 +24,6 @@ interface SiteRow {
   has_rank_data: boolean
 }
 
-interface KwRow {
-  site_id: string
-  keyword: string
-  content_type: string | null
-  discovered_at: string
-}
-
 interface Keyword {
   keyword: string
   source_url: string | null
@@ -126,41 +119,28 @@ export default function CompetitorDailyPage() {
       const supabase = getBrowserClient()
       const yesterday = getMalaysiaDate(-1)
       const d7ago = getMalaysiaDate(-7)
-      const ytRange = utcRangeForMalaysiaDate(yesterday)
-      const d7Range = utcRangeForMalaysiaDate(d7ago)
 
-      // Two separate queries: yesterday exact count + previous 6 days for avg
-      const [{ data: sitesRaw }, { data: ytKwRaw }, { data: d7KwRaw }] = await Promise.all([
+      interface StatRow { site_id: string; stat_date: string; new_count: number }
+
+      const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data').eq('is_enabled', true),
-        supabase.from('raw_keywords')
-          .select('site_id, keyword, content_type')
-          .gte('discovered_at', ytRange.start)
-          .lte('discovered_at', ytRange.end)
-          .limit(20000),
-        supabase.from('raw_keywords')
-          .select('site_id, discovered_at')
-          .gte('discovered_at', d7Range.start)
-          .lt('discovered_at', ytRange.start)
-          .limit(50000),
+        supabase.from('daily_stats')
+          .select('site_id, stat_date, new_count')
+          .gte('stat_date', d7ago)
+          .lte('stat_date', yesterday),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
-      const ytKwRows = (ytKwRaw || []) as { site_id: string; keyword: string; content_type: string | null }[]
-      const d7KwRows = (d7KwRaw || []) as { site_id: string; discovered_at: string }[]
+      const stats = (statsRaw || []) as StatRow[]
 
-      const result: CompetitorRow[] = (sites || []).map((site) => {
-        // Yesterday: DB already filtered the date range, no JS date comparison needed
-        const ytSiteKw = ytKwRows.filter(k => k.site_id === site.id && !k.keyword.includes('电脑版'))
-        const yesterdayVal = ytSiteKw.length
+      const result: CompetitorRow[] = sites.map((site) => {
+        const siteStats = stats.filter(s => s.site_id === site.id)
+        const ytStat = siteStats.find(s => (s.stat_date ?? '').slice(0, 10) === yesterday)
+        const yesterdayVal = ytStat?.new_count ?? 0
 
-        // 7-day avg: yesterday count + previous 6 days grouped by MYT date
-        const dayMap = new Map<string, number>([[yesterday, yesterdayVal]])
-        const d7SiteKw = d7KwRows.filter(k => k.site_id === site.id)
-        for (const k of d7SiteKw) {
-          const t = new Date(k.discovered_at).getTime()
-          if (!isNaN(t)) {
-            const mytDate = new Date(t + 8 * 3600000).toISOString().slice(0, 10)
-            dayMap.set(mytDate, (dayMap.get(mytDate) ?? 0) + 1)
-          }
+        const dayMap = new Map<string, number>()
+        for (const s of siteStats) {
+          const d = (s.stat_date ?? '').slice(0, 10)
+          if (d) dayMap.set(d, s.new_count ?? 0)
         }
         const avg7d = dayMap.size > 0
           ? Math.round(Array.from(dayMap.values()).reduce((a, b) => a + b, 0) / dayMap.size)
