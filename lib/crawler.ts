@@ -256,11 +256,13 @@ export async function fetchAizhanData(domain: string): Promise<{
   }
 }
 
-const RANK_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'zh-CN,zh;q=0.9',
-  'Referer': 'https://baidurank.aizhan.com/',
+function getRankHeaders(ua: string) {
+  return {
+    'User-Agent': ua,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+    'Referer': 'https://baidurank.aizhan.com/',
+  }
 }
 
 async function fetchRankPage(
@@ -269,12 +271,13 @@ async function fetchRankPage(
   rankPos: number,
   date: string,
   page: number,
-  cookie = ''
+  cookie = '',
+  ua: string
 ): Promise<{ keyword: string; volume: number }[]> {
   const suffix = page === 1 ? '' : `${page}/`
   const url = `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${date}/${suffix}`
   try {
-    const headers: Record<string, string> = { ...RANK_HEADERS }
+    const headers: Record<string, string> = { ...getRankHeaders(ua) }
     if (cookie) headers['Cookie'] = cookie
 
     const res = await fetch(url, {
@@ -291,7 +294,7 @@ async function fetchRankPage(
     if (cookieMatch) {
       const challengeCookie = cookieMatch[1].split(';')[0]
       if (challengeCookie === cookie) return []  // same cookie returned — stuck, bail out
-      return fetchRankPage(domain, type, rankPos, date, page, challengeCookie)
+      return fetchRankPage(domain, type, rankPos, date, page, challengeCookie, ua)
     }
 
     const $ = cheerio.load(html)
@@ -310,10 +313,10 @@ async function fetchRankPage(
 // Pre-fetch the JS challenge cookie for a domain so all subsequent requests
 // can skip the challenge round-trip (aizhan added this protection ~2026-06-19).
 // Cookie has path=/ and max-age=300, so it's valid for all pages of the same domain.
-async function prefetchRankCookie(domain: string, type: string, date: string): Promise<string> {
+async function prefetchRankCookie(domain: string, type: string, date: string, ua: string): Promise<string> {
   try {
     const url = `https://baidurank.aizhan.com/mobile/${domain}/${type}/1/${date}/`
-    const res = await fetch(url, { headers: RANK_HEADERS, signal: AbortSignal.timeout(8000), next: { revalidate: 0 } })
+    const res = await fetch(url, { headers: getRankHeaders(ua), signal: AbortSignal.timeout(8000), next: { revalidate: 0 } })
     const html = await res.text()
     const m = html.match(/\.cookie\s*=\s*"([^"]+)"/)
     return m ? m[1].split(';')[0] : ''
@@ -325,18 +328,20 @@ async function prefetchRankCookie(domain: string, type: string, date: string): P
 // Fetch all rank changes (涨入 or 跌出) for a domain on a given date.
 // The 5 rank positions run in parallel; within each position pages are fetched
 // sequentially with 300ms delay and stop as soon as a page returns empty.
+// A single UA is chosen per call so retries (in route.ts) naturally rotate to a fresh UA.
 export async function fetchRankChanges(
   domain: string,
   date: string,
   type: 'rankup' | 'rankdown'
 ): Promise<{ keyword: string; volume: number }[]> {
-  const sharedCookie = await prefetchRankCookie(domain, type, date)
+  const ua = randomUA()
+  const sharedCookie = await prefetchRankCookie(domain, type, date, ua)
 
   const allResults = await Promise.all(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
       const entries: { keyword: string; volume: number }[] = []
       for (let page = 1; page <= 15; page++) {
-        const pageEntries = await fetchRankPage(domain, type, rankPos, date, page, sharedCookie)
+        const pageEntries = await fetchRankPage(domain, type, rankPos, date, page, sharedCookie, ua)
         if (pageEntries.length === 0) break
         entries.push(...pageEntries.filter((e) => e.volume > 0))
         if (page < 15) await new Promise((r) => setTimeout(r, 300))
