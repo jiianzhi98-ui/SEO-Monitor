@@ -146,6 +146,7 @@ export async function GET(request: Request) {
             .select('keyword')
             .eq('site_id', site.id)
             .gte('discovered_at', new Date(Date.now() - 7 * 86400000).toISOString())
+            .limit(10000)
 
           const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
           const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
