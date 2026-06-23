@@ -26,9 +26,9 @@ interface SiteRow {
 
 interface KwRow {
   site_id: string
-  content_date: string | null
   keyword: string
   content_type: string | null
+  discovered_at: string
 }
 
 interface Keyword {
@@ -109,6 +109,14 @@ export default function CompetitorDailyPage() {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
   }
 
+  function utcRangeForMalaysiaDate(date: string) {
+    const nextMidnightMYT = new Date(date + 'T16:00:00.000Z').getTime()
+    return {
+      start: new Date(nextMidnightMYT - 86400000).toISOString(),
+      end: new Date(nextMidnightMYT - 1).toISOString(),
+    }
+  }
+
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
@@ -118,13 +126,15 @@ export default function CompetitorDailyPage() {
       const supabase = getBrowserClient()
       const yesterday = getMalaysiaDate(-1)
       const d7ago = getMalaysiaDate(-7)
+      const ytRange = utcRangeForMalaysiaDate(yesterday)
+      const d7Range = utcRangeForMalaysiaDate(d7ago)
 
       const [{ data: sitesRaw }, { data: kwRaw }] = await Promise.all([
         supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data').eq('is_enabled', true),
         supabase.from('raw_keywords')
-          .select('site_id, content_date, keyword, content_type')
-          .gte('content_date', d7ago)
-          .lte('content_date', yesterday)
+          .select('site_id, keyword, content_type, discovered_at')
+          .gte('discovered_at', d7Range.start)
+          .lte('discovered_at', ytRange.end)
           .limit(20000),
       ])
       const sites = (sitesRaw || []) as SiteRow[]
@@ -132,13 +142,13 @@ export default function CompetitorDailyPage() {
 
       const result: CompetitorRow[] = (sites || []).map((site) => {
         const siteKw = kwRows.filter(k => k.site_id === site.id && !k.keyword.includes('电脑版'))
-        const yesterdayVal = siteKw.filter(k => k.content_date?.slice(0, 10) === yesterday).length
+        const yesterdayVal = siteKw.filter(k => k.discovered_at >= ytRange.start && k.discovered_at <= ytRange.end).length
 
-        // 7-day avg: count per content_date, then average across days that have data
+        // 7-day avg: group by MYT date derived from discovered_at, average over days with data
         const dayMap = new Map<string, number>()
         for (const k of siteKw) {
-          const d = k.content_date?.slice(0, 10)
-          if (d) dayMap.set(d, (dayMap.get(d) ?? 0) + 1)
+          const mytDate = new Date(new Date(k.discovered_at).getTime() + 8 * 3600000).toISOString().slice(0, 10)
+          dayMap.set(mytDate, (dayMap.get(mytDate) ?? 0) + 1)
         }
         const avg7d = dayMap.size > 0
           ? Math.round(Array.from(dayMap.values()).reduce((a, b) => a + b, 0) / dayMap.size)
@@ -180,11 +190,13 @@ export default function CompetitorDailyPage() {
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
+      const { start, end } = utcRangeForMalaysiaDate(date)
       const { data, error: err } = await supabase
         .from('raw_keywords')
         .select('keyword, source_url, discovered_at, content_date, content_type')
         .eq('site_id', site.site_id)
-        .eq('content_date', date)
+        .gte('discovered_at', start)
+        .lte('discovered_at', end)
         .order('keyword', { ascending: true })
         .limit(500)
       if (err) throw err
