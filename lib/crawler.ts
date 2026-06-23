@@ -276,9 +276,9 @@ async function fetchRankPage(
   isToday = false
 ): Promise<{ keyword: string; volume: number }[]> {
   const suffix = page === 1 ? '' : `${page}/`
-  // Today's rankdown on aizhan omits the date segment; past dates include it
-  const url = (type === 'rankdown' && isToday)
-    ? `https://baidurank.aizhan.com/mobile/${domain}/rankdown/${rankPos}/${suffix}`
+  // Today's aizhan URLs omit the date segment for both rankup and rankdown
+  const url = isToday
+    ? `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${suffix}`
     : `https://baidurank.aizhan.com/mobile/${domain}/${type}/${rankPos}/${date}/${suffix}`
   try {
     const headers: Record<string, string> = { ...getRankHeaders(ua) }
@@ -341,8 +341,8 @@ export async function fetchRankChanges(
   const ua = randomUA()
   const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
   const isToday = date === todayMY
-  const prefetchOverride = (type === 'rankdown' && isToday)
-    ? `https://baidurank.aizhan.com/mobile/${domain}/rankdown/1/`
+  const prefetchOverride = isToday
+    ? `https://baidurank.aizhan.com/mobile/${domain}/${type}/1/`
     : undefined
   const sharedCookie = await prefetchRankCookie(domain, type, date, ua, prefetchOverride)
 
