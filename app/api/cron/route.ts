@@ -141,12 +141,12 @@ export async function GET(request: Request) {
 
         if (cleanedEntries.length > 0) {
           // Dedup against keywords already in DB within last 7 days
+          const todayMYTStart = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 86400000).toISOString()
           const { data: existing } = await supabase
             .from('raw_keywords')
             .select('keyword')
             .eq('site_id', site.id)
-            .gte('discovered_at', new Date(Date.now() - 7 * 86400000).toISOString())
-            .limit(10000)
+            .gte('discovered_at', todayMYTStart)
 
           const existingSet = new Set((existing || []).map((e) => (e as { keyword: string }).keyword))
           const newEntries = cleanedEntries.filter((e) => !existingSet.has(e.keyword))
