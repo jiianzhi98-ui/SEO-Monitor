@@ -77,6 +77,7 @@ export default function CompetitorDailyPage() {
   const [kwLoading, setKwLoading] = useState(false)
   const [kwDate, setKwDate] = useState('')
   const [kwTab, setKwTab] = useState<'app' | 'game'>('app')
+  const [kwCounts, setKwCounts] = useState<{ app: number; game: number }>({ app: 0, game: 0 })
 
   // 更新词库 modal
   const [cleanSite, setCleanSite] = useState<CompetitorRow | null>(null)
@@ -170,38 +171,64 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  async function fetchKeywordsForDate(site: CompetitorRow, date: string) {
+  async function buildKwQuery(supabase: ReturnType<typeof getBrowserClient>, site: CompetitorRow, date: string, tab: 'app' | 'game') {
+    if (tab === 'game') {
+      return supabase.from('raw_keywords')
+        .select('keyword, source_url, discovered_at, content_date, content_type')
+        .eq('site_id', site.site_id).eq('content_date', date)
+        .eq('content_type', 'game')
+        .not('keyword', 'like', '%电脑版%')
+        .order('keyword', { ascending: true }).limit(1000)
+    }
+    return supabase.from('raw_keywords')
+      .select('keyword, source_url, discovered_at, content_date, content_type')
+      .eq('site_id', site.site_id).eq('content_date', date)
+      .or('content_type.eq.app,content_type.is.null')
+      .not('keyword', 'like', '%电脑版%')
+      .order('keyword', { ascending: true }).limit(1000)
+  }
+
+  async function fetchKeywordsForDate(site: CompetitorRow, date: string, tab: 'app' | 'game') {
     setKwLoading(true)
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      const { data, error: err } = await supabase
-        .from('raw_keywords')
-        .select('keyword, source_url, discovered_at, content_date, content_type')
-        .eq('site_id', site.site_id)
-        .eq('content_date', date)
-        .order('keyword', { ascending: true })
-        .limit(3000)
-      if (err) throw err
-      const filtered = ((data || []) as Keyword[]).filter((kw) => !kw.keyword.includes('电脑版'))
-      setSiteKeywords(filtered)
-      // Upsert counts so the main table stays fresh (fire-and-forget)
-      Promise.all([
+      // Count queries + keyword list in parallel
+      const [appRes, gameRes, kwRes] = await Promise.all([
         supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
           .eq('site_id', site.site_id).eq('content_type', 'app')
-          .eq('content_date', date)
-          .not('keyword', 'like', '%电脑版%'),
+          .eq('content_date', date).not('keyword', 'like', '%电脑版%'),
         supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
           .eq('site_id', site.site_id).eq('content_type', 'game')
-          .eq('content_date', date)
-          .not('keyword', 'like', '%电脑版%'),
-      ]).then(([appRes, gameRes]) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(supabase.from('competitor_kw_stats') as any).upsert(
-          { site_id: site.site_id, stat_date: date, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
-          { onConflict: 'site_id,stat_date' }
-        ).then(() => loadData()).catch((e: unknown) => { console.error('competitor_kw_stats upsert failed:', e); loadData() })
-      }).catch(() => {})
+          .eq('content_date', date).not('keyword', 'like', '%电脑版%'),
+        buildKwQuery(supabase, site, date, tab),
+      ])
+      const appCount = appRes.count ?? 0
+      const gameCount = gameRes.count ?? 0
+      setKwCounts({ app: appCount, game: gameCount })
+      if (kwRes.error) throw kwRes.error
+      setSiteKeywords((kwRes.data || []) as Keyword[])
+      // Upsert counts so the main table stays fresh (fire-and-forget)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(supabase.from('competitor_kw_stats') as any).upsert(
+        { site_id: site.site_id, stat_date: date, app_count: appCount, game_count: gameCount, updated_at: new Date().toISOString() },
+        { onConflict: 'site_id,stat_date' }
+      ).then(() => loadData()).catch(() => loadData())
+    } catch {
+      setSiteKeywords([])
+    } finally {
+      setKwLoading(false)
+    }
+  }
+
+  async function fetchKeywordsForTab(site: CompetitorRow, date: string, tab: 'app' | 'game') {
+    setKwLoading(true)
+    setSiteKeywords([])
+    try {
+      const supabase = getBrowserClient()
+      const { data, error: err } = await buildKwQuery(supabase, site, date, tab)
+      if (err) throw err
+      setSiteKeywords((data || []) as Keyword[])
     } catch {
       setSiteKeywords([])
     } finally {
@@ -214,12 +241,20 @@ export default function CompetitorDailyPage() {
     setSelectedSite(site)
     setKwDate(date)
     setKwTab('app')
-    fetchKeywordsForDate(site, date)
+    setKwCounts({ app: 0, game: 0 })
+    fetchKeywordsForDate(site, date, 'app')
   }
 
   function handleKwDateChange(date: string) {
     setKwDate(date)
-    if (selectedSite) fetchKeywordsForDate(selectedSite, date)
+    setKwTab('app')
+    setKwCounts({ app: 0, game: 0 })
+    if (selectedSite) fetchKeywordsForDate(selectedSite, date, 'app')
+  }
+
+  function handleKwTabChange(tab: 'app' | 'game') {
+    setKwTab(tab)
+    if (selectedSite && kwDate) fetchKeywordsForTab(selectedSite, kwDate, tab)
   }
 
   async function viewCleanedKeywords(site: CompetitorRow) {
@@ -478,9 +513,7 @@ export default function CompetitorDailyPage() {
 
       {/* 昨日新词 Modal */}
       {selectedSite && (() => {
-        const appKeywords = siteKeywords.filter((kw) => (kw.content_type || 'app') === 'app')
-        const gameKeywords = siteKeywords.filter((kw) => kw.content_type === 'game')
-        const filteredKeywords = kwTab === 'app' ? appKeywords : gameKeywords
+        const filteredKeywords = siteKeywords
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
@@ -507,18 +540,18 @@ export default function CompetitorDailyPage() {
                 {(['app', 'game'] as const).map((t) => {
                   const isActive = kwTab === t
                   const label = t === 'app' ? '应用' : '游戏'
-                  const count = t === 'app' ? appKeywords.length : gameKeywords.length
+                  const count = t === 'app' ? kwCounts.app : kwCounts.game
                   const activeClass = t === 'app' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
                   return (
                     <button
                       key={t}
-                      onClick={() => setKwTab(t)}
+                      onClick={() => handleKwTabChange(t)}
                       className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${
                         isActive ? activeClass : 'border-transparent text-gray-500 hover:text-gray-700'
                       }`}
                     >
                       {label}
-                      {!kwLoading && count > 0 && (
+                      {count > 0 && (
                         <span className="ml-1.5 text-xs text-gray-400">({count})</span>
                       )}
                     </button>
