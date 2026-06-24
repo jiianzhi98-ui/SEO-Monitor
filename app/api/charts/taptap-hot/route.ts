@@ -3,16 +3,7 @@ import { NextResponse } from 'next/server'
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 
-const ICON_LABEL: Record<number, string> = { 2: '首发', 6: '上升' }
-
-function isSkippable(s: string): boolean {
-  if (s.length <= 1) return true
-  if (s.startsWith('http') || s.startsWith('0x') || s.startsWith('service=')) return true
-  if (['png', 'gif', 'jpg', 'webp', 'jpeg'].includes(s)) return true
-  // Skip pure ASCII strings (property keys like "keyword", "url", "width", etc.)
-  if (/^[\x00-\x7F]+$/.test(s)) return true
-  return false
-}
+type HotItem = { rank: number; name: string; labels: string[] }
 
 export async function GET() {
   try {
@@ -27,45 +18,60 @@ export async function GET() {
 
     const html = await res.text()
 
-    const hsIdx = html.indexOf('"hot_search"')
-    if (hsIdx < 0) return NextResponse.json({ items: [] })
-    const chunk = html.slice(hsIdx, hsIdx + 8000)
-
-    const items: { rank: number; name: string; labels: string[] }[] = []
-
-    // Find each item by locating its service string, then looking backward for the keyword
-    const serviceRe = /"service=[^"]*scenes=[^"]*"/g
-    let sm: RegExpExecArray | null
-
-    while ((sm = serviceRe.exec(chunk)) !== null) {
-      if (items.length >= 20) break
-
-      // Look backward up to 800 chars from this service string
-      const lookback = chunk.slice(Math.max(0, sm.index - 800), sm.index)
-
-      // Find the last non-skippable quoted string — that's the keyword
-      const strRe = /"([^"]*)"/g
-      let lastKw = ''
-      let lastKwEnd = -1
-      let kwm: RegExpExecArray | null
-      while ((kwm = strRe.exec(lookback)) !== null) {
-        if (!isSkippable(kwm[1])) {
-          lastKw = kwm[1]
-          lastKwEnd = kwm.index + kwm[0].length
-        }
-      }
-      if (!lastKw) continue
-
-      // Check if an icon_type number follows the keyword (indicates badge)
-      const afterKw = lookback.slice(lastKwEnd)
-      const iconMatch = afterKw.match(/^,([1-9]),\{"url":\d+/)
+    // --- Step 1: rendered anchors (server-renders ~9 items) ---
+    // Gives correct keywords including ASCII names like Phigros, plus label badges.
+    const renderedItems: HotItem[] = []
+    const anchorRe =
+      /class="[^"]*tap-hot-search-item__wrapper[^"]*"[^>]+href="\/search\/([^"?]+)|href="\/search\/([^"?]+)"[^>]*class="[^"]*tap-hot-search-item__wrapper/g
+    let m: RegExpExecArray | null
+    while ((m = anchorRe.exec(html)) !== null) {
+      if (renderedItems.length >= 20) break
+      const encoded = m[1] ?? m[2]
+      if (!encoded) continue
+      const keyword = decodeURIComponent(encoded)
+      const anchorStart = html.lastIndexOf('<a ', m.index)
+      const anchorEnd = html.indexOf('</a>', m.index) + 4
+      const anchorHtml = anchorStart >= 0 && anchorEnd > anchorStart ? html.slice(anchorStart, anchorEnd) : ''
       const labels: string[] = []
-      if (iconMatch) {
-        const lbl = ICON_LABEL[parseInt(iconMatch[1])]
-        if (lbl) labels.push(lbl)
-      }
+      if (/活动/.test(anchorHtml)) labels.push('活动')
+      if (/首发/.test(anchorHtml)) labels.push('首发')
+      if (/UP/.test(anchorHtml)) labels.push('上升')
+      renderedItems.push({ rank: renderedItems.length + 1, name: keyword, labels })
+    }
 
-      items.push({ rank: items.length + 1, name: lastKw, labels })
+    // --- Step 2: serialized data chunk (all 20 items, but item 1 extracts '热搜' so skip it) ---
+    // The page embeds a flat Vuex store with service= URLs as delimiters between items.
+    // Taking the last non-ASCII quoted string between consecutive service= URLs gives the keyword.
+    const serializedItems: string[] = [] // index i → rank (i+1)
+    const hotIdx = html.indexOf('"hot_search"')
+    if (hotIdx >= 0) {
+      const chunk = html.slice(hotIdx, hotIdx + 8000)
+      const svcRe = /"service=[^"]*scenes=[^"]*"/g
+      const svcMatches: RegExpExecArray[] = []
+      let sm: RegExpExecArray | null
+      while ((sm = svcRe.exec(chunk)) !== null) svcMatches.push(sm)
+
+      for (let i = 0; i < svcMatches.length && i < 20; i++) {
+        const segStart = i === 0 ? 0 : svcMatches[i - 1].index + svcMatches[i - 1][0].length
+        const segEnd = svcMatches[i].index
+        const segment = chunk.slice(segStart, segEnd)
+        const allQuoted = [...segment.matchAll(/"([^"]+)"/g)].map((q) => q[1])
+        // Last string with a non-ASCII character is the keyword (title/display_word precedes service= URL)
+        const keyword = [...allQuoted].reverse().find((s) => /[^\x00-\x7F]/.test(s)) ?? ''
+        serializedItems.push(keyword)
+      }
+    }
+
+    // --- Step 3: merge — rendered wins for ranks it covers, serialized fills the rest ---
+    const items: HotItem[] = []
+    for (let rank = 1; rank <= 20; rank++) {
+      const rendered = renderedItems[rank - 1]
+      const serialized = serializedItems[rank - 1]
+      if (rendered) {
+        items.push(rendered)
+      } else if (serialized) {
+        items.push({ rank, name: serialized, labels: [] })
+      }
     }
 
     return NextResponse.json({ items })
