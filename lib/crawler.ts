@@ -274,7 +274,7 @@ async function fetchRankPage(
   cookie = '',
   ua: string,
   isToday = false
-): Promise<{ keyword: string; volume: number }[]> {
+): Promise<{ keyword: string; volume: number }[] | null> {
   const suffix = page === 1 ? '' : `${page}/`
   // Today's aizhan URLs omit the date segment for both rankup and rankdown
   const url = isToday
@@ -299,6 +299,11 @@ async function fetchRankPage(
       const challengeCookie = cookieMatch[1].split(';')[0]
       if (challengeCookie === cookie) return []  // same cookie returned — stuck, bail out
       return fetchRankPage(domain, type, rankPos, date, page, challengeCookie, ua, isToday)
+    }
+
+    // 检测登录墙：返回了登录页而非排名数据（null = 被拦截，区别于 [] = 无数据）
+    if (!html.includes('<tbody') && (html.includes('login_fixedt') || html.includes('wic_login') || html.includes('请登录'))) {
+      return null
     }
 
     const $ = cheerio.load(html)
@@ -351,6 +356,7 @@ export async function fetchRankChanges(
       const entries: { keyword: string; volume: number }[] = []
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankPage(domain, type, rankPos, date, page, sharedCookie, ua, isToday)
+        if (pageEntries === null) throw new Error('AIZHAN_LOGIN_WALL')
         if (pageEntries.length === 0) break
         entries.push(...pageEntries.filter((e) => e.volume > 0))
         if (page < 15) await new Promise((r) => setTimeout(r, 300))

@@ -271,8 +271,9 @@ export async function GET(request: Request) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('keyword_volume') as any).upsert(kwNoVol, { onConflict: 'keyword', ignoreDuplicates: true })
         }
-      } catch {
-        // rank fetch failure does not block other processing
+      } catch (rankErr) {
+        const msg = rankErr instanceof Error ? rankErr.message : '排名抓取失败'
+        results.push({ site: site.domain, count: -1, error: msg })
       }
     }
 
