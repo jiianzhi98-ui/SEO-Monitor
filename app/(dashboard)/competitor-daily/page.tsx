@@ -181,7 +181,7 @@ export default function CompetitorDailyPage() {
         .eq('site_id', site.site_id)
         .eq('content_date', date)
         .order('keyword', { ascending: true })
-        .limit(500)
+        .limit(3000)
       if (err) throw err
       const filtered = ((data || []) as Keyword[]).filter((kw) => !kw.keyword.includes('电脑版'))
       setSiteKeywords(filtered)
