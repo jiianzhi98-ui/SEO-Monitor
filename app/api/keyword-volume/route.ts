@@ -38,20 +38,32 @@ export async function GET(req: Request) {
     return NextResponse.json({ keywords: result })
   }
 
+  if (exportAll) {
+    const batchSize = 2000
+    let offset = 0
+    const allRows: { keyword: string; volume: number }[] = []
+    while (true) {
+      const { data, error } = await supabase
+        .from('keyword_volume')
+        .select('keyword, volume')
+        .order('volume', { ascending: false })
+        .range(offset, offset + batchSize - 1)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (!data || data.length === 0) break
+      allRows.push(...data)
+      if (data.length < batchSize) break
+      offset += batchSize
+    }
+    return NextResponse.json({ keywords: allRows })
+  }
+
   let query = supabase
     .from('keyword_volume')
     .select('keyword, volume')
     .order('volume', { ascending: false })
 
-  if (q) {
-    query = query.ilike('keyword', `%${q}%`)
-  }
-
-  if (!exportAll) {
-    query = query.limit(50)
-  } else {
-    query = query.limit(100000)
-  }
+  if (q) query = query.ilike('keyword', `%${q}%`)
+  query = query.limit(50)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

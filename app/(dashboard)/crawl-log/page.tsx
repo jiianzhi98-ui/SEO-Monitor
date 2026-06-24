@@ -12,17 +12,16 @@ export default function CrawlLogPage() {
         <div className="card p-5">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-base font-semibold text-gray-900">抓取架构</h2>
-            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">GitHub Actions → Vercel /api/cron</span>
+            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">cron-job.org → Vercel /api/cron</span>
           </div>
           <div className="space-y-2 text-sm text-gray-600">
-            <p>GitHub Actions 按时间触发，逐站点调用 <code className="text-xs bg-gray-100 px-1 rounded">/api/cron?site=域名&step=步骤</code>，每个站点独立一次 Vercel 函数调用。三个步骤相互独立，某步骤失败不影响其他步骤运行。</p>
+            <p>cron-job.org 按时间触发，直接调用 Vercel <code className="text-xs bg-gray-100 px-1 rounded">/api/cron?step=步骤</code>，请求头带 <code className="text-xs bg-gray-100 px-1 rounded">Authorization: Bearer …</code> 验证。API 内部遍历所有已启用站点，三个步骤相互独立，某步骤失败不影响其他步骤。GitHub Actions 仅保留 <code className="text-xs bg-gray-100 px-1 rounded">workflow_dispatch</code> 供手动触发。</p>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="bg-gray-50">
                     <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">步骤</th>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">触发时间（Malaysia UTC+8）</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">站点顺序</th>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">站点间隔</th>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">预计用时（25站）</th>
                   </tr>
@@ -31,22 +30,19 @@ export default function CrawlLogPage() {
                   <tr>
                     <td className="px-3 py-2 border border-gray-100 font-medium text-gray-700">关键词抓取</td>
                     <td className="px-3 py-2 border border-gray-100">00:00（<code>0 16 * * *</code> UTC）</td>
-                    <td className="px-3 py-2 border border-gray-100">随机</td>
-                    <td className="px-3 py-2 border border-gray-100">3 秒</td>
+                    <td className="px-3 py-2 border border-gray-100">无</td>
                     <td className="px-3 py-2 border border-gray-100">~10 分钟</td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 border border-gray-100 font-medium text-gray-700">排名变动</td>
                     <td className="px-3 py-2 border border-gray-100">02:00（<code>0 18 * * *</code> UTC）</td>
-                    <td className="px-3 py-2 border border-gray-100">随机</td>
-                    <td className="px-3 py-2 border border-gray-100">10 秒</td>
+                    <td className="px-3 py-2 border border-gray-100">无</td>
                     <td className="px-3 py-2 border border-gray-100">~10 分钟</td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 border border-gray-100 font-medium text-gray-700">权重 + 收录</td>
                     <td className="px-3 py-2 border border-gray-100">07:00（<code>0 23 * * *</code> UTC）</td>
-                    <td className="px-3 py-2 border border-gray-100">随机</td>
-                    <td className="px-3 py-2 border border-gray-100">10 秒</td>
+                    <td className="px-3 py-2 border border-gray-100">3 秒（API 内置）</td>
                     <td className="px-3 py-2 border border-gray-100">~10 分钟</td>
                   </tr>
                 </tbody>
@@ -110,7 +106,7 @@ export default function CrawlLogPage() {
                 </div>
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">限流保护</span>
-                  <span>涨入抓完后等 <strong>500ms</strong> 再抓跌出；当涨入和跌出均为 0 时视为被限流，等待 <strong>30 秒</strong>后重试，最多重试 <strong>2 次</strong>（每次重试换新 UA）</span>
+                  <span>涨入抓完后等 <strong>2 秒</strong> 再抓跌出；当涨入和跌出均为 0 时视为被限流，等待 <strong>5 秒</strong>后重试，最多重试 <strong>1 次</strong>（每次重试换新 UA）</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">去重</span>

@@ -7,63 +7,31 @@ function getMY(offsetDays = 0) {
   return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
 }
 
-interface SiteRow { id: string; domain: string }
-interface RawKwRow { keyword: string; site_id: string }
-interface RankRow { keyword: string; site_id: string; volume: number }
+interface NewWordRow { keyword: string; site_count: number; total_count: number; sites: string[] }
+interface RankWordRow { keyword: string; site_count: number; max_volume: number; sites: string[] }
 
 export async function GET() {
   const supabase = createServiceClient()
   const since = getMY(-30)
 
-  const { data: sitesRaw } = await supabase.from('sites').select('id, domain')
-  const siteMap = new Map(((sitesRaw || []) as SiteRow[]).map((s) => [s.id, s.domain]))
+  const [{ data: newWordsRaw }, { data: rankWordsRaw }] = await Promise.all([
+    supabase.rpc('get_hot_new_words', { p_since: since }),
+    supabase.rpc('get_hot_rank_words', { p_since: since }),
+  ])
 
-  // 共新增词
-  const { data: rawKws } = await supabase
-    .from('raw_keywords')
-    .select('keyword, site_id')
-    .gte('discovered_at', since)
+  const newWords = ((newWordsRaw || []) as NewWordRow[]).map((r) => ({
+    keyword: r.keyword,
+    count: Number(r.total_count),
+    siteCount: Number(r.site_count),
+    sites: r.sites || [],
+  }))
 
-  const newAgg = new Map<string, { siteIds: Set<string>; count: number }>()
-  for (const row of (rawKws || []) as RawKwRow[]) {
-    if (!newAgg.has(row.keyword)) newAgg.set(row.keyword, { siteIds: new Set(), count: 0 })
-    const e = newAgg.get(row.keyword)!
-    e.siteIds.add(row.site_id)
-    e.count++
-  }
-  const newWords = Array.from(newAgg.entries())
-    .filter(([, v]) => v.siteIds.size >= 2)
-    .map(([keyword, v]) => ({
-      keyword,
-      count: v.count,
-      siteCount: v.siteIds.size,
-      sites: Array.from(v.siteIds).map((id) => siteMap.get(id) ?? id),
-    }))
-    .sort((a, b) => b.siteCount - a.siteCount || b.count - a.count)
-
-  // 竞品涨排名
-  const { data: rankRows } = await supabase
-    .from('rank_changes')
-    .select('keyword, site_id, volume')
-    .eq('type', 'rankup')
-    .gte('stat_date', since)
-
-  const rankAgg = new Map<string, { siteIds: Set<string>; maxVolume: number }>()
-  for (const row of (rankRows || []) as RankRow[]) {
-    if (!rankAgg.has(row.keyword)) rankAgg.set(row.keyword, { siteIds: new Set(), maxVolume: 0 })
-    const e = rankAgg.get(row.keyword)!
-    e.siteIds.add(row.site_id)
-    e.maxVolume = Math.max(e.maxVolume, row.volume ?? 0)
-  }
-  const rankWords = Array.from(rankAgg.entries())
-    .filter(([, v]) => v.siteIds.size >= 2)
-    .map(([keyword, v]) => ({
-      keyword,
-      siteCount: v.siteIds.size,
-      volume: v.maxVolume,
-      sites: Array.from(v.siteIds).map((id) => siteMap.get(id) ?? id),
-    }))
-    .sort((a, b) => b.siteCount - a.siteCount || b.volume - a.volume)
+  const rankWords = ((rankWordsRaw || []) as RankWordRow[]).map((r) => ({
+    keyword: r.keyword,
+    siteCount: Number(r.site_count),
+    volume: Number(r.max_volume),
+    sites: r.sites || [],
+  }))
 
   return NextResponse.json({ newWords, rankWords })
 }

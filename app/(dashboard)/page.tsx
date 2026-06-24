@@ -572,7 +572,10 @@ function KeywordSearchCard() {
     <>
       <div className="rounded-xl border border-green-300 bg-white p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-medium text-gray-600">搜索量查询</span>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400" />
+            <span className="text-sm font-medium text-gray-600">搜索量查询</span>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => openExportDialog('today')}
