@@ -17,10 +17,18 @@ jobs:
   crawl:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    env:
-      BASE_URL: https://seo-monitor-iota.vercel.app
 
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Determine step
         id: vars
         run: |
@@ -33,69 +41,13 @@ jobs:
           elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
             STEP="rank"
           else
-            STEP="weight"
+            STEP="all"
           fi
           echo "step=$STEP" >> $GITHUB_OUTPUT
           echo "Running step: $STEP"
 
-      - name: Fetch site list
-        id: sites
-        run: |
-          DOMAINS=$(curl -sf "$BASE_URL/api/sites/domains" | jq -r '.[]')
-          echo "domains<<EOF" >> $GITHUB_OUTPUT
-          echo "$DOMAINS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Keywords — per site
-        if: steps.vars.outputs.step == 'keywords' || steps.vars.outputs.step == 'all'
-        run: |
-          first=true
-          echo "${{ steps.sites.outputs.domains }}" | shuf | while read domain; do
-            [ -z "$domain" ] && continue
-            if [ "$first" = true ]; then
-              first=false
-            else
-              sleep 3
-            fi
-            echo "=== Keywords: $domain ==="
-            result=$(curl -s --max-time 90 \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron?site=$domain&step=keywords") || true
-            echo "$result" | jq . 2>/dev/null || echo "Error: $result"
-          done
-
-      - name: Rank changes — per site
-        if: steps.vars.outputs.step == 'rank' || steps.vars.outputs.step == 'all'
-        run: |
-          first=true
-          echo "${{ steps.sites.outputs.domains }}" | shuf | while read domain; do
-            [ -z "$domain" ] && continue
-            if [ "$first" = true ]; then
-              first=false
-            else
-              sleep 10
-            fi
-            echo "=== Rank: $domain ==="
-            result=$(curl -s --max-time 120 \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron?site=$domain&step=rank") || true
-            echo "$result" | jq . 2>/dev/null || echo "Error: $result"
-          done
-
-      - name: Weight + index — per site
-        if: steps.vars.outputs.step == 'weight' || steps.vars.outputs.step == 'all'
-        run: |
-          first=true
-          echo "${{ steps.sites.outputs.domains }}" | shuf | while read domain; do
-            [ -z "$domain" ] && continue
-            if [ "$first" = true ]; then
-              first=false
-            else
-              sleep 10
-            fi
-            echo "=== Weight: $domain ==="
-            result=$(curl -s --max-time 90 \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron?site=$domain&step=weight") || true
-            echo "$result" | jq . 2>/dev/null || echo "Error: $result"
-          done
+      - name: Run crawl
+        run: npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }}
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
