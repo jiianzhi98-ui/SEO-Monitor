@@ -56,9 +56,10 @@ jobs:
               sleep 3
             fi
             echo "=== Keywords: $domain ==="
-            curl -f -s \
+            result=$(curl -s --max-time 90 \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron?site=$domain&step=keywords" | jq .
+              "$BASE_URL/api/cron?site=$domain&step=keywords") || true
+            echo "$result" | jq . 2>/dev/null || echo "Error: $result"
           done
 
       - name: Rank changes — per site
@@ -73,9 +74,10 @@ jobs:
               sleep 10
             fi
             echo "=== Rank: $domain ==="
-            curl -f -s \
+            result=$(curl -s --max-time 120 \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron?site=$domain&step=rank" | jq .
+              "$BASE_URL/api/cron?site=$domain&step=rank") || true
+            echo "$result" | jq . 2>/dev/null || echo "Error: $result"
           done
 
       - name: Weight + index — per site
@@ -90,7 +92,8 @@ jobs:
               sleep 10
             fi
             echo "=== Weight: $domain ==="
-            curl -f -s \
+            result=$(curl -s --max-time 90 \
               -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              "$BASE_URL/api/cron?site=$domain&step=weight" | jq .
+              "$BASE_URL/api/cron?site=$domain&step=weight") || true
+            echo "$result" | jq . 2>/dev/null || echo "Error: $result"
           done
