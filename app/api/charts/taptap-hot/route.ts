@@ -55,9 +55,9 @@ export async function GET() {
         const segStart = i === 0 ? 0 : svcMatches[i - 1].index + svcMatches[i - 1][0].length
         const segEnd = svcMatches[i].index
         const segment = chunk.slice(segStart, segEnd)
-        const allQuoted = [...segment.matchAll(/"([^"]+)"/g)].map((q) => q[1])
+        const allQuoted = Array.from(segment.matchAll(/"([^"]+)"/g)).map((q) => q[1])
         // Last string with a non-ASCII character is the keyword (title/display_word precedes service= URL)
-        const keyword = [...allQuoted].reverse().find((s) => /[^\x00-\x7F]/.test(s)) ?? ''
+        const keyword = allQuoted.reverse().find((s) => /[^\x00-\x7F]/.test(s)) ?? ''
         serializedItems.push(keyword)
       }
     }
