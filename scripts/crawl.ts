@@ -214,11 +214,11 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
         )
       }
 
-      console.log(`  [ok] ${site.domain} +${newCount}`)
+      console.log(`  [ok] ${site.domain}  抓到=${rawEntries.length} 新增=${newCount}`)
     } catch (e) {
       console.error(`  [err] ${site.domain}`, e instanceof Error ? e.message : e)
     }
-    await delay(3000) // 站点间间隔，避免外部站点和 Supabase 限流
+    await delay(5000) // 站点间间隔，避免外部站点和 Supabase 限流
   }
 
   // 清理旧数据
