@@ -100,9 +100,9 @@ export default function HotRadarPage() {
         return { keyword, dims, volume: rwMap.get(keyword)?.volume ?? null }
       })
       .filter((w) => w.dims.length >= 2)
-      .sort((a, b) => b.dims.length - a.dims.length)
+      .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0) || b.dims.length - a.dims.length)
 
-    return { newWords: nw, rankWords: rw, crossWords: cw }
+    return { newWords: nw, rankWords: rw.sort((a, b) => b.volume - a.volume || b.siteCount - a.siteCount), crossWords: cw }
   }, [data, minSites])
 
   async function copyKw(kw: string) {
