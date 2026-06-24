@@ -441,7 +441,7 @@ export default function CompetitorDailyPage() {
         }
       }
 
-      setUnstableData(results.sort((a, b) => b.totalDays - a.totalDays))
+      setUnstableData(results.sort((a, b) => b.volume - a.volume || b.totalDays - a.totalDays))
     } catch {
       setUnstableData([])
     } finally {
