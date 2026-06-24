@@ -14,9 +14,11 @@ export async function GET() {
   const supabase = createServiceClient()
   const since = getMY(-30)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any
   const [{ data: newWordsRaw }, { data: rankWordsRaw }] = await Promise.all([
-    supabase.rpc('get_hot_new_words', { p_since: since }),
-    supabase.rpc('get_hot_rank_words', { p_since: since }),
+    db.rpc('get_hot_new_words', { p_since: since }),
+    db.rpc('get_hot_rank_words', { p_since: since }),
   ])
 
   const newWords = ((newWordsRaw || []) as NewWordRow[]).map((r) => ({
