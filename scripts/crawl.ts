@@ -57,6 +57,12 @@ function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+// supabase-js 出错时不 throw，只在返回值带 error 字段，需要手动检查
+function sbCheck<T extends { error: unknown }>(res: T, label: string): T {
+  if (res.error) throw new Error(`[Supabase] ${label}: ${JSON.stringify(res.error)}`)
+  return res
+}
+
 // Supabase 写入失败时自动重试（网络抖动/短暂限流）
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, waitMs = 5000): Promise<T> {
   for (let i = 0; i < retries; i++) {
@@ -171,16 +177,19 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
         newCount = newEntries.length
 
         if (newEntries.length > 0) {
-          await withRetry(() =>
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (supabase.from('raw_keywords') as any).insert(
-              newEntries.map((e) => ({
-                keyword: e.keyword,
-                site_id: site.id,
-                discovered_at: new Date().toISOString(),
-                content_date: e.content_date || yesterday,
-                content_type: e.content_type || 'app',
-              }))
+          await withRetry(async () =>
+            sbCheck(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (supabase.from('raw_keywords') as any).insert(
+                newEntries.map((e) => ({
+                  keyword: e.keyword,
+                  site_id: site.id,
+                  discovered_at: new Date().toISOString(),
+                  content_date: e.content_date || yesterday,
+                  content_type: e.content_type || 'app',
+                }))
+              ),
+              'raw_keywords insert'
             )
           )
         }
@@ -248,7 +257,7 @@ async function runRank(sites: SiteRecord[], today: string) {
         await withRetry(async () => {
           await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('rank_changes') as any).insert(rankRows)
+          sbCheck(await (supabase.from('rank_changes') as any).insert(rankRows), 'rank_changes insert')
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
         })
