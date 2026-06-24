@@ -237,12 +237,14 @@ export async function GET(request: Request) {
         await new Promise((r) => setTimeout(r, 2000))
         let rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
         await new Promise((r) => setTimeout(r, 2000))
-        // Retry once if both returned 0 — likely rate-limited
-        for (let retry = 0; retry < 1; retry++) {
-          if (rankupEntries.length > 0 || rankdownEntries.length > 0) break
+        // Retry each type individually if it returned 0 — one may succeed while the other got rate-limited
+        if (rankupEntries.length === 0) {
           await new Promise((r) => setTimeout(r, 5000))
           rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
           await new Promise((r) => setTimeout(r, 2000))
+        }
+        if (rankdownEntries.length === 0) {
+          await new Promise((r) => setTimeout(r, 5000))
           rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
           await new Promise((r) => setTimeout(r, 2000))
         }
