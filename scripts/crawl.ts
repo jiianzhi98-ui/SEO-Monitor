@@ -57,6 +57,20 @@ function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+// Supabase 写入失败时自动重试（网络抖动/短暂限流）
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, waitMs = 5000): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (i === retries - 1) throw e
+      console.warn(`    [retry ${i + 1}/${retries}] ${e instanceof Error ? e.message : e}`)
+      await delay(waitMs)
+    }
+  }
+  throw new Error('unreachable')
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SiteRecord {
@@ -157,15 +171,17 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
         newCount = newEntries.length
 
         if (newEntries.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('raw_keywords') as any).insert(
-            newEntries.map((e) => ({
-              keyword: e.keyword,
-              site_id: site.id,
-              discovered_at: new Date().toISOString(),
-              content_date: e.content_date || yesterday,
-              content_type: e.content_type || 'app',
-            }))
+          await withRetry(() =>
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabase.from('raw_keywords') as any).insert(
+              newEntries.map((e) => ({
+                keyword: e.keyword,
+                site_id: site.id,
+                discovered_at: new Date().toISOString(),
+                content_date: e.content_date || yesterday,
+                content_type: e.content_type || 'app',
+              }))
+            )
           )
         }
       }
@@ -193,6 +209,7 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
     } catch (e) {
       console.error(`  [err] ${site.domain}`, e instanceof Error ? e.message : e)
     }
+    await delay(3000) // 站点间间隔，避免外部站点和 Supabase 限流
   }
 
   // 清理旧数据
@@ -228,11 +245,13 @@ async function runRank(sites: SiteRecord[], today: string) {
         ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
       ]
       if (rankRows.length > 0) {
-        await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('rank_changes') as any).insert(rankRows)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
+        await withRetry(async () => {
+          await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('rank_changes') as any).insert(rankRows)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
+        })
       }
 
       const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
