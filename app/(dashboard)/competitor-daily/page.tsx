@@ -98,6 +98,10 @@ export default function CompetitorDailyPage() {
   const [unstableData, setUnstableData] = useState<UnstableEntry[]>([])
   const [unstableLoading, setUnstableLoading] = useState(false)
 
+  // 重新抓取
+  const [rankCrawling, setRankCrawling] = useState(false)
+  const [kwCrawling, setKwCrawling] = useState(false)
+
 
   function getMalaysiaDate(offsetDays = 0) {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
@@ -233,6 +237,36 @@ export default function CompetitorDailyPage() {
       setSiteKeywords([])
     } finally {
       setKwLoading(false)
+    }
+  }
+
+  async function triggerRankCrawl() {
+    if (!rankSite) return
+    setRankCrawling(true)
+    try {
+      await fetch('/api/trigger-crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site: rankSite.domain, step: 'rank' }),
+      })
+      await fetchAllRankData(rankSite, rankDate)
+    } finally {
+      setRankCrawling(false)
+    }
+  }
+
+  async function triggerKwCrawl() {
+    if (!selectedSite) return
+    setKwCrawling(true)
+    try {
+      await fetch('/api/trigger-crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site: selectedSite.domain, step: 'keywords' }),
+      })
+      await fetchKeywordsForDate(selectedSite, kwDate, kwTab)
+    } finally {
+      setKwCrawling(false)
     }
   }
 
@@ -529,11 +563,20 @@ export default function CompetitorDailyPage() {
                     className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
                   />
                 </div>
-                <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={triggerKwCrawl}
+                    disabled={kwCrawling}
+                    className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-40"
+                  >
+                    {kwCrawling ? '抓取中…' : '重抓'}
+                  </button>
+                  <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               {/* Tabs */}
               <div className="flex border-b border-gray-200 px-5">
@@ -666,11 +709,20 @@ export default function CompetitorDailyPage() {
                   className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 />
               </div>
-              <button onClick={() => setRankSite(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={triggerRankCrawl}
+                  disabled={rankCrawling}
+                  className="text-xs text-gray-400 hover:text-purple-600 px-2 py-1 rounded hover:bg-purple-50 transition-colors disabled:opacity-40"
+                >
+                  {rankCrawling ? '抓取中…' : '重抓'}
+                </button>
+                <button onClick={() => setRankSite(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             {/* Tabs */}
             <div className="flex border-b border-gray-200 px-5">

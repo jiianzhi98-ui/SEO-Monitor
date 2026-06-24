@@ -47,6 +47,21 @@ export default function IndexMonitorPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedSite, setSelectedSite] = useState<IndexRow | null>(null)
+  const [crawling, setCrawling] = useState<string | null>(null)
+
+  async function triggerCrawl(domain: string) {
+    setCrawling(domain)
+    try {
+      await fetch('/api/trigger-crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site: domain, step: 'weight' }),
+      })
+      await loadData()
+    } finally {
+      setCrawling(null)
+    }
+  }
 
   useEffect(() => { loadData() }, [])
 
@@ -180,6 +195,13 @@ export default function IndexMonitorPage() {
                               className="text-xs text-gray-500 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
                             >
                               详情
+                            </button>
+                            <button
+                              onClick={() => crawling !== row.domain && triggerCrawl(row.domain)}
+                              disabled={crawling === row.domain}
+                              className="text-xs text-gray-400 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50 transition-colors disabled:opacity-40"
+                            >
+                              {crawling === row.domain ? '抓取中…' : '重抓'}
                             </button>
                           </div>
                         </td>
