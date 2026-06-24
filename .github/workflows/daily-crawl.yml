@@ -1,10 +1,6 @@
 name: Daily SEO Crawl
 
 on:
-  schedule:
-    - cron: '0 16 * * *'   # 00:00 Malaysia (UTC+8) — 关键词抓取
-    - cron: '0 18 * * *'   # 02:00 Malaysia (UTC+8) — 排名变动
-    - cron: '0 23 * * *'   # 07:00 Malaysia (UTC+8) — 权重 + 收录
   workflow_dispatch:
     inputs:
       step:
