@@ -28,6 +28,33 @@ interface RadarData {
 }
 
 type Tab = 'cross' | 'new' | 'rank'
+type PageSize = 50 | 100 | 500
+const PAGE_SIZES: PageSize[] = [50, 100, 500]
+
+function PaginationBar({ page, total, pageSize, onPageChange, onPageSizeChange }: {
+  page: number; total: number; pageSize: PageSize
+  onPageChange: (p: number) => void; onPageSizeChange: (s: PageSize) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50/50 text-xs">
+      <div className="flex items-center gap-1.5 text-gray-500">
+        每页
+        <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)} className="border border-gray-200 rounded px-1 py-0.5 text-xs">
+          {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} 条</option>)}
+        </select>
+        <span className="ml-1 text-gray-400">共 {total} 条</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button disabled={page === 0} onClick={() => onPageChange(0)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">«</button>
+        <button disabled={page === 0} onClick={() => onPageChange(page - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">‹</button>
+        <span className="px-2 text-gray-600">{page + 1} / {totalPages}</span>
+        <button disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">›</button>
+        <button disabled={page >= totalPages - 1} onClick={() => onPageChange(totalPages - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">»</button>
+      </div>
+    </div>
+  )
+}
 
 const TAB_CONFIG: { key: Tab; label: string }[] = [
   { key: 'cross', label: '交叉词' },
@@ -73,6 +100,8 @@ export default function HotRadarPage() {
   const [activeTab, setActiveTab] = useState<Tab>('cross')
   const [minSites, setMinSites] = useState(3)
   const [copiedKw, setCopiedKw] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState<PageSize>(50)
 
   useEffect(() => {
     setLoading(true)
@@ -115,6 +144,16 @@ export default function HotRadarPage() {
     ? { cross: filtered.crossWords.length, new: filtered.newWords.length, rank: filtered.rankWords.length }
     : { cross: 0, new: 0, rank: 0 }
 
+  function handleTabChange(tab: Tab) { setActiveTab(tab); setPage(0) }
+  function handleMinSitesChange(v: number) { setMinSites(v); setPage(0) }
+
+  const activeList = filtered
+    ? activeTab === 'cross' ? filtered.crossWords
+      : activeTab === 'new' ? filtered.newWords
+      : filtered.rankWords
+    : []
+  const pagedList = activeList.slice(page * pageSize, (page + 1) * pageSize)
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -130,7 +169,7 @@ export default function HotRadarPage() {
           return (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => handleTabChange(tab.key)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-green-600 text-white'
@@ -154,7 +193,7 @@ export default function HotRadarPage() {
           <span className="text-xs text-gray-400">最少站点数</span>
           <select
             value={minSites}
-            onChange={(e) => setMinSites(Number(e.target.value))}
+            onChange={(e) => handleMinSitesChange(Number(e.target.value))}
             className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
           >
             <option value={2}>2站</option>
@@ -180,6 +219,7 @@ export default function HotRadarPage() {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 text-sm">{error}</div>
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto">
             {activeTab === 'cross' && (
               <table className="w-full">
@@ -193,12 +233,12 @@ export default function HotRadarPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered?.crossWords.length === 0 ? (
+                  {pagedList.length === 0 ? (
                     <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
                   ) : (
-                    filtered?.crossWords.map((w, i) => (
+                    (pagedList as CrossEntry[]).map((w, i) => (
                       <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                        <td className="table-td text-gray-400 text-xs">{i + 1}</td>
+                        <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td">
                           <div className="flex gap-1.5">
@@ -213,10 +253,7 @@ export default function HotRadarPage() {
                           {w.volume != null ? fmtVolume(w.volume) : '—'}
                         </td>
                         <td className="table-td text-right">
-                          <button
-                            onClick={() => copyKw(w.keyword)}
-                            className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                          >
+                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
                             {copiedKw === w.keyword ? '✓' : '复制'}
                           </button>
                         </td>
@@ -240,12 +277,12 @@ export default function HotRadarPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered?.newWords.length === 0 ? (
+                  {pagedList.length === 0 ? (
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
-                    filtered?.newWords.map((w, i) => (
+                    (pagedList as WordEntry[]).map((w, i) => (
                       <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                        <td className="table-td text-gray-400 text-xs">{i + 1}</td>
+                        <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center text-gray-600">{w.count}次</td>
                         <td className="table-td text-center">
@@ -254,10 +291,7 @@ export default function HotRadarPage() {
                         </td>
                         <td className="table-td"><SiteBadges sites={w.sites} /></td>
                         <td className="table-td text-right">
-                          <button
-                            onClick={() => copyKw(w.keyword)}
-                            className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                          >
+                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
                             {copiedKw === w.keyword ? '✓' : '复制'}
                           </button>
                         </td>
@@ -281,12 +315,12 @@ export default function HotRadarPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered?.rankWords.length === 0 ? (
+                  {pagedList.length === 0 ? (
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
-                    filtered?.rankWords.map((w, i) => (
+                    (pagedList as RankEntry[]).map((w, i) => (
                       <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                        <td className="table-td text-gray-400 text-xs">{i + 1}</td>
+                        <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center">
                           <span className="font-semibold text-gray-900">{w.siteCount}</span>
@@ -295,10 +329,7 @@ export default function HotRadarPage() {
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
                         <td className="table-td"><SiteBadges sites={w.sites} /></td>
                         <td className="table-td text-right">
-                          <button
-                            onClick={() => copyKw(w.keyword)}
-                            className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                          >
+                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
                             {copiedKw === w.keyword ? '✓' : '复制'}
                           </button>
                         </td>
@@ -308,8 +339,15 @@ export default function HotRadarPage() {
                 </tbody>
               </table>
             )}
-
           </div>
+          <PaginationBar
+            page={page}
+            total={activeList.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(ps) => { setPageSize(ps); setPage(0) }}
+          />
+          </>
         )}
       </div>
     </div>

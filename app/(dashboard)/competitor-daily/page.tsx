@@ -37,7 +37,6 @@ interface CleanedEntry {
   variants: string[]
 }
 
-
 interface RankEntry {
   keyword: string
   volume: number
@@ -51,6 +50,9 @@ interface UnstableEntry {
   totalDays: number
 }
 
+type PageSize = 50 | 100 | 500
+const PAGE_SIZES: PageSize[] = [50, 100, 500]
+
 const statusConfig = {
   normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
   warning: { label: '偏低', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
@@ -58,7 +60,38 @@ const statusConfig = {
   high:    { label: '偏高', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-medium' },
 }
 
-// Client-side version of cleanTitle — strips standalone suffix from end of title
+function PaginationBar({ page, total, pageSize, onPageChange, onPageSizeChange }: {
+  page: number
+  total: number
+  pageSize: PageSize
+  onPageChange: (p: number) => void
+  onPageSizeChange: (s: PageSize) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  return (
+    <div className="flex items-center justify-between px-5 py-2.5 border-t border-gray-100 bg-gray-50/50 flex-shrink-0 text-xs">
+      <div className="flex items-center gap-1.5 text-gray-500">
+        每页
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
+          className="border border-gray-200 rounded px-1 py-0.5 text-xs"
+        >
+          {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} 条</option>)}
+        </select>
+        <span className="ml-1 text-gray-400">共 {total} 条</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button disabled={page === 0} onClick={() => onPageChange(0)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">«</button>
+        <button disabled={page === 0} onClick={() => onPageChange(page - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">‹</button>
+        <span className="px-2 text-gray-600">{page + 1} / {totalPages}</span>
+        <button disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">›</button>
+        <button disabled={page >= totalPages - 1} onClick={() => onPageChange(totalPages - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">»</button>
+      </div>
+    </div>
+  )
+}
+
 function cleanTitleClient(title: string, suffixes: string[]): string {
   if (suffixes.length === 0) return title
   const escaped = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -71,6 +104,9 @@ export default function CompetitorDailyPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // 全局分页大小（所有 modal 共用）
+  const [pageSize, setPageSize] = useState<PageSize>(50)
+
   // 昨日新词 modal
   const [selectedSite, setSelectedSite] = useState<CompetitorRow | null>(null)
   const [siteKeywords, setSiteKeywords] = useState<Keyword[]>([])
@@ -78,30 +114,34 @@ export default function CompetitorDailyPage() {
   const [kwDate, setKwDate] = useState('')
   const [kwTab, setKwTab] = useState<'app' | 'game'>('app')
   const [kwCounts, setKwCounts] = useState<{ app: number; game: number }>({ app: 0, game: 0 })
+  const [kwPage, setKwPage] = useState(0)
 
   // 更新词库 modal
   const [cleanSite, setCleanSite] = useState<CompetitorRow | null>(null)
   const [cleanedEntries, setCleanedEntries] = useState<CleanedEntry[]>([])
   const [cleanLoading, setCleanLoading] = useState(false)
   const [expandedBases, setExpandedBases] = useState<Set<string>>(new Set())
+  const [cleanPage, setCleanPage] = useState(0)
 
   // 排名变动 modal
   const [rankSite, setRankSite] = useState<CompetitorRow | null>(null)
   const [rankType, setRankType] = useState<'rankup' | 'rankdown'>('rankup')
   const [rankDate, setRankDate] = useState('')
-  const [rankDataMap, setRankDataMap] = useState<{ rankup: RankEntry[], rankdown: RankEntry[] }>({ rankup: [], rankdown: [] })
+  const [rankPageData, setRankPageData] = useState<RankEntry[]>([])
+  const [rankCounts, setRankCounts] = useState<{ rankup: number; rankdown: number }>({ rankup: 0, rankdown: 0 })
   const [rankLoading, setRankLoading] = useState(false)
+  const [rankPage, setRankPage] = useState(0)
   const [rankUnstableSet, setRankUnstableSet] = useState<Set<string>>(new Set())
 
   // 不稳定词 modal
   const [unstableSite, setUnstableSite] = useState<CompetitorRow | null>(null)
   const [unstableData, setUnstableData] = useState<UnstableEntry[]>([])
   const [unstableLoading, setUnstableLoading] = useState(false)
+  const [unstablePage, setUnstablePage] = useState(0)
 
   // 重新抓取
   const [rankCrawling, setRankCrawling] = useState(false)
   const [kwCrawling, setKwCrawling] = useState(false)
-
 
   function getMalaysiaDate(offsetDays = 0) {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
@@ -175,29 +215,25 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  async function buildKwQuery(supabase: ReturnType<typeof getBrowserClient>, site: CompetitorRow, date: string, tab: 'app' | 'game') {
-    if (tab === 'game') {
-      return supabase.from('raw_keywords')
-        .select('keyword, source_url, discovered_at, content_date, content_type')
-        .eq('site_id', site.site_id).eq('content_date', date)
-        .eq('content_type', 'game')
-        .not('keyword', 'like', '%电脑版%')
-        .order('keyword', { ascending: true }).limit(1000)
-    }
-    return supabase.from('raw_keywords')
+  // ── 昨日新词 ─────────────────────────────────────────────────────────────────
+
+  function buildKwBaseQuery(supabase: ReturnType<typeof getBrowserClient>, site: CompetitorRow, date: string, tab: 'app' | 'game', from: number, to: number) {
+    const base = supabase.from('raw_keywords')
       .select('keyword, source_url, discovered_at, content_date, content_type')
       .eq('site_id', site.site_id).eq('content_date', date)
-      .or('content_type.eq.app,content_type.is.null')
       .not('keyword', 'like', '%电脑版%')
-      .order('keyword', { ascending: true }).limit(1000)
+      .order('keyword', { ascending: true })
+      .range(from, to)
+    if (tab === 'game') return base.eq('content_type', 'game')
+    return base.or('content_type.eq.app,content_type.is.null')
   }
 
-  async function fetchKeywordsForDate(site: CompetitorRow, date: string, tab: 'app' | 'game') {
+  async function fetchKeywordsForDate(site: CompetitorRow, date: string, tab: 'app' | 'game', ps: PageSize = pageSize) {
+    setKwPage(0)
     setKwLoading(true)
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      // Count queries + keyword list in parallel
       const [appRes, gameRes, kwRes] = await Promise.all([
         supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
           .eq('site_id', site.site_id).eq('content_type', 'app')
@@ -205,17 +241,14 @@ export default function CompetitorDailyPage() {
         supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
           .eq('site_id', site.site_id).eq('content_type', 'game')
           .eq('content_date', date).not('keyword', 'like', '%电脑版%'),
-        buildKwQuery(supabase, site, date, tab),
+        buildKwBaseQuery(supabase, site, date, tab, 0, ps - 1),
       ])
-      const appCount = appRes.count ?? 0
-      const gameCount = gameRes.count ?? 0
-      setKwCounts({ app: appCount, game: gameCount })
+      setKwCounts({ app: appRes.count ?? 0, game: gameRes.count ?? 0 })
       if (kwRes.error) throw kwRes.error
       setSiteKeywords((kwRes.data || []) as Keyword[])
-      // Upsert counts so the main table stays fresh (fire-and-forget)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(supabase.from('competitor_kw_stats') as any).upsert(
-        { site_id: site.site_id, stat_date: date, app_count: appCount, game_count: gameCount, updated_at: new Date().toISOString() },
+        { site_id: site.site_id, stat_date: date, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
         { onConflict: 'site_id,stat_date' }
       ).then(() => loadData()).catch(() => loadData())
     } catch {
@@ -225,33 +258,20 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  async function fetchKeywordsForTab(site: CompetitorRow, date: string, tab: 'app' | 'game') {
+  async function fetchKeywordsPage(site: CompetitorRow, date: string, tab: 'app' | 'game', page: number, ps: PageSize = pageSize) {
     setKwLoading(true)
     setSiteKeywords([])
     try {
       const supabase = getBrowserClient()
-      const { data, error: err } = await buildKwQuery(supabase, site, date, tab)
+      const from = page * ps
+      const to = (page + 1) * ps - 1
+      const { data, error: err } = await buildKwBaseQuery(supabase, site, date, tab, from, to)
       if (err) throw err
       setSiteKeywords((data || []) as Keyword[])
     } catch {
       setSiteKeywords([])
     } finally {
       setKwLoading(false)
-    }
-  }
-
-  async function triggerRankCrawl() {
-    if (!rankSite) return
-    setRankCrawling(true)
-    try {
-      await fetch('/api/trigger-crawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ site: rankSite.domain, step: 'rank' }),
-      })
-      await fetchAllRankData(rankSite, rankDate)
-    } finally {
-      setRankCrawling(false)
     }
   }
 
@@ -288,11 +308,26 @@ export default function CompetitorDailyPage() {
 
   function handleKwTabChange(tab: 'app' | 'game') {
     setKwTab(tab)
-    if (selectedSite && kwDate) fetchKeywordsForTab(selectedSite, kwDate, tab)
+    setKwPage(0)
+    if (selectedSite && kwDate) fetchKeywordsForDate(selectedSite, kwDate, tab)
   }
+
+  function handleKwPageChange(page: number) {
+    setKwPage(page)
+    if (selectedSite && kwDate) fetchKeywordsPage(selectedSite, kwDate, kwTab, page)
+  }
+
+  function handleKwPageSizeChange(ps: PageSize) {
+    setPageSize(ps)
+    setKwPage(0)
+    if (selectedSite && kwDate) fetchKeywordsForDate(selectedSite, kwDate, kwTab, ps)
+  }
+
+  // ── 更新词库 ─────────────────────────────────────────────────────────────────
 
   async function viewCleanedKeywords(site: CompetitorRow) {
     setCleanSite(site)
+    setCleanPage(0)
     setCleanLoading(true)
     setCleanedEntries([])
     try {
@@ -306,7 +341,6 @@ export default function CompetitorDailyPage() {
         .gte('discovered_at', since)
         .limit(5000)
 
-      // Deduplicate across days, filter 电脑版, sort shortest first for prefix matching
       const keywords = Array.from(
         new Set(
           ((kwData || []) as { keyword: string }[])
@@ -315,7 +349,6 @@ export default function CompetitorDailyPage() {
         )
       ).sort((a, b) => a.length - b.length)
 
-      // Auto-group by prefix: if keyword A is a prefix of keyword B, they belong to the same group
       const groups = new Map<string, string[]>()
       for (const k of keywords) {
         let matched = false
@@ -342,27 +375,54 @@ export default function CompetitorDailyPage() {
     }
   }
 
-  async function fetchAllRankData(site: CompetitorRow, date: string) {
+  // ── 排名变动 ─────────────────────────────────────────────────────────────────
+
+  async function fetchRankPage(site: CompetitorRow, date: string, type: 'rankup' | 'rankdown', page: number, ps: PageSize = pageSize, fetchCounts = false) {
     setRankLoading(true)
-    setRankDataMap({ rankup: [], rankdown: [] })
+    setRankPageData([])
     try {
       const supabase = getBrowserClient()
-      const [upResult, downResult] = await Promise.all([
-        supabase.from('rank_changes').select('keyword, volume')
-          .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup')
-          .order('volume', { ascending: false }),
-        supabase.from('rank_changes').select('keyword, volume')
-          .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown')
-          .order('volume', { ascending: false }),
-      ])
-      setRankDataMap({
-        rankup: (upResult.data || []) as RankEntry[],
-        rankdown: (downResult.data || []) as RankEntry[],
-      })
+      const from = page * ps
+      const to = (page + 1) * ps - 1
+
+      if (fetchCounts) {
+        const [upCount, downCount, pageRes] = await Promise.all([
+          supabase.from('rank_changes').select('id', { count: 'exact', head: true })
+            .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup'),
+          supabase.from('rank_changes').select('id', { count: 'exact', head: true })
+            .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown'),
+          supabase.from('rank_changes').select('keyword, volume')
+            .eq('site_id', site.site_id).eq('stat_date', date).eq('type', type)
+            .order('volume', { ascending: false }).range(from, to),
+        ])
+        setRankCounts({ rankup: upCount.count ?? 0, rankdown: downCount.count ?? 0 })
+        setRankPageData((pageRes.data || []) as RankEntry[])
+      } else {
+        const { data } = await supabase.from('rank_changes').select('keyword, volume')
+          .eq('site_id', site.site_id).eq('stat_date', date).eq('type', type)
+          .order('volume', { ascending: false }).range(from, to)
+        setRankPageData((data || []) as RankEntry[])
+      }
     } catch {
-      setRankDataMap({ rankup: [], rankdown: [] })
+      setRankPageData([])
     } finally {
       setRankLoading(false)
+    }
+  }
+
+  async function triggerRankCrawl() {
+    if (!rankSite) return
+    setRankCrawling(true)
+    try {
+      await fetch('/api/trigger-crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site: rankSite.domain, step: 'rank' }),
+      })
+      await fetchRankPage(rankSite, rankDate, rankType, 0, pageSize, true)
+      setRankPage(0)
+    } finally {
+      setRankCrawling(false)
     }
   }
 
@@ -370,10 +430,10 @@ export default function CompetitorDailyPage() {
     const today = getMalaysiaDate(0)
     setRankType('rankup')
     setRankDate(today)
+    setRankPage(0)
     setRankSite(site)
-    fetchAllRankData(site, today)
+    fetchRankPage(site, today, 'rankup', 0, pageSize, true)
 
-    // Compute unstable keyword set from last 30 days
     try {
       const supabase = getBrowserClient()
       const since = getMalaysiaDate(-30)
@@ -382,6 +442,7 @@ export default function CompetitorDailyPage() {
         .select('keyword, type, stat_date')
         .eq('site_id', site.site_id)
         .gte('stat_date', since)
+        .limit(5000)
 
       type RawRow = { keyword: string; type: string; stat_date: string }
       const rows = (data || []) as RawRow[]
@@ -408,8 +469,34 @@ export default function CompetitorDailyPage() {
     }
   }
 
+  function handleRankTypeChange(type: 'rankup' | 'rankdown') {
+    setRankType(type)
+    setRankPage(0)
+    if (rankSite && rankDate) fetchRankPage(rankSite, rankDate, type, 0, pageSize, false)
+  }
+
+  function handleRankDateChange(date: string) {
+    setRankDate(date)
+    setRankPage(0)
+    if (rankSite) fetchRankPage(rankSite, date, rankType, 0, pageSize, true)
+  }
+
+  function handleRankPageChange(page: number) {
+    setRankPage(page)
+    if (rankSite && rankDate) fetchRankPage(rankSite, rankDate, rankType, page, pageSize, false)
+  }
+
+  function handleRankPageSizeChange(ps: PageSize) {
+    setPageSize(ps)
+    setRankPage(0)
+    if (rankSite && rankDate) fetchRankPage(rankSite, rankDate, rankType, 0, ps, false)
+  }
+
+  // ── 不稳定词 ─────────────────────────────────────────────────────────────────
+
   async function openUnstableModal(site: CompetitorRow) {
     setUnstableSite(site)
+    setUnstablePage(0)
     setUnstableLoading(true)
     setUnstableData([])
     try {
@@ -420,6 +507,7 @@ export default function CompetitorDailyPage() {
         .select('keyword, volume, type, stat_date')
         .eq('site_id', site.site_id)
         .gte('stat_date', since)
+        .limit(5000)
 
       type RawRow = { keyword: string; volume: number; type: string; stat_date: string }
       const rows = (data || []) as RawRow[]
@@ -449,6 +537,7 @@ export default function CompetitorDailyPage() {
     }
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-8">
@@ -546,108 +635,60 @@ export default function CompetitorDailyPage() {
       </div>
 
       {/* 昨日新词 Modal */}
-      {selectedSite && (() => {
-        const filteredKeywords = siteKeywords
-        return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 新词</h3>
-                  <input
-                    type="date"
-                    value={kwDate}
-                    max={getMalaysiaDate(0)}
-                    onChange={(e) => handleKwDateChange(e.target.value)}
-                    className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={triggerKwCrawl}
-                    disabled={kwCrawling}
-                    className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-40"
-                  >
-                    {kwCrawling ? '抓取中…' : '重抓'}
-                  </button>
-                  <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              {/* Tabs */}
-              <div className="flex border-b border-gray-200 px-5">
-                {(['app', 'game'] as const).map((t) => {
-                  const isActive = kwTab === t
-                  const label = t === 'app' ? '应用' : '游戏'
-                  const count = t === 'app' ? kwCounts.app : kwCounts.game
-                  const activeClass = t === 'app' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => handleKwTabChange(t)}
-                      className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${
-                        isActive ? activeClass : 'border-transparent text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      {label}
-                      {count > 0 && (
-                        <span className="ml-1.5 text-xs text-gray-400">({count})</span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                {kwLoading ? (
-                  <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    加载中...
-                  </div>
-                ) : filteredKeywords.length === 0 ? (
-                  <p className="text-center text-gray-400 py-10 text-sm">该日期暂无新词</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {filteredKeywords.map((kw, i) => (
-                      <li key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50">
-                        <span className="text-sm text-gray-900">{kw.keyword}</span>
-                        <span className="text-xs text-gray-400 flex-shrink-0">
-                          {(kw.content_date ?? kwDate).slice(5).replace('-', '/')}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* 更新词库 Modal */}
-      {cleanSite && (
+      {selectedSite && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
-                <h3 className="font-semibold text-gray-900">{cleanSite.domain} · 更新词库</h3>
-                <p className="text-xs text-gray-400 mt-0.5">近30天持续更新的词条，按出现天数排序</p>
+              <div className="flex items-center gap-3">
+                <h3 className="font-semibold text-gray-900">{selectedSite.domain} · 新词</h3>
+                <input
+                  type="date"
+                  value={kwDate}
+                  max={getMalaysiaDate(0)}
+                  onChange={(e) => handleKwDateChange(e.target.value)}
+                  className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
               </div>
-              <button onClick={() => setCleanSite(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={triggerKwCrawl}
+                  disabled={kwCrawling}
+                  className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-40"
+                >
+                  {kwCrawling ? '抓取中…' : '重抓'}
+                </button>
+                <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 px-5">
+              {(['app', 'game'] as const).map((t) => {
+                const isActive = kwTab === t
+                const label = t === 'app' ? '应用' : '游戏'
+                const count = t === 'app' ? kwCounts.app : kwCounts.game
+                const activeClass = t === 'app' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
+                return (
+                  <button
+                    key={t}
+                    onClick={() => handleKwTabChange(t)}
+                    className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${
+                      isActive ? activeClass : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {label}
+                    {count > 0 && <span className="ml-1.5 text-xs text-gray-400">({count})</span>}
+                  </button>
+                )
+              })}
+            </div>
+            {/* Content */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              {cleanLoading ? (
+              {kwLoading ? (
                 <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
                   <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -655,41 +696,105 @@ export default function CompetitorDailyPage() {
                   </svg>
                   加载中...
                 </div>
-              ) : cleanedEntries.length === 0 ? (
-                <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
+              ) : siteKeywords.length === 0 ? (
+                <p className="text-center text-gray-400 py-10 text-sm">该日期暂无新词</p>
               ) : (
-                <div className="divide-y divide-gray-50">
-                  {cleanedEntries.map((entry, i) => {
-                    const expanded = expandedBases.has(entry.base)
-                    return (
-                      <div key={i} className="py-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm text-gray-900">{entry.base}</span>
-                          <button
-                            onClick={() => setExpandedBases((prev) => {
-                              const next = new Set(prev)
-                              next.has(entry.base) ? next.delete(entry.base) : next.add(entry.base)
-                              return next
-                            })}
-                            className="text-xs text-blue-500 hover:text-blue-700 flex-shrink-0"
-                          >
-                            {entry.variants.length}条
-                          </button>
-                        </div>
-                        {expanded && (
-                          <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
-                            {entry.variants.join('、')}
-                          </p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+                <ul className="space-y-2">
+                  {siteKeywords.map((kw, i) => (
+                    <li key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50">
+                      <span className="text-sm text-gray-900">{kw.keyword}</span>
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        {(kw.content_date ?? kwDate).slice(5).replace('-', '/')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
+            {/* Pagination */}
+            <PaginationBar
+              page={kwPage}
+              total={kwTab === 'app' ? kwCounts.app : kwCounts.game}
+              pageSize={pageSize}
+              onPageChange={handleKwPageChange}
+              onPageSizeChange={handleKwPageSizeChange}
+            />
           </div>
         </div>
       )}
+
+      {/* 更新词库 Modal */}
+      {cleanSite && (() => {
+        const totalClean = cleanedEntries.length
+        const cleanFrom = cleanPage * pageSize
+        const pageClean = cleanedEntries.slice(cleanFrom, cleanFrom + pageSize)
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{cleanSite.domain} · 更新词库</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">近30天持续更新的词条，按出现天数排序</p>
+                </div>
+                <button onClick={() => setCleanSite(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                {cleanLoading ? (
+                  <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    加载中...
+                  </div>
+                ) : pageClean.length === 0 ? (
+                  <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
+                ) : (
+                  <div className="divide-y divide-gray-50">
+                    {pageClean.map((entry, i) => {
+                      const expanded = expandedBases.has(entry.base)
+                      return (
+                        <div key={i} className="py-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm text-gray-900">{entry.base}</span>
+                            <button
+                              onClick={() => setExpandedBases((prev) => {
+                                const next = new Set(prev)
+                                next.has(entry.base) ? next.delete(entry.base) : next.add(entry.base)
+                                return next
+                              })}
+                              className="text-xs text-blue-500 hover:text-blue-700 flex-shrink-0"
+                            >
+                              {entry.variants.length}条
+                            </button>
+                          </div>
+                          {expanded && (
+                            <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                              {entry.variants.join('、')}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              <PaginationBar
+                page={cleanPage}
+                total={totalClean}
+                pageSize={pageSize}
+                onPageChange={(p) => setCleanPage(p)}
+                onPageSizeChange={(ps) => { setPageSize(ps); setCleanPage(0) }}
+              />
+            </div>
+          </div>
+        )
+      })()}
+
       {/* 排名变动 Modal */}
       {rankSite && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -702,10 +807,7 @@ export default function CompetitorDailyPage() {
                   type="date"
                   value={rankDate}
                   max={getMalaysiaDate(0)}
-                  onChange={(e) => {
-                    setRankDate(e.target.value)
-                    fetchAllRankData(rankSite, e.target.value)
-                  }}
+                  onChange={(e) => handleRankDateChange(e.target.value)}
                   className="text-sm border border-gray-200 rounded px-2 py-0.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 />
               </div>
@@ -729,22 +831,18 @@ export default function CompetitorDailyPage() {
               {(['rankup', 'rankdown'] as const).map((t) => {
                 const isActive = rankType === t
                 const label = t === 'rankup' ? '涨入' : '跌出'
-                const activeClass = t === 'rankup'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-red-500 text-red-600'
-                const count = rankDataMap[t].length
+                const activeClass = t === 'rankup' ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600'
+                const count = rankCounts[t]
                 return (
                   <button
                     key={t}
-                    onClick={() => setRankType(t)}
+                    onClick={() => handleRankTypeChange(t)}
                     className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${
                       isActive ? activeClass : 'border-transparent text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {label}
-                    {!rankLoading && count > 0 && (
-                      <span className="ml-1.5 text-xs text-gray-400">({count})</span>
-                    )}
+                    {!rankLoading && count > 0 && <span className="ml-1.5 text-xs text-gray-400">({count})</span>}
                   </button>
                 )
               })}
@@ -757,9 +855,9 @@ export default function CompetitorDailyPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  <span className="text-sm">抓取中，请稍候...</span>
+                  <span className="text-sm">加载中...</span>
                 </div>
-              ) : rankDataMap[rankType].length === 0 ? (
+              ) : rankPageData.length === 0 ? (
                 <p className="text-center text-gray-400 py-16 text-sm">无数据</p>
               ) : (
                 <table className="w-full text-sm">
@@ -770,7 +868,7 @@ export default function CompetitorDailyPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {rankDataMap[rankType].map((entry, i) => {
+                    {rankPageData.map((entry, i) => {
                       const isUnstable = rankUnstableSet.has(entry.keyword)
                       return (
                         <tr key={i} className="hover:bg-gray-50">
@@ -785,65 +883,84 @@ export default function CompetitorDailyPage() {
                 </table>
               )}
             </div>
+            {/* Pagination */}
+            <PaginationBar
+              page={rankPage}
+              total={rankCounts[rankType]}
+              pageSize={pageSize}
+              onPageChange={handleRankPageChange}
+              onPageSizeChange={handleRankPageSizeChange}
+            />
           </div>
         </div>
       )}
 
       {/* 不稳定词 Modal */}
-      {unstableSite && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
-                <h3 className="font-semibold text-gray-900">{unstableSite.domain} · 不稳定词</h3>
-                <p className="text-xs text-gray-400 mt-0.5">近30天在涨入和跌出均出现过的词，按波动天数排序</p>
-              </div>
-              <button onClick={() => setUnstableSite(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {unstableLoading ? (
-                <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  <span className="text-sm">加载中...</span>
+      {unstableSite && (() => {
+        const totalUnstable = unstableData.length
+        const unstableFrom = unstablePage * pageSize
+        const pageUnstable = unstableData.slice(unstableFrom, unstableFrom + pageSize)
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{unstableSite.domain} · 不稳定词</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">近30天在涨入和跌出均出现过的词，按波动天数排序</p>
                 </div>
-              ) : unstableData.length === 0 ? (
-                <p className="text-center text-gray-400 py-16 text-sm">暂无不稳定词（需积累多天数据）</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-5 py-2.5 text-left font-medium text-gray-500">关键词</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-500">搜索量</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-green-600">涨入天</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-red-500">跌出天</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-500">波动天</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {unstableData.map((entry, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-5 py-2 text-gray-900">{entry.keyword}</td>
-                        <td className="px-4 py-2 text-right text-gray-600">{entry.volume > 0 ? entry.volume.toLocaleString() : '-'}</td>
-                        <td className="px-4 py-2 text-right text-green-600 font-medium">{entry.upDays}</td>
-                        <td className="px-4 py-2 text-right text-red-500 font-medium">{entry.downDays}</td>
-                        <td className="px-4 py-2 text-right text-gray-700 font-bold">{entry.totalDays}</td>
+                <button onClick={() => setUnstableSite(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {unstableLoading ? (
+                  <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span className="text-sm">加载中...</span>
+                  </div>
+                ) : pageUnstable.length === 0 ? (
+                  <p className="text-center text-gray-400 py-16 text-sm">暂无不稳定词（需积累多天数据）</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-5 py-2.5 text-left font-medium text-gray-500">关键词</th>
+                        <th className="px-4 py-2.5 text-right font-medium text-gray-500">搜索量</th>
+                        <th className="px-4 py-2.5 text-right font-medium text-green-600">涨入天</th>
+                        <th className="px-4 py-2.5 text-right font-medium text-red-500">跌出天</th>
+                        <th className="px-4 py-2.5 text-right font-medium text-gray-500">波动天</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {pageUnstable.map((entry, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-5 py-2 text-gray-900">{entry.keyword}</td>
+                          <td className="px-4 py-2 text-right text-gray-600">{entry.volume > 0 ? entry.volume.toLocaleString() : '-'}</td>
+                          <td className="px-4 py-2 text-right text-green-600 font-medium">{entry.upDays}</td>
+                          <td className="px-4 py-2 text-right text-red-500 font-medium">{entry.downDays}</td>
+                          <td className="px-4 py-2 text-right text-gray-700 font-bold">{entry.totalDays}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <PaginationBar
+                page={unstablePage}
+                total={totalUnstable}
+                pageSize={pageSize}
+                onPageChange={(p) => setUnstablePage(p)}
+                onPageSizeChange={(ps) => { setPageSize(ps); setUnstablePage(0) }}
+              />
             </div>
           </div>
-        </div>
-      )}
-      {/* 收录 Modal */}
+        )
+      })()}
     </div>
   )
 }
