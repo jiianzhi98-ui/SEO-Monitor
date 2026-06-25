@@ -1,0 +1,94 @@
+import { NextResponse } from 'next/server'
+import * as cheerio from 'cheerio'
+import * as iconv from 'iconv-lite'
+import { Element } from 'domhandler'
+
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  'Referer': 'https://www.3839.com/',
+  'Upgrade-Insecure-Requests': '1',
+}
+
+export interface HaoyouItem {
+  name: string
+  tags: string[]
+  score: string
+  status: string
+  url: string
+  btnText: string
+}
+
+async function loadPage() {
+  try {
+    const res = await fetch('https://www.3839.com/timeline.html', {
+      headers: HEADERS,
+      next: { revalidate: 3600 },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!res.ok) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    const peek = buf.subarray(0, 4096).toString('ascii')
+    const meta = peek.match(/<meta[^>]+charset=["']?\s*([^"'\s;>]+)/i)?.[1]?.toLowerCase() ?? 'utf-8'
+    const charset = (meta === 'gb2312' || meta === 'gb18030') ? 'gbk' : meta
+    return cheerio.load(iconv.decode(buf, charset))
+  } catch { return null }
+}
+
+const PC_TAGS = ['pc游戏', '主机游戏', '3ds', 'ps4', 'ps5', 'xbox', 'switch']
+
+function isPc($: ReturnType<typeof cheerio.load>, li: Element): boolean {
+  if ($(li).find('.g-type-pc').length) return true
+  const tags = $(li).find('p.tags .it').map((_, el) => $(el).text().toLowerCase()).get()
+  return tags.some(t => PC_TAGS.includes(t))
+}
+
+function isPaid($: ReturnType<typeof cheerio.load>, li: Element): boolean {
+  return $(li).find('a.btn').text().includes('¥')
+}
+
+function parseItem($: ReturnType<typeof cheerio.load>, li: Element): HaoyouItem | null {
+  const name = $(li).find('.name em').text().trim()
+  if (!name) return null
+
+  const href = $(li).find('a').first().attr('href') ?? ''
+  const url = href.startsWith('http') ? href : 'https:' + href
+
+  const tags = $(li).find('p.tags .it').map((_, el) => $(el).text().trim()).get()
+
+  const score = $(li).find('.score').text().replace(/[^\d.]/g, '').trim()
+
+  // Status is the non-score span inside .info
+  let status = ''
+  $(li).find('.info span').each((_, el) => {
+    if (!$(el).hasClass('score') && !$(el).find('i').length) {
+      const t = $(el).text().trim()
+      if (t) status = t
+    }
+  })
+
+  const btnText = $(li).find('a.btn').text().trim()
+
+  return { name, tags, score, status, url, btnText }
+}
+
+function parseTab($: ReturnType<typeof cheerio.load>, rel: string): HaoyouItem[] {
+  const items: HaoyouItem[] = []
+  $(`.panelList[rel="${rel}"]`).find('.foreList li').each((_, el) => {
+    if (isPc($, el) || isPaid($, el)) return
+    const item = parseItem($, el)
+    if (item) items.push(item)
+  })
+  return items
+}
+
+export async function GET() {
+  const $ = await loadPage()
+  if (!$) return NextResponse.json({ upcoming: [], updates: [] })
+
+  return NextResponse.json({
+    upcoming: parseTab($, '1'),  // 即将上线
+    updates: parseTab($, '3'),   // 即将更新
+  })
+}

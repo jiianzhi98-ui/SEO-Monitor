@@ -70,6 +70,51 @@ function ShowMoreList({ items, initialCount = 10 }: { items: React.ReactNode[]; 
 
 interface HotItem { rank: number; name: string; labels: string[] }
 interface TodayGame { title: string; tag: string; startDate: string; startTime: string; endDate: string; rating: number | null; labels: string[]; icon: string }
+interface HaoyouItem { name: string; tags: string[]; score: string; status: string; url: string; btnText: string }
+
+const haoyouTagColors: Record<string, string> = {
+  '限量测试': 'bg-purple-100 text-purple-700',
+  '公测': 'bg-teal-100 text-teal-700',
+  '测试招募': 'bg-orange-100 text-orange-700',
+  '测试': 'bg-orange-100 text-orange-600',
+  '预下载': 'bg-blue-100 text-blue-600',
+  '首发': 'bg-green-100 text-green-700',
+  '上线': 'bg-green-100 text-green-700',
+  '预约': 'bg-blue-100 text-blue-600',
+  '下载': 'bg-gray-100 text-gray-600',
+  '更新': 'bg-gray-100 text-gray-600',
+}
+
+function deriveHaoyouTag(status: string, btnText: string): string {
+  if (status.includes('限量测试') || status.includes('限测')) return '限量测试'
+  if (status.includes('公测') || status.includes('不限量')) return '公测'
+  if (status.includes('测试招募')) return '测试招募'
+  if (status.includes('测试')) return '测试'
+  if (status.includes('预下载')) return '预下载'
+  if (status.includes('正式上线') || status.includes('首发')) return '首发'
+  if (status.includes('上线')) return '上线'
+  if (status.includes('更新')) return '更新'
+  return btnText || ''
+}
+
+function HaoyouGameItem({ g }: { g: HaoyouItem }) {
+  const tag = deriveHaoyouTag(g.status, g.btnText)
+  const firstTag = g.tags[0] ?? ''
+  const sub = [g.status, firstTag].filter(Boolean).join(' · ')
+  return (
+    <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+      <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
+        {g.name}
+        {sub && <span className="text-gray-400 font-normal"> · {sub}</span>}
+      </p>
+      {tag && (
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${haoyouTagColors[tag] || 'bg-gray-100 text-gray-500'}`}>
+          {tag}
+        </span>
+      )}
+    </li>
+  )
+}
 
 const tagColors2: Record<string, string> = {
   '首发': 'bg-green-100 text-green-700',
@@ -108,6 +153,13 @@ export default function ChartsPage() {
   const [upcomingExpanded, setUpcomingExpanded] = useState(false)
   const [hotUpdatedAt, setHotUpdatedAt] = useState('')
 
+  const [haoyouUpcoming, setHaoyouUpcoming] = useState<HaoyouItem[]>([])
+  const [haoyouUpdates, setHaoyouUpdates] = useState<HaoyouItem[]>([])
+  const [haoyouLoading, setHaoyouLoading] = useState(true)
+  const [haoyouUpdatedAt, setHaoyouUpdatedAt] = useState('')
+  const [haoyouUpcomingExpanded, setHaoyouUpcomingExpanded] = useState(false)
+  const [haoyouUpdatesExpanded, setHaoyouUpdatesExpanded] = useState(false)
+
   useEffect(() => {
     const now = new Date()
     const ts = `${String(now.getMonth() + 1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
@@ -126,6 +178,16 @@ export default function ChartsPage() {
       })
       .catch(() => {})
       .finally(() => setTodayLoading(false))
+
+    fetch('/api/charts/haoyou')
+      .then((r) => r.json())
+      .then((d) => {
+        setHaoyouUpcoming(d.upcoming ?? [])
+        setHaoyouUpdates(d.updates ?? [])
+        setHaoyouUpdatedAt(ts)
+      })
+      .catch(() => {})
+      .finally(() => setHaoyouLoading(false))
   }, [])
 
   const visibleToday = todayExpanded ? todayGames : todayGames.slice(0, 5)
@@ -135,7 +197,7 @@ export default function ChartsPage() {
     <div className="p-8 space-y-10">
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-gray-900">近期榜单</h1>
-        <p className="text-gray-500 text-sm mt-1">TapTap 实时榜单汇总</p>
+        <p className="text-gray-500 text-sm mt-1">TapTap · 好游快爆 榜单汇总</p>
       </div>
 
       {/* ── TapTap ── */}
@@ -222,6 +284,79 @@ export default function ChartsPage() {
                 </li>
               ))} />
             )}
+          </Card>
+
+        </div>
+      </div>
+
+      {/* ── 好游快爆 ── */}
+      <div>
+        <SectionHeader title="好游快爆" color="bg-green-500" updatedAt={haoyouUpdatedAt || '加载中…'} />
+        <div className="grid grid-cols-3 gap-5">
+
+          {/* 即将上线 */}
+          <Card
+            title={`即将上线${haoyouUpcoming.length ? ` · ${haoyouUpcoming.length} 款` : ''}`}
+            subtitle="手机游戏 / 免费"
+            icon="🚀"
+            accent="bg-green-50"
+          >
+            {haoyouLoading ? (
+              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+            ) : haoyouUpcoming.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+            ) : (
+              <>
+                <ul>
+                  {(haoyouUpcomingExpanded ? haoyouUpcoming : haoyouUpcoming.slice(0, 6)).map((g, i) => (
+                    <HaoyouGameItem key={i} g={g} />
+                  ))}
+                </ul>
+                {haoyouUpcoming.length > 6 && (
+                  <button
+                    onClick={() => setHaoyouUpcomingExpanded(!haoyouUpcomingExpanded)}
+                    className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg"
+                  >
+                    {haoyouUpcomingExpanded ? '收起' : `查看更多 (${haoyouUpcoming.length - 6} 款)`}
+                  </button>
+                )}
+              </>
+            )}
+          </Card>
+
+          {/* 即将更新 */}
+          <Card
+            title={`即将更新${haoyouUpdates.length ? ` · ${haoyouUpdates.length} 款` : ''}`}
+            subtitle="手机游戏 / 免费"
+            icon="🔄"
+            accent="bg-green-50"
+          >
+            {haoyouLoading ? (
+              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+            ) : haoyouUpdates.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+            ) : (
+              <>
+                <ul>
+                  {(haoyouUpdatesExpanded ? haoyouUpdates : haoyouUpdates.slice(0, 6)).map((g, i) => (
+                    <HaoyouGameItem key={i} g={g} />
+                  ))}
+                </ul>
+                {haoyouUpdates.length > 6 && (
+                  <button
+                    onClick={() => setHaoyouUpdatesExpanded(!haoyouUpdatesExpanded)}
+                    className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg"
+                  >
+                    {haoyouUpdatesExpanded ? '收起' : `查看更多 (${haoyouUpdates.length - 6} 款)`}
+                  </button>
+                )}
+              </>
+            )}
+          </Card>
+
+          {/* 第三个名片 TBD */}
+          <Card title="敬请期待" subtitle="即将加入" icon="⭐" accent="bg-green-50">
+            <p className="text-xs text-gray-400 py-4 text-center">第三个榜单即将配置</p>
           </Card>
 
         </div>
