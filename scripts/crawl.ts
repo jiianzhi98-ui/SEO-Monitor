@@ -69,6 +69,13 @@ function elapsed(ms: number): string {
   return s >= 60 ? `${Math.floor(s / 60)}m${s % 60}s` : `${s}s`
 }
 
+// 把数组切成指定大小的块
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
+  return chunks
+}
+
 // supabase-js 出错时不 throw，只在返回值带 error 字段，需要手动检查
 function sbCheck<T extends { error: unknown }>(res: T, label: string): T {
   if (res.error) throw new Error(`[Supabase] ${label}: ${JSON.stringify(res.error)}`)
@@ -200,21 +207,19 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
         newCount = newEntries.length
 
         if (newEntries.length > 0) {
-          await withRetry(async () =>
-            sbCheck(
+          const rows = newEntries.map((e) => ({
+            keyword: e.keyword,
+            site_id: site.id,
+            discovered_at: new Date().toISOString(),
+            content_date: e.content_date || yesterday,
+            content_type: e.content_type || 'app',
+          }))
+          for (const chunk of chunkArray(rows, 500)) {
+            await withRetry(async () =>
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await (supabase.from('raw_keywords') as any).insert(
-                newEntries.map((e) => ({
-                  keyword: e.keyword,
-                  site_id: site.id,
-                  discovered_at: new Date().toISOString(),
-                  content_date: e.content_date || yesterday,
-                  content_type: e.content_type || 'app',
-                }))
-              ),
-              'raw_keywords insert'
+              sbCheck(await (supabase.from('raw_keywords') as any).insert(chunk), 'raw_keywords insert')
             )
-          )
+          }
         }
       }
 
@@ -276,21 +281,23 @@ async function runRank(sites: SiteRecord[], today: string) {
     if (rows.length > 0) {
       await withRetry(async () => {
         await supabase.from('rank_changes').delete().eq('site_id', s.id).eq('stat_date', today)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sbCheck(await (supabase.from('rank_changes') as any).insert(rows), 'rank_changes insert')
+        for (const chunk of chunkArray(rows, 500)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          sbCheck(await (supabase.from('rank_changes') as any).insert(chunk), 'rank_changes insert')
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', s.id)
       })
     }
     const kwWithVol = up.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
     const kwNoVol = up.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: today }))
-    if (kwWithVol.length > 0) {
+    for (const chunk of chunkArray(kwWithVol, 500)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.from('keyword_volume') as any).upsert(kwWithVol, { onConflict: 'keyword' })
+      await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
     }
-    if (kwNoVol.length > 0) {
+    for (const chunk of chunkArray(kwNoVol, 500)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.from('keyword_volume') as any).upsert(kwNoVol, { onConflict: 'keyword', ignoreDuplicates: true })
+      await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
     }
   }
 
