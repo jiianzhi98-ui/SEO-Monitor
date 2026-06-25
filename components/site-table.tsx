@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+import { SimplePagination, PAGE_SIZE } from './simple-pagination'
+
 interface Site {
   id: string
   domain: string
@@ -46,7 +49,9 @@ const frequencyLabel: Record<string, string> = {
 }
 
 export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
+  const [page, setPage] = useState(0)
   const sorted = [...sites].sort((a, b) => a.focus_level - b.focus_level)
+  const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   if (sorted.length === 0) {
     return (
@@ -57,6 +62,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
   }
 
   return (
+    <>
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead className="bg-gray-50">
@@ -73,7 +79,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {sorted.map((site) => (
+          {paged.map((site) => (
             <tr key={site.id} className="hover:bg-gray-50 transition-colors">
               <td className="table-td">
                 <a
@@ -149,5 +155,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
         </tbody>
       </table>
     </div>
+    <SimplePagination page={page} total={sorted.length} onChange={setPage} />
+    </>
   )
 }

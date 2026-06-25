@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
+import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 
 interface SiteRow { id: string; domain: string; name: string; focus_level: number; category: string }
 interface HistoryRow {
@@ -84,6 +85,7 @@ export default function WeightMonitorPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<WeightRow | null>(null)
+  const [page, setPage] = useState(0)
 
   useEffect(() => { loadData() }, [])
 
@@ -234,6 +236,7 @@ export default function WeightMonitorPage() {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 text-sm">{error}</div>
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -255,7 +258,7 @@ export default function WeightMonitorPage() {
                     <td colSpan={9} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
                   </tr>
                 ) : (
-                  rows.map((row) => (
+                  rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
                     <tr key={row.site_id} className="hover:bg-gray-50 transition-colors">
                       <td className="table-td">
                         <div>
@@ -298,6 +301,8 @@ export default function WeightMonitorPage() {
               </tbody>
             </table>
           </div>
+          <SimplePagination page={page} total={rows.length} onChange={setPage} />
+          </>
         )}
       </div>
     </div>

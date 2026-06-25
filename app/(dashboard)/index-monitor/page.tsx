@@ -5,6 +5,7 @@ import { getBrowserClient } from '@/lib/supabase'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
+import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 
 interface SiteRow { id: string; domain: string; name: string; focus_level: number }
 interface SnapRow { site_id: string; snapshot_date: string; index_count: number }
@@ -48,6 +49,7 @@ export default function IndexMonitorPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedSite, setSelectedSite] = useState<IndexRow | null>(null)
   const [crawling, setCrawling] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   async function triggerCrawl(domain: string) {
     setCrawling(domain)
@@ -149,6 +151,7 @@ export default function IndexMonitorPage() {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 text-sm">{error}</div>
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -167,7 +170,7 @@ export default function IndexMonitorPage() {
                     <td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无收录数据</td>
                   </tr>
                 ) : (
-                  rows.map((row) => {
+                  rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => {
                     const s = statusConfig[row.status]
                     const isPos = row.weeklyChange >= 0
                     return (
@@ -212,6 +215,8 @@ export default function IndexMonitorPage() {
               </tbody>
             </table>
           </div>
+          <SimplePagination page={page} total={rows.length} onChange={setPage} />
+          </>
         )}
       </div>
 
