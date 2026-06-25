@@ -34,8 +34,7 @@ type SiteLog = {
 }
 
 function getMalaysiaToday(): string {
-  const myt = new Date(Date.now() + 8 * 60 * 60 * 1000)
-  return myt.toISOString().slice(0, 10)
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
 function getMytDayRange(mytDate: string): { from: string; to: string } {
@@ -45,6 +44,22 @@ function getMytDayRange(mytDate: string): { from: string; to: string } {
   }
 }
 
+function toMyt(iso: string) {
+  return new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000)
+}
+
+function formatDateTime(iso: string): string {
+  return toMyt(iso).toISOString().slice(0, 19).replace('T', ' ')
+}
+
+function formatCardTime(iso: string): string {
+  const d = toMyt(iso)
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  const hhmm = d.toISOString().slice(11, 16)
+  return `${mm}/${dd} ${hhmm}`
+}
+
 function formatDuration(ms: number | null): string {
   if (!ms) return '-'
   if (ms < 1000) return `${ms}ms`
@@ -52,27 +67,32 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`
 }
 
-function formatDateTime(iso: string): string {
-  const d = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000)
-  return d.toISOString().slice(0, 19).replace('T', ' ')
+function getDateFilterRange(f: string): { from: string; to: string } | null {
+  const nowMyt = Date.now() + 8 * 60 * 60 * 1000
+  const today = new Date(nowMyt).toISOString().slice(0, 10)
+  if (f === 'today') return getMytDayRange(today)
+  if (f === 'yesterday') {
+    return getMytDayRange(new Date(nowMyt - 86400000).toISOString().slice(0, 10))
+  }
+  if (f === '3days') {
+    return {
+      from: new Date(new Date(nowMyt - 2 * 86400000).toISOString().slice(0, 10) + 'T00:00:00+08:00').toISOString(),
+      to: new Date(today + 'T23:59:59.999+08:00').toISOString(),
+    }
+  }
+  return null
 }
 
 const STEP_LABELS: Record<string, string> = {
-  keywords: '关键词',
-  rank: '排名',
-  weight: '权重+收录',
+  keywords: '关键词', rank: '排名', weight: '权重+收录',
 }
 
 const STEP_TIMES: Record<string, string> = {
-  keywords: '每日 00:00',
-  rank: '每日 02:00',
-  weight: '每日 07:00',
+  keywords: '每日 00:00', rank: '每日 02:00', weight: '每日 07:00',
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  cron_task: '任务cron',
-  cron_manual: '手动cron',
-  search: '搜索',
+  cron_task: '任务cron', cron_manual: '手动cron', search: '搜索',
 }
 
 const SITE_STATUS_LABELS: Record<string, string> = {
@@ -83,18 +103,13 @@ const SITE_STATUS_COLORS: Record<string, string> = {
   ok: 'text-green-700', empty: 'text-yellow-600', skip: 'text-gray-400', fail: 'text-red-500',
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const cls = {
-    running: 'text-blue-600',
-    done: 'text-green-700',
-    warn: 'text-yellow-600',
-    fail: 'text-red-500',
-  }[status] ?? 'text-gray-500'
-  const label = {
-    running: '进行中', done: '完成', warn: '有空值', fail: '失败',
-  }[status] ?? status
+function StatusText({ status }: { status: string }) {
+  const cls = { running: 'text-blue-600', done: 'text-green-700', warn: 'text-yellow-600', fail: 'text-red-500' }[status] ?? 'text-gray-500'
+  const label = { running: '进行中', done: '完成', warn: '有空值', fail: '失败' }[status] ?? status
   return <span className={`text-xs font-medium ${cls}`}>{label}</span>
 }
+
+const SELECT_CLS = 'text-xs border border-gray-200 rounded-md pl-2.5 pr-6 py-1 text-gray-600 bg-white cursor-pointer hover:border-gray-300 focus:outline-none appearance-none'
 
 export default function CrawlLogPage() {
   const [todayLogs, setTodayLogs] = useState<Record<string, ActivityLog[]>>({
@@ -102,15 +117,21 @@ export default function CrawlLogPage() {
   })
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'cron_task' | 'cron_manual' | 'search'>('all')
+
+  // Filters
+  const [filterDate, setFilterDate] = useState('')
+  const [filterType, setFilterType] = useState('')
+  const [filterDomain, setFilterDomain] = useState('')
   const [onlyProblems, setOnlyProblems] = useState(false)
   const [page, setPage] = useState(1)
 
+  // Modals
   const [rulesStep, setRulesStep] = useState<string | null>(null)
   const [detailActivity, setDetailActivity] = useState<ActivityLog | null>(null)
   const [siteLogs, setSiteLogs] = useState<SiteLog[]>([])
   const [siteLogsLoading, setSiteLogsLoading] = useState(false)
 
+  // Card expand
   const [expandedStep, setExpandedStep] = useState<string | null>(null)
   const [expandedSites, setExpandedSites] = useState<Record<string, SiteLog[]>>({})
 
@@ -120,12 +141,13 @@ export default function CrawlLogPage() {
     const today = getMalaysiaToday()
     const { from, to } = getMytDayRange(today)
 
+    // Cards: only GitHub Actions (cron_task)
     const { data: todayData } = await supabase
       .from('activity_log')
       .select('*')
       .gte('logged_at', from)
       .lte('logged_at', to)
-      .in('type', ['cron_task', 'cron_manual'])
+      .eq('type', 'cron_task')
       .order('logged_at', { ascending: false })
 
     const grouped: Record<string, ActivityLog[]> = { keywords: [], rank: [], weight: [] }
@@ -176,9 +198,24 @@ export default function CrawlLogPage() {
     setExpandedSites(p => ({ ...p, [step]: (data || []) as SiteLog[] }))
   }
 
+  function resetFilters() {
+    setFilterDate(''); setFilterType(''); setFilterDomain(''); setOnlyProblems(false); setPage(1)
+  }
+
+  function isFiltered() {
+    return filterDate !== '' || filterType !== '' || filterDomain !== '' || onlyProblems
+  }
+
+  const domainOptions = Array.from(new Set(logs.filter(l => l.domain).map(l => l.domain!))).sort()
+
   const filteredLogs = logs.filter(log => {
-    if (filter !== 'all' && log.type !== filter) return false
+    if (filterType && log.type !== filterType) return false
+    if (filterDomain && log.domain !== filterDomain) return false
     if (onlyProblems && log.status !== 'warn' && log.status !== 'fail') return false
+    if (filterDate) {
+      const range = getDateFilterRange(filterDate)
+      if (range && (log.logged_at < range.from || log.logged_at > range.to)) return false
+    }
     return true
   })
 
@@ -187,18 +224,14 @@ export default function CrawlLogPage() {
   const safePage = Math.min(page, totalPages)
   const pagedLogs = filteredLogs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-  function setFilterAndReset(f: typeof filter) { setFilter(f); setPage(1) }
-  function setOnlyProblemsAndReset(v: boolean) { setOnlyProblems(v); setPage(1) }
-
   function getTodaySummary(step: string) {
     const stepLogs = todayLogs[step] || []
-    return {
-      ok: stepLogs.reduce((s, l) => s + l.ok_count, 0),
-      empty: stepLogs.reduce((s, l) => s + l.empty_count, 0),
-      fail: stepLogs.reduce((s, l) => s + l.fail_count, 0),
-      latestStatus: stepLogs[0]?.status ?? null,
-      runs: stepLogs.length,
-    }
+    const ok = stepLogs.reduce((s, l) => s + l.ok_count, 0)
+    const empty = stepLogs.reduce((s, l) => s + l.empty_count, 0)
+    const fail = stepLogs.reduce((s, l) => s + l.fail_count, 0)
+    const total = ok + empty + fail
+    const latestRun = stepLogs[0]
+    return { ok, empty, fail, total, latestRun, runs: stepLogs.length }
   }
 
   const rulesSection = CRAWL_RULES.find(r => r.key === rulesStep)
@@ -227,23 +260,26 @@ export default function CrawlLogPage() {
       ) : (
         <div className="space-y-6">
 
-          {/* Today's task status cards */}
+          {/* Today's GitHub Actions task status */}
           <div>
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">今日任务状态</h2>
             <div className="grid grid-cols-3 gap-4">
               {(['keywords', 'rank', 'weight'] as const).map(step => {
-                const { ok, empty, fail, latestStatus, runs } = getTodaySummary(step)
+                const { ok, empty, fail, total, latestRun, runs } = getTodaySummary(step)
                 const hasProblems = empty > 0 || fail > 0
                 const isExpanded = expandedStep === step
                 return (
                   <div key={step} className="card p-4">
-                    <div className="flex items-start justify-between mb-3">
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="font-semibold text-gray-900 text-sm">{STEP_LABELS[step]}</p>
                         <p className="text-xs text-gray-400 mt-0.5">{STEP_TIMES[step]} MYT</p>
                       </div>
-                      {latestStatus ? (
-                        <StatusBadge status={latestStatus} />
+                      {latestRun ? (
+                        <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                          {formatCardTime(latestRun.logged_at)} 执行
+                        </span>
                       ) : (
                         <span className="text-xs text-gray-400">尚无记录</span>
                       )}
@@ -251,34 +287,35 @@ export default function CrawlLogPage() {
 
                     {runs > 0 ? (
                       <>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-500">成功</span>
-                            <span className="font-medium text-green-700">{ok} 站</span>
+                        {/* X/Y 站成功 */}
+                        <div className="flex items-end justify-between mt-3">
+                          <div>
+                            <span className={`text-2xl font-bold tabular-nums ${hasProblems ? 'text-yellow-600' : 'text-green-700'}`}>
+                              {ok}
+                            </span>
+                            <span className="text-sm text-gray-400">
+                              {total > 0 ? `/${total}` : ''} 站成功
+                            </span>
+                            {fail > 0 && (
+                              <span className="ml-2 text-xs text-red-500">{fail} 失败</span>
+                            )}
+                            {empty > 0 && (
+                              <span className="ml-1 text-xs text-yellow-500">{empty} 空</span>
+                            )}
                           </div>
-                          {empty > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-gray-500">空值</span>
-                              <span className="font-medium text-yellow-600">{empty} 站</span>
-                            </div>
-                          )}
-                          {fail > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-gray-500">失败</span>
-                              <span className="font-medium text-red-600">{fail} 站</span>
-                            </div>
+                          {hasProblems && (
+                            <button
+                              onClick={() => toggleExpandStep(step)}
+                              className="text-xs text-blue-500 hover:text-blue-700"
+                            >
+                              {isExpanded ? '收起' : '查看'}
+                            </button>
                           )}
                         </div>
-                        {hasProblems && (
-                          <button
-                            onClick={() => toggleExpandStep(step)}
-                            className="mt-3 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                          >
-                            {isExpanded ? '▲ 收起' : '▼ 查看问题站点'}
-                          </button>
-                        )}
+
+                        {/* Expanded problem sites */}
                         {isExpanded && (
-                          <div className="mt-2 border-t border-gray-100 pt-2 space-y-1">
+                          <div className="mt-3 border-t border-gray-100 pt-2 space-y-1">
                             {!expandedSites[step] ? (
                               <p className="text-xs text-gray-400">加载中…</p>
                             ) : expandedSites[step].length === 0 ? (
@@ -286,7 +323,7 @@ export default function CrawlLogPage() {
                             ) : (
                               expandedSites[step].map(sl => (
                                 <div key={sl.id} className="flex items-center justify-between text-xs">
-                                  <span className="text-gray-700 truncate max-w-[130px]" title={sl.domain}>{sl.domain}</span>
+                                  <span className="text-gray-700 truncate max-w-[140px]" title={sl.domain}>{sl.domain}</span>
                                   <span className={sl.status === 'fail' ? 'text-red-500' : 'text-yellow-600'}>
                                     {sl.status === 'fail' ? '失败' : '空'}
                                   </span>
@@ -297,7 +334,7 @@ export default function CrawlLogPage() {
                         )}
                       </>
                     ) : (
-                      <p className="text-xs text-gray-400 mt-2">今日暂无记录</p>
+                      <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
                     )}
                   </div>
                 )
@@ -310,28 +347,69 @@ export default function CrawlLogPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">运行记录</h2>
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 text-xs">
-                  {(['all', 'cron_task', 'cron_manual', 'search'] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setFilterAndReset(f)}
-                      className={`px-2.5 py-1 rounded-md font-medium ${
-                        filter === f
-                          ? 'bg-gray-800 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {f === 'all' ? '全部' : TYPE_LABELS[f]}
-                    </button>
-                  ))}
-                </div>
+                {/* 全部 reset */}
                 <button
-                  onClick={() => setOnlyProblemsAndReset(!onlyProblems)}
+                  onClick={resetFilters}
+                  className={`text-xs px-2.5 py-1 rounded-md font-medium ${
+                    !isFiltered() ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  全部
+                </button>
+
+                {/* 日期▼ */}
+                <div className="relative">
+                  <select
+                    value={filterDate}
+                    onChange={e => { setFilterDate(e.target.value); setPage(1) }}
+                    className={SELECT_CLS + (filterDate ? ' border-blue-300 text-blue-600' : '')}
+                  >
+                    <option value="">日期</option>
+                    <option value="today">今天</option>
+                    <option value="yesterday">昨天</option>
+                    <option value="3days">近 3 天</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">▼</span>
+                </div>
+
+                {/* 类型▼ */}
+                <div className="relative">
+                  <select
+                    value={filterType}
+                    onChange={e => { setFilterType(e.target.value); setPage(1) }}
+                    className={SELECT_CLS + (filterType ? ' border-blue-300 text-blue-600' : '')}
+                  >
+                    <option value="">类型</option>
+                    <option value="cron_task">任务cron</option>
+                    <option value="cron_manual">手动cron</option>
+                    <option value="search">搜索</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">▼</span>
+                </div>
+
+                {/* 域名▼ */}
+                {domainOptions.length > 0 && (
+                  <div className="relative">
+                    <select
+                      value={filterDomain}
+                      onChange={e => { setFilterDomain(e.target.value); setPage(1) }}
+                      className={SELECT_CLS + (filterDomain ? ' border-blue-300 text-blue-600' : '')}
+                    >
+                      <option value="">域名</option>
+                      {domainOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">▼</span>
+                  </div>
+                )}
+
+                {/* 运行异常 */}
+                <button
+                  onClick={() => { setOnlyProblems(p => !p); setPage(1) }}
                   className={`text-xs px-2.5 py-1 rounded-md font-medium ${
                     onlyProblems ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  只看问题
+                  运行异常
                 </button>
               </div>
             </div>
@@ -345,19 +423,17 @@ export default function CrawlLogPage() {
                     <colgroup>
                       <col style={{ width: '160px' }} />
                       <col style={{ width: '90px' }} />
-                      <col style={{ width: '170px' }} />
-                      <col style={{ width: '136px' }} />
+                      <col />
                       <col style={{ width: '88px' }} />
-                      <col style={{ width: '76px' }} />
-                      <col style={{ width: '64px' }} />
-                      <col style={{ width: '104px' }} />
+                      <col style={{ width: '72px' }} />
+                      <col style={{ width: '60px' }} />
+                      <col style={{ width: '100px' }} />
                     </colgroup>
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50">
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">时间 (MYT)</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">类型</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">步骤 / 域名</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">IP</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">步骤 / 域名 / IP</th>
                         <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">成 / 空 / 失</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">状态</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">时长</th>
@@ -380,18 +456,12 @@ export default function CrawlLogPage() {
                             </span>
                           </td>
                           <td className="px-4 py-2.5 text-xs text-gray-700 truncate">
-                            {log.step ? (STEP_LABELS[log.step] ?? log.step) : ''}
-                            {log.domain && (
-                              <span className="ml-1 text-gray-400">{log.domain}</span>
-                            )}
+                            {log.step && <span className="font-medium">{STEP_LABELS[log.step] ?? log.step}</span>}
+                            {log.domain && <span className="text-gray-400"> · {log.domain}</span>}
+                            {log.ip && <span className="text-gray-400"> · IP：{log.ip}</span>}
                             {log.group_index != null && log.total_groups != null && (
-                              <span className="ml-1 text-gray-400">
-                                #{log.group_index}/{log.total_groups}
-                              </span>
+                              <span className="text-gray-400"> #{log.group_index}/{log.total_groups}</span>
                             )}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums whitespace-nowrap">
-                            {log.ip ?? '-'}
                           </td>
                           <td className="px-4 py-2.5 text-xs tabular-nums text-center whitespace-nowrap">
                             <span className="text-green-700">{log.ok_count}</span>
@@ -401,7 +471,7 @@ export default function CrawlLogPage() {
                             <span className={log.fail_count > 0 ? 'text-red-500' : 'text-gray-400'}>{log.fail_count}</span>
                           </td>
                           <td className="px-4 py-2.5 whitespace-nowrap">
-                            <StatusBadge status={log.status} />
+                            <StatusText status={log.status} />
                           </td>
                           <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums whitespace-nowrap">
                             {formatDuration(log.duration_ms)}
@@ -485,14 +555,8 @@ export default function CrawlLogPage() {
 
       {/* Rules Modal */}
       {rulesStep && rulesSection && (
-        <div
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-          onClick={() => setRulesStep(null)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl max-w-xl w-full max-h-[80vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setRulesStep(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-gray-900">{rulesSection.title}</h3>
@@ -507,9 +571,7 @@ export default function CrawlLogPage() {
             <div className="px-6 py-4 space-y-3">
               {rulesSection.items.map(item => (
                 <div key={item.label} className="flex gap-3 text-sm">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0 h-fit mt-0.5">
-                    {item.label}
-                  </span>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0 h-fit mt-0.5">{item.label}</span>
                   <span className="text-gray-600">{item.text}</span>
                 </div>
               ))}
@@ -520,20 +582,12 @@ export default function CrawlLogPage() {
 
       {/* Detail Modal */}
       {detailActivity && (
-        <div
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-          onClick={() => setDetailActivity(null)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDetailActivity(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-gray-900">
-                  {detailActivity.step
-                    ? (STEP_LABELS[detailActivity.step] ?? detailActivity.step)
-                    : (detailActivity.domain ?? '详情')}
+                  {detailActivity.step ? (STEP_LABELS[detailActivity.step] ?? detailActivity.step) : (detailActivity.domain ?? '详情')}
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {formatDateTime(detailActivity.logged_at)} MYT
@@ -548,34 +602,19 @@ export default function CrawlLogPage() {
                 </svg>
               </button>
             </div>
-
             <div className="px-6 py-4">
               <div className="flex items-center flex-wrap gap-4 mb-4 text-sm">
-                <StatusBadge status={detailActivity.status} />
-                <span className="text-gray-500">
-                  成功 <span className="font-medium text-green-700">{detailActivity.ok_count}</span>
-                </span>
-                <span className="text-gray-500">
-                  空 <span className="font-medium text-yellow-600">{detailActivity.empty_count}</span>
-                </span>
-                <span className="text-gray-500">
-                  跳过 <span className="font-medium text-gray-500">{detailActivity.skip_count}</span>
-                </span>
-                <span className="text-gray-500">
-                  失败 <span className="font-medium text-red-500">{detailActivity.fail_count}</span>
-                </span>
-                <span className="text-gray-400">
-                  写入 {detailActivity.rows_written} 行
-                </span>
+                <StatusText status={detailActivity.status} />
+                <span className="text-gray-500">成功 <span className="font-medium text-green-700">{detailActivity.ok_count}</span></span>
+                <span className="text-gray-500">空 <span className="font-medium text-yellow-600">{detailActivity.empty_count}</span></span>
+                <span className="text-gray-500">跳过 <span className="font-medium text-gray-500">{detailActivity.skip_count}</span></span>
+                <span className="text-gray-500">失败 <span className="font-medium text-red-500">{detailActivity.fail_count}</span></span>
+                <span className="text-gray-400">写入 {detailActivity.rows_written} 行</span>
                 <span className="text-gray-400">{formatDuration(detailActivity.duration_ms)}</span>
               </div>
-
               {detailActivity.summary && (
-                <p className="text-xs text-gray-500 mb-4 bg-gray-50 rounded px-3 py-2">
-                  {detailActivity.summary}
-                </p>
+                <p className="text-xs text-gray-500 mb-4 bg-gray-50 rounded px-3 py-2">{detailActivity.summary}</p>
               )}
-
               {siteLogsLoading ? (
                 <div className="text-center text-gray-400 text-sm py-8">加载中…</div>
               ) : siteLogs.length === 0 ? (
@@ -587,7 +626,7 @@ export default function CrawlLogPage() {
                       <th className="text-left py-2 text-xs font-medium text-gray-500">域名</th>
                       <th className="text-left py-2 text-xs font-medium text-gray-500">状态</th>
                       <th className="text-left py-2 text-xs font-medium text-gray-500">写入</th>
-                      <th className="text-left py-2 text-xs font-medium text-gray-500 max-w-[200px]">详情</th>
+                      <th className="text-left py-2 text-xs font-medium text-gray-500">详情</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -599,12 +638,8 @@ export default function CrawlLogPage() {
                             {SITE_STATUS_LABELS[sl.status] ?? sl.status}
                           </span>
                         </td>
-                        <td className="py-1.5 text-xs text-gray-400">
-                          {sl.rows_written > 0 ? `${sl.rows_written} 行` : '-'}
-                        </td>
-                        <td className="py-1.5 text-xs text-gray-400 max-w-[200px] truncate" title={sl.detail ?? ''}>
-                          {sl.detail ?? ''}
-                        </td>
+                        <td className="py-1.5 text-xs text-gray-400">{sl.rows_written > 0 ? `${sl.rows_written} 行` : '-'}</td>
+                        <td className="py-1.5 text-xs text-gray-400 max-w-[220px] truncate" title={sl.detail ?? ''}>{sl.detail ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>
