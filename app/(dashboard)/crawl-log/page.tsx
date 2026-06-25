@@ -609,7 +609,6 @@ export default function CrawlLogPage() {
                 <span className="text-gray-500">空 <span className="font-medium text-yellow-600">{detailActivity.empty_count}</span></span>
                 <span className="text-gray-500">跳过 <span className="font-medium text-gray-500">{detailActivity.skip_count}</span></span>
                 <span className="text-gray-500">失败 <span className="font-medium text-red-500">{detailActivity.fail_count}</span></span>
-                <span className="text-gray-400">写入 {detailActivity.rows_written} 行</span>
                 <span className="text-gray-400">{formatDuration(detailActivity.duration_ms)}</span>
               </div>
               {detailActivity.summary && (
