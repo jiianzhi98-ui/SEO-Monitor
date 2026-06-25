@@ -341,17 +341,27 @@ export default function CrawlLogPage() {
                 <div className="p-8 text-center text-gray-400 text-sm">暂无记录</div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col style={{ width: '160px' }} />
+                      <col style={{ width: '90px' }} />
+                      <col />
+                      <col style={{ width: '136px' }} />
+                      <col style={{ width: '88px' }} />
+                      <col style={{ width: '76px' }} />
+                      <col style={{ width: '64px' }} />
+                      <col style={{ width: '104px' }} />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">时间 (MYT)</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">类型</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">时间 (MYT)</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">类型</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">步骤 / 域名</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">IP</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">成 / 空 / 失</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">状态</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">时长</th>
-                        <th className="px-4 py-2.5"></th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">IP</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">成 / 空 / 失</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">状态</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">时长</th>
+                        <th className="text-right pr-4 py-2.5 text-xs font-medium text-gray-500"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -361,11 +371,11 @@ export default function CrawlLogPage() {
                             {formatDateTime(log.logged_at)}
                           </td>
                           <td className="px-4 py-2.5">
-                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded whitespace-nowrap">
                               {TYPE_LABELS[log.type] ?? log.type}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-700">
+                          <td className="px-4 py-2.5 text-xs text-gray-700 truncate">
                             {log.step ? (STEP_LABELS[log.step] ?? log.step) : ''}
                             {log.domain && (
                               <span className="ml-1 text-gray-400">{log.domain}</span>
@@ -376,10 +386,10 @@ export default function CrawlLogPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums">
+                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums whitespace-nowrap">
                             {log.ip ?? '-'}
                           </td>
-                          <td className="px-4 py-2.5 text-xs tabular-nums">
+                          <td className="px-4 py-2.5 text-xs tabular-nums whitespace-nowrap">
                             <span className="text-green-700">{log.ok_count}</span>
                             <span className="text-gray-300 mx-1">/</span>
                             <span className={log.empty_count > 0 ? 'text-yellow-600' : 'text-gray-400'}>
@@ -390,14 +400,14 @@ export default function CrawlLogPage() {
                               {log.fail_count}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5">
+                          <td className="px-4 py-2.5 whitespace-nowrap">
                             <StatusBadge status={log.status} />
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums">
+                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums whitespace-nowrap">
                             {formatDuration(log.duration_ms)}
                           </td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-1.5">
+                          <td className="pr-4 py-2.5">
+                            <div className="flex items-center justify-end gap-1.5">
                               {log.step && (
                                 <button
                                   onClick={() => setRulesStep(log.step as string)}
