@@ -262,11 +262,19 @@ async function runRank(sites: SiteRecord[], today: string) {
   console.log(`  RANK   日期=${today}   ${ts()}`)
   console.log(`${'═'.repeat(60)}`)
 
-  let ok = 0, failed = 0
+  let ok = 0, failed = 0, consecutiveEmpty = 0
 
   for (let idx = 0; idx < sites.length; idx++) {
     const site = sites[idx]
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
+
+    // 熔断：连续 3 站均为空，说明 IP 被限流，暂停 5 分钟
+    if (consecutiveEmpty >= 3) {
+      console.log(`\n  ⏸ 连续 ${consecutiveEmpty} 站为空，疑似 IP 被限流，暂停 5 分钟… (${ts()})`)
+      await delay(5 * 60 * 1000)
+      consecutiveEmpty = 0
+      console.log(`  ▶ 恢复抓取 (${ts()})`)
+    }
 
     try {
       let rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
@@ -313,14 +321,20 @@ async function runRank(sites: SiteRecord[], today: string) {
       }
 
       const bothZero = rankupEntries.length === 0 && rankdownEntries.length === 0
-      const warn = bothZero ? '  ⚠ 涨跌均为空' : ''
-      console.log(`${prefix} ✓  涨入=${String(rankupEntries.length).padStart(4)}  跌出=${String(rankdownEntries.length).padStart(4)}${warn}`)
+      if (bothZero) {
+        consecutiveEmpty++
+        console.log(`${prefix} ✓  涨入=   0  跌出=   0  ⚠ 涨跌均为空 (连续${consecutiveEmpty}站)`)
+      } else {
+        consecutiveEmpty = 0
+        console.log(`${prefix} ✓  涨入=${String(rankupEntries.length).padStart(4)}  跌出=${String(rankdownEntries.length).padStart(4)}`)
+      }
       ok++
     } catch (e) {
       console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)
       failed++
+      consecutiveEmpty++
     }
-    await delay(10000)
+    await delay(45000) // 站点间 45s，避免触发爱站限流
   }
 
   console.log(`\n  RANK 完成  ✓${ok}  ✗${failed}  耗时=${elapsed(Date.now() - stepStart)}`)
