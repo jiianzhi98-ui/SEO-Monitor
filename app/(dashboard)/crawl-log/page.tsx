@@ -85,15 +85,15 @@ const SITE_STATUS_COLORS: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const cls = {
-    running: 'bg-blue-50 text-blue-600',
-    done: 'bg-green-50 text-green-700',
-    warn: 'bg-yellow-50 text-yellow-700',
-    fail: 'bg-red-50 text-red-600',
-  }[status] ?? 'bg-gray-100 text-gray-600'
+    running: 'text-blue-600',
+    done: 'text-green-700',
+    warn: 'text-yellow-600',
+    fail: 'text-red-500',
+  }[status] ?? 'text-gray-500'
   const label = {
     running: '进行中', done: '完成', warn: '有空值', fail: '失败',
   }[status] ?? status
-  return <span className={`text-xs px-2 py-0.5 rounded font-medium ${cls}`}>{label}</span>
+  return <span className={`text-xs font-medium ${cls}`}>{label}</span>
 }
 
 export default function CrawlLogPage() {
