@@ -6,6 +6,7 @@ import {
   fetchRankChanges,
   type HtmlSource,
 } from '../lib/crawler'
+import { activityStart, activityEnd, siteLog } from '../lib/activity-log'
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
 
@@ -96,6 +97,13 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, waitMs = 5000): P
   throw new Error('unreachable')
 }
 
+async function getPublicIp(): Promise<string> {
+  try {
+    const res = await fetch('https://api.ipify.org?format=text', { signal: AbortSignal.timeout(5000) })
+    return (await res.text()).trim()
+  } catch { return 'unknown' }
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SiteRecord {
@@ -113,13 +121,13 @@ interface SiteRecord {
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
 
-async function runKeywords(sites: SiteRecord[], today: string, yesterday: string, isMainGroup = true) {
+async function runKeywords(sites: SiteRecord[], today: string, yesterday: string, isMainGroup = true, activityId: string | null = null) {
   const stepStart = Date.now()
   console.log(`\n${'═'.repeat(60)}`)
   console.log(`  KEYWORDS   日期=${yesterday}   ${ts()}`)
   console.log(`${'═'.repeat(60)}`)
 
-  let ok = 0, skipped = 0, failed = 0
+  let ok = 0, skipped = 0, failed = 0, empty = 0, totalRows = 0
 
   for (let idx = 0; idx < sites.length; idx++) {
     const site = sites[idx]
@@ -128,6 +136,7 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
     if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) {
       console.log(`${prefix} ⊘ 跳过 (${site.crawl_frequency})`)
       skipped++
+      if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'skip', detail: site.crawl_frequency })
       continue
     }
 
@@ -242,12 +251,25 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
         )
       }
 
-      const warn = hasCrawlConfig && rawEntries.length === 0 ? '  ⚠ 抓取为空，请检查URL/选择器' : ''
+      const isEmptyFetch = hasCrawlConfig && rawEntries.length === 0
+      const warn = isEmptyFetch ? '  ⚠ 抓取为空，请检查URL/选择器' : ''
       console.log(`${prefix} ✓  抓到=${String(rawEntries.length).padStart(4)}  新增=${String(newCount).padStart(4)}${warn}`)
-      ok++
+      if (hasCrawlConfig) {
+        if (isEmptyFetch) {
+          empty++
+          if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail: '页面抓取返回空，请检查URL/选择器' })
+        } else {
+          ok++
+          totalRows += newCount
+          if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `新增${newCount}条` })
+        }
+      } else {
+        ok++
+      }
     } catch (e) {
       console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)
       failed++
+      if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'fail', detail: e instanceof Error ? e.message : String(e) })
     }
     await delay(5000)
   }
@@ -260,16 +282,22 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
     await supabase.from('competitor_kw_stats').delete().lt('stat_date', getMalaysiaDate(-10))
   }
 
-  console.log(`\n  KEYWORDS 完成  ✓${ok}  ⊘${skipped}  ✗${failed}  耗时=${elapsed(Date.now() - stepStart)}`)
+  const durationMs = Date.now() - stepStart
+  console.log(`\n  KEYWORDS 完成  ✓${ok}  ⊘${skipped}  ⚠${empty}  ✗${failed}  耗时=${elapsed(durationMs)}`)
+  if (activityId) await activityEnd(supabase, activityId, {
+    status: failed > 0 ? 'warn' : empty > 0 ? 'warn' : 'done',
+    ok, empty, skip: skipped, fail: failed, rowsWritten: totalRows, durationMs,
+    summary: `新增关键词 ${totalRows} 条，${empty} 站为空，${failed} 站失败`,
+  })
 }
 
-async function runRank(sites: SiteRecord[], today: string) {
+async function runRank(sites: SiteRecord[], today: string, activityId: string | null = null) {
   const stepStart = Date.now()
   console.log(`\n${'═'.repeat(60)}`)
   console.log(`  RANK   日期=${today}   ${ts()}`)
   console.log(`${'═'.repeat(60)}`)
 
-  let ok = 0, failed = 0, consecutiveEmpty = 0
+  let ok = 0, failed = 0, emptyCount = 0, totalRows = 0, consecutiveEmpty = 0
   const retryQueue: SiteRecord[] = [] // 因限流而为空的站，熔断后补抓
 
   // 将一个站点的抓取结果写入数据库
@@ -351,14 +379,19 @@ async function runRank(sites: SiteRecord[], today: string) {
       await saveRankResult(site, rankupEntries, rankdownEntries)
 
       const bothZero = rankupEntries.length === 0 && rankdownEntries.length === 0
+      const written = rankupEntries.length + rankdownEntries.length
       if (bothZero) {
         consecutiveEmpty++
+        emptyCount++
         retryQueue.push(site)
         console.log(`${prefix} ✓  涨入=   0  跌出=   0  ⚠ 涨跌均为空 (连续${consecutiveEmpty}站)`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail: '涨入0 | 跌出0（疑似限流）' })
       } else {
         consecutiveEmpty = 0
         retryQueue.length = 0
+        totalRows += written
         console.log(`${prefix} ✓  涨入=${String(rankupEntries.length).padStart(4)}  跌出=${String(rankdownEntries.length).padStart(4)}`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: written, detail: `涨入${rankupEntries.length} | 跌出${rankdownEntries.length}` })
       }
       ok++
     } catch (e) {
@@ -366,14 +399,21 @@ async function runRank(sites: SiteRecord[], today: string) {
       failed++
       consecutiveEmpty++
       retryQueue.push(site)
+      if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'fail', detail: e instanceof Error ? e.message : String(e) })
     }
     await delay(45000) // 站点间 45s，避免触发爱站限流
   }
 
-  console.log(`\n  RANK 完成  ✓${ok}  ✗${failed}  耗时=${elapsed(Date.now() - stepStart)}`)
+  const durationMs = Date.now() - stepStart
+  console.log(`\n  RANK 完成  ✓${ok}  ⚠${emptyCount}  ✗${failed}  耗时=${elapsed(durationMs)}`)
+  if (activityId) await activityEnd(supabase, activityId, {
+    status: failed > 0 ? 'warn' : emptyCount > 0 ? 'warn' : 'done',
+    ok: ok - emptyCount, empty: emptyCount, fail: failed, rowsWritten: totalRows, durationMs,
+    summary: `涨跌词 ${totalRows} 条，${emptyCount} 站为空，${failed} 站失败`,
+  })
 }
 
-async function runWeight(sites: SiteRecord[], today: string) {
+async function runWeight(sites: SiteRecord[], today: string, activityId: string | null = null) {
   const stepStart = Date.now()
   console.log(`\n${'═'.repeat(60)}`)
   console.log(`  WEIGHT   日期=${today}   ${ts()}`)
@@ -406,18 +446,28 @@ async function runWeight(sites: SiteRecord[], today: string) {
           ),
         ])
         console.log(`${prefix} ✓  pc=${String(pc).padStart(3)}  mobile=${String(mobile).padStart(3)}  index=${indexCount}`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: 2, detail: `pc=${pc} mobile=${mobile} index=${indexCount}` })
         fetched = true
         ok++
         break
       } catch (e) {
-        if (attempt === 2) console.error(`${prefix} ✗  权重抓取失败（3次）: ${e instanceof Error ? e.message : e}`)
+        if (attempt === 2) {
+          console.error(`${prefix} ✗  权重抓取失败（3次）: ${e instanceof Error ? e.message : e}`)
+          if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'fail', detail: e instanceof Error ? e.message : '3次重试失败' })
+        }
       }
     }
     if (!fetched) failed++
     await delay(3000)
   }
 
-  console.log(`\n  WEIGHT 完成  ✓${ok}  ✗${failed}  耗时=${elapsed(Date.now() - stepStart)}`)
+  const durationMs = Date.now() - stepStart
+  console.log(`\n  WEIGHT 完成  ✓${ok}  ✗${failed}  耗时=${elapsed(durationMs)}`)
+  if (activityId) await activityEnd(supabase, activityId, {
+    status: failed > 0 ? 'warn' : 'done',
+    ok, fail: failed, rowsWritten: ok * 2, durationMs,
+    summary: `权重+收录 ${ok} 站成功，${failed} 站失败`,
+  })
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -430,9 +480,10 @@ async function main() {
   const totalGroups = parseInt(args.find((a) => a.startsWith('--total-groups='))?.split('=')[1] ?? '1', 10)
 
   const totalStart = Date.now()
+  const ip = await getPublicIp()
   console.log(`\n${'▶'.repeat(60)}`)
   console.log(`  SEO Monitor Crawl`)
-  console.log(`  step=${step}  site=${siteFilter ?? 'all'}  group=${group}/${totalGroups}  启动时间=${ts()} MYT`)
+  console.log(`  step=${step}  site=${siteFilter ?? 'all'}  group=${group}/${totalGroups}  ip=${ip}  启动时间=${ts()} MYT`)
   console.log(`${'▶'.repeat(60)}`)
 
   const today = getMalaysiaDate()
@@ -451,9 +502,20 @@ async function main() {
 
   console.log(`  共 ${allSites.length} 个站点，本组 ${sites.length} 个  today=${today}  yesterday=${yesterday}`)
 
-  if (step === 'keywords' || step === 'all') await runKeywords(sites, today, yesterday, group === 0)
-  if (step === 'weight'   || step === 'all') await runWeight(sites, today)
-  if (step === 'rank'     || step === 'all') await runRank(sites, today)
+  const logBase = { type: 'cron_task' as const, source: 'github_actions', groupIndex: group, totalGroups, ip }
+
+  if (step === 'keywords' || step === 'all') {
+    const aid = await activityStart(supabase, { ...logBase, step: 'keywords' })
+    await runKeywords(sites, today, yesterday, group === 0, aid)
+  }
+  if (step === 'weight' || step === 'all') {
+    const aid = await activityStart(supabase, { ...logBase, step: 'weight' })
+    await runWeight(sites, today, aid)
+  }
+  if (step === 'rank' || step === 'all') {
+    const aid = await activityStart(supabase, { ...logBase, step: 'rank' })
+    await runRank(sites, today, aid)
+  }
 
   console.log(`\n${'✓'.repeat(60)}`)
   console.log(`  全部完成   总耗时=${elapsed(Date.now() - totalStart)}`)

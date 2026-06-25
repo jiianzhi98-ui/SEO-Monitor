@@ -15,6 +15,7 @@ import {
   fetchRankChanges,
   type HtmlSource,
 } from '@/lib/crawler'
+import { activityStart, activityEnd, siteLog } from '@/lib/activity-log'
 
 interface SiteRecord {
   id: string
@@ -83,6 +84,8 @@ export async function GET(request: Request) {
   const runKeywords = !step || step === 'keywords'
   const runRank     = !step || step === 'rank'
   const runWeight   = !step || step === 'weight'
+  const isSingleSite = !!siteFilter
+  const logType = isSingleSite ? 'cron_manual' as const : 'cron_task' as const
 
   try {
     let query = supabase.from('sites').select('*').eq('is_enabled', true)
@@ -91,234 +94,309 @@ export async function GET(request: Request) {
     if (sitesErr) throw sitesErr
     const sites = (sitesRaw || []) as SiteRecord[]
 
-    if (runKeywords) for (const site of sites) {
-      if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) continue
+    // ── Keywords ────────────────────────────────────────────────────────────────
+    if (runKeywords) {
+      let kwOk = 0, kwEmpty = 0, kwFail = 0, kwRows = 0
+      const kwStart = Date.now()
+      const kwAid = await activityStart(supabase, { type: logType, source: 'vercel', step: 'keywords', domain: siteFilter ?? undefined })
 
-      try {
-        type RawEntry = { title: string; content_date: string | null; content_type?: string }
-        let rawEntries: RawEntry[] = []
-        const hasCrawlConfig = !!(site.list_url && site.title_selector)
-
-        if (hasCrawlConfig) {
-          const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
-          const htmlCutoff = getMalaysiaDate(-cutoffDays)
-          const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
-          const SRC_SEP = '|||'
-          const listUrl = site.list_url!
-          const isNew = listUrl.includes(SRC_SEP)
-          const urlBlocks = isNew ? listUrl.split(SRC_SEP) : listUrl.split('\n').map((u: string) => u.trim()).filter(Boolean)
-          const titleSels = (site.title_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
-          const dateSels = (site.date_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
-          const sourceTypesList = (site.source_types || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
-          // Process each source separately to track content_type
-          for (let i = 0; i < urlBlocks.length; i++) {
-            const srcType = sourceTypesList[i] === 'game' ? 'game' : 'app'
-            const srcUrls = isNew
-              ? urlBlocks[i].split('\n').map((u: string) => u.trim()).filter(Boolean)
-              : [urlBlocks[i]]
-            for (let urlIdx = 0; urlIdx < srcUrls.length; urlIdx++) {
-              const src: HtmlSource = {
-                url: srcUrls[urlIdx],
-                titleSelector: titleSels[i] || titleSels[0] || '',
-                dateSelector: dateSels[i] || dateSels[0] || '',
-              }
-              const srcEntries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
-              for (const e of srcEntries) {
-                rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType })
-              }
-            }
-          }
+      for (const site of sites) {
+        if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) {
+          if (kwAid) await siteLog(supabase, kwAid, { domain: site.domain, status: 'skip' })
+          continue
         }
 
-        // Dedup within this crawl batch by keyword (first source wins, preserves content_type)
-        const seenInBatch = new Set<string>()
-        const cleanedEntries = rawEntries
-          .map((e) => ({
-            keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
-            content_date: e.content_date,
-            content_type: e.content_type || 'app',
-          }))
-          .filter((e) => {
-            if (e.keyword.length === 0 || seenInBatch.has(e.keyword)) return false
-            seenInBatch.add(e.keyword)
-            return true
-          })
+        try {
+          type RawEntry = { title: string; content_date: string | null; content_type?: string }
+          let rawEntries: RawEntry[] = []
+          const hasCrawlConfig = !!(site.list_url && site.title_selector)
 
-        let newCount = 0
-
-        if (cleanedEntries.length > 0) {
-          // Dedup by (keyword, content_date): same keyword on the same website date must not be re-inserted
-          const batchDates = Array.from(new Set(cleanedEntries.map(e => e.content_date).filter((d): d is string => !!d)))
-          const hasNullDate = cleanedEntries.some(e => !e.content_date)
-          const existingKeys = new Set<string>()
-
-          for (const cd of batchDates) {
-            const { data: existing } = await supabase
-              .from('raw_keywords')
-              .select('keyword')
-              .eq('site_id', site.id)
-              .eq('content_date', cd)
-              .limit(10000)
-            for (const row of (existing || []) as { keyword: string }[]) {
-              existingKeys.add(`${cd}|${row.keyword}`)
+          if (hasCrawlConfig) {
+            const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
+            const htmlCutoff = getMalaysiaDate(-cutoffDays)
+            const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
+            const SRC_SEP = '|||'
+            const listUrl = site.list_url!
+            const isNew = listUrl.includes(SRC_SEP)
+            const urlBlocks = isNew ? listUrl.split(SRC_SEP) : listUrl.split('\n').map((u: string) => u.trim()).filter(Boolean)
+            const titleSels = (site.title_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
+            const dateSels = (site.date_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
+            const sourceTypesList = (site.source_types || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
+            // Process each source separately to track content_type
+            for (let i = 0; i < urlBlocks.length; i++) {
+              const srcType = sourceTypesList[i] === 'game' ? 'game' : 'app'
+              const srcUrls = isNew
+                ? urlBlocks[i].split('\n').map((u: string) => u.trim()).filter(Boolean)
+                : [urlBlocks[i]]
+              for (let urlIdx = 0; urlIdx < srcUrls.length; urlIdx++) {
+                const src: HtmlSource = {
+                  url: srcUrls[urlIdx],
+                  titleSelector: titleSels[i] || titleSels[0] || '',
+                  dateSelector: dateSels[i] || dateSels[0] || '',
+                }
+                const srcEntries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
+                for (const e of srcEntries) {
+                  rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType })
+                }
+              }
             }
           }
 
-          if (hasNullDate) {
-            // For undated entries, fall back to same-MYT-day dedup
-            const todayMYTStart = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 86400000).toISOString()
-            const { data: existingNull } = await supabase
-              .from('raw_keywords')
-              .select('keyword')
-              .eq('site_id', site.id)
-              .gte('discovered_at', todayMYTStart)
-              .is('content_date', null)
-            for (const row of (existingNull || []) as { keyword: string }[]) {
-              existingKeys.add(`null|${row.keyword}`)
-            }
-          }
-
-          const newEntries = cleanedEntries.filter(e => {
-            const key = e.content_date ? `${e.content_date}|${e.keyword}` : `null|${e.keyword}`
-            return !existingKeys.has(key)
-          })
-          newCount = newEntries.length
-
-          if (newEntries.length > 0) {
-            const rows = newEntries.map((e) => ({
-              keyword: e.keyword,
-              site_id: site.id,
-              discovered_at: new Date().toISOString(),
-              content_date: e.content_date || yesterday,
+          // Dedup within this crawl batch by keyword (first source wins, preserves content_type)
+          const seenInBatch = new Set<string>()
+          const cleanedEntries = rawEntries
+            .map((e) => ({
+              keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
+              content_date: e.content_date,
               content_type: e.content_type || 'app',
             }))
-            for (const chunk of chunkArray(rows, 500)) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await (supabase.from('raw_keywords') as any).insert(chunk)
+            .filter((e) => {
+              if (e.keyword.length === 0 || seenInBatch.has(e.keyword)) return false
+              seenInBatch.add(e.keyword)
+              return true
+            })
+
+          let newCount = 0
+
+          if (cleanedEntries.length > 0) {
+            // Dedup by (keyword, content_date): same keyword on the same website date must not be re-inserted
+            const batchDates = Array.from(new Set(cleanedEntries.map(e => e.content_date).filter((d): d is string => !!d)))
+            const hasNullDate = cleanedEntries.some(e => !e.content_date)
+            const existingKeys = new Set<string>()
+
+            for (const cd of batchDates) {
+              const { data: existing } = await supabase
+                .from('raw_keywords')
+                .select('keyword')
+                .eq('site_id', site.id)
+                .eq('content_date', cd)
+                .limit(10000)
+              for (const row of (existing || []) as { keyword: string }[]) {
+                existingKeys.add(`${cd}|${row.keyword}`)
+              }
+            }
+
+            if (hasNullDate) {
+              // For undated entries, fall back to same-MYT-day dedup
+              const todayMYTStart = new Date(new Date(today + 'T16:00:00.000Z').getTime() - 86400000).toISOString()
+              const { data: existingNull } = await supabase
+                .from('raw_keywords')
+                .select('keyword')
+                .eq('site_id', site.id)
+                .gte('discovered_at', todayMYTStart)
+                .is('content_date', null)
+              for (const row of (existingNull || []) as { keyword: string }[]) {
+                existingKeys.add(`null|${row.keyword}`)
+              }
+            }
+
+            const newEntries = cleanedEntries.filter(e => {
+              const key = e.content_date ? `${e.content_date}|${e.keyword}` : `null|${e.keyword}`
+              return !existingKeys.has(key)
+            })
+            newCount = newEntries.length
+
+            if (newEntries.length > 0) {
+              const rows = newEntries.map((e) => ({
+                keyword: e.keyword,
+                site_id: site.id,
+                discovered_at: new Date().toISOString(),
+                content_date: e.content_date || yesterday,
+                content_type: e.content_type || 'app',
+              }))
+              for (const chunk of chunkArray(rows, 500)) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (supabase.from('raw_keywords') as any).insert(chunk)
+              }
             }
           }
-        }
 
-        // Always write daily_stats for sites with crawl config (even if 0 new)
-        if (hasCrawlConfig) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('daily_stats') as any).upsert(
-            { site_id: site.id, stat_date: yesterday, new_count: newCount },
-            { onConflict: 'site_id,stat_date' }
-          )
-          // Write per-type counts to competitor_kw_stats, keyed by content_date (website's own date)
-          const [appRes, gameRes] = await Promise.all([
-            supabase.from('raw_keywords')
-              .select('id', { count: 'exact', head: true })
-              .eq('site_id', site.id).eq('content_type', 'app')
-              .eq('content_date', yesterday)
-              .not('keyword', 'like', '%电脑版%'),
-            supabase.from('raw_keywords')
-              .select('id', { count: 'exact', head: true })
-              .eq('site_id', site.id).eq('content_type', 'game')
-              .eq('content_date', yesterday)
-              .not('keyword', 'like', '%电脑版%'),
-          ])
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('competitor_kw_stats') as any).upsert(
-            { site_id: site.id, stat_date: yesterday, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
-            { onConflict: 'site_id,stat_date' }
-          )
-        }
-
-        results.push({ site: site.domain, count: newCount })
-      } catch (siteErr: unknown) {
-        results.push({
-          site: site.domain,
-          count: 0,
-          error: siteErr instanceof Error ? siteErr.message : '抓取失败',
-        })
-      }
-    }
-
-    // Fetch rank changes for each site (always daily, independent of crawl_frequency)
-    if (runRank) for (const site of sites) {
-      try {
-        const rankDate = today
-        let rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
-        await new Promise((r) => setTimeout(r, 2000))
-        let rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
-        await new Promise((r) => setTimeout(r, 2000))
-        // Retry each type individually if it returned 0 — one may succeed while the other got rate-limited
-        if (rankupEntries.length === 0) {
-          await new Promise((r) => setTimeout(r, 5000))
-          rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
-          await new Promise((r) => setTimeout(r, 2000))
-        }
-        if (rankdownEntries.length === 0) {
-          await new Promise((r) => setTimeout(r, 5000))
-          rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
-          await new Promise((r) => setTimeout(r, 2000))
-        }
-        const rankRows = [
-          ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: rankDate, type: 'rankup', keyword: e.keyword, volume: e.volume })),
-          ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: rankDate, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
-        ]
-        if (rankRows.length > 0) {
-          await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', rankDate)
-          for (const chunk of chunkArray(rankRows, 500)) {
+          // Always write daily_stats for sites with crawl config (even if 0 new)
+          if (hasCrawlConfig) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('rank_changes') as any).insert(chunk)
+            await (supabase.from('daily_stats') as any).upsert(
+              { site_id: site.id, stat_date: yesterday, new_count: newCount },
+              { onConflict: 'site_id,stat_date' }
+            )
+            // Write per-type counts to competitor_kw_stats, keyed by content_date (website's own date)
+            const [appRes, gameRes] = await Promise.all([
+              supabase.from('raw_keywords')
+                .select('id', { count: 'exact', head: true })
+                .eq('site_id', site.id).eq('content_type', 'app')
+                .eq('content_date', yesterday)
+                .not('keyword', 'like', '%电脑版%'),
+              supabase.from('raw_keywords')
+                .select('id', { count: 'exact', head: true })
+                .eq('site_id', site.id).eq('content_type', 'game')
+                .eq('content_date', yesterday)
+                .not('keyword', 'like', '%电脑版%'),
+            ])
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('competitor_kw_stats') as any).upsert(
+              { site_id: site.id, stat_date: yesterday, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
+              { onConflict: 'site_id,stat_date' }
+            )
+
+            if (rawEntries.length === 0) {
+              kwEmpty++
+              if (kwAid) await siteLog(supabase, kwAid, { domain: site.domain, status: 'empty', detail: '页面返回空（疑似限流或选择器失效）' })
+            } else {
+              kwOk++
+              kwRows += newCount
+              if (kwAid) await siteLog(supabase, kwAid, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `新词${newCount}条` })
+            }
+          } else {
+            if (kwAid) await siteLog(supabase, kwAid, { domain: site.domain, status: 'skip', detail: '无list_url配置' })
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
-        }
-        const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: rankDate }))
-        const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: rankDate }))
-        for (const chunk of chunkArray(kwWithVol, 500)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
-        }
-        for (const chunk of chunkArray(kwNoVol, 500)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
-        }
-      } catch (rankErr) {
-        const msg = rankErr instanceof Error ? rankErr.message : '排名抓取失败'
-        results.push({ site: site.domain, count: -1, error: msg })
-      }
-    }
 
-    // Fetch weight + index snapshot from aizhan (today's reading)
-    // Retries up to 2 times on failure (likely rate-limited) with 30s wait each
-    if (runWeight) for (const site of sites) {
-      let fetched = false
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          if (attempt > 0) await new Promise((r) => setTimeout(r, 30000))
-          const { pc, mobile, indexCount, pcIpMin, pcIpMax, mobileIpMin, mobileIpMax } = await fetchAizhanData(site.domain)
-          await Promise.all([
-            (supabase.from('weight_history') as any).upsert(
-              { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile, pc_ip: pcIpMin, pc_ip_max: pcIpMax, mobile_ip: mobileIpMin, mobile_ip_max: mobileIpMax },
-              { onConflict: 'site_id,record_date' }
-            ),
-            (supabase.from('index_snapshots') as any).upsert(
-              { site_id: site.id, snapshot_date: today, index_count: indexCount },
-              { onConflict: 'site_id,snapshot_date' }
-            ),
-          ])
-          fetched = true
-          break
-        } catch {
-          // retry on next attempt
+          results.push({ site: site.domain, count: newCount })
+        } catch (siteErr: unknown) {
+          kwFail++
+          const errMsg = siteErr instanceof Error ? siteErr.message : '抓取失败'
+          if (kwAid) await siteLog(supabase, kwAid, { domain: site.domain, status: 'fail', detail: errMsg })
+          results.push({ site: site.domain, count: 0, error: errMsg })
         }
       }
-      // Always pace between sites — skipping delay on failure causes immediate hammering of the next site
-      await new Promise((r) => setTimeout(r, 3000))
-      if (!fetched) results.push({ site: site.domain, count: -1, error: '权重抓取失败（3次重试后放弃）' })
-    }
 
-    // Cleanup old data (only on keywords step to avoid running 3x per day)
-    if (runKeywords) {
+      if (kwAid) await activityEnd(supabase, kwAid, {
+        status: kwFail > 0 ? 'fail' : kwEmpty > 0 ? 'warn' : 'done',
+        ok: kwOk, empty: kwEmpty, fail: kwFail, rowsWritten: kwRows,
+        durationMs: Date.now() - kwStart,
+      })
+
+      // Cleanup old data (only on keywords step to avoid running 3x per day)
       await supabase.rpc('delete_old_raw_keywords').maybeSingle()
       await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
       await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
       await supabase.from('competitor_kw_stats').delete().lt('stat_date', getMalaysiaDate(-10))
+    }
+
+    // ── Rank ─────────────────────────────────────────────────────────────────────
+    if (runRank) {
+      let rkOk = 0, rkEmpty = 0, rkFail = 0, rkRows = 0
+      const rkStart = Date.now()
+      const rkAid = await activityStart(supabase, { type: logType, source: 'vercel', step: 'rank', domain: siteFilter ?? undefined })
+
+      for (const site of sites) {
+        try {
+          const rankDate = today
+          let rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
+          await new Promise((r) => setTimeout(r, 2000))
+          let rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
+          await new Promise((r) => setTimeout(r, 2000))
+          // Retry each type individually if it returned 0 — one may succeed while the other got rate-limited
+          if (rankupEntries.length === 0) {
+            await new Promise((r) => setTimeout(r, 5000))
+            rankupEntries = await fetchRankChanges(site.domain, rankDate, 'rankup')
+            await new Promise((r) => setTimeout(r, 2000))
+          }
+          if (rankdownEntries.length === 0) {
+            await new Promise((r) => setTimeout(r, 5000))
+            rankdownEntries = await fetchRankChanges(site.domain, rankDate, 'rankdown')
+            await new Promise((r) => setTimeout(r, 2000))
+          }
+          const rankRows = [
+            ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: rankDate, type: 'rankup', keyword: e.keyword, volume: e.volume })),
+            ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: rankDate, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
+          ]
+          if (rankRows.length > 0) {
+            await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', rankDate)
+            for (const chunk of chunkArray(rankRows, 500)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (supabase.from('rank_changes') as any).insert(chunk)
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
+          }
+          const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: rankDate }))
+          const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: rankDate }))
+          for (const chunk of chunkArray(kwWithVol, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
+          }
+          for (const chunk of chunkArray(kwNoVol, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
+          }
+
+          if (rankRows.length > 0) {
+            rkOk++
+            rkRows += rankRows.length
+            if (rkAid) await siteLog(supabase, rkAid, { domain: site.domain, status: 'ok', rowsWritten: rankRows.length, detail: `涨入${rankupEntries.length} | 跌出${rankdownEntries.length}` })
+          } else {
+            rkEmpty++
+            if (rkAid) await siteLog(supabase, rkAid, { domain: site.domain, status: 'empty', detail: '涨入0 | 跌出0（疑似限流）' })
+          }
+        } catch (rankErr) {
+          rkFail++
+          const msg = rankErr instanceof Error ? rankErr.message : '排名抓取失败'
+          if (rkAid) await siteLog(supabase, rkAid, { domain: site.domain, status: 'fail', detail: msg })
+          results.push({ site: site.domain, count: -1, error: msg })
+        }
+      }
+
+      if (rkAid) await activityEnd(supabase, rkAid, {
+        status: rkFail > 0 ? 'fail' : rkEmpty > 0 ? 'warn' : 'done',
+        ok: rkOk, empty: rkEmpty, fail: rkFail, rowsWritten: rkRows,
+        durationMs: Date.now() - rkStart,
+      })
+    }
+
+    // ── Weight + Index ────────────────────────────────────────────────────────────
+    // Retries up to 2 times on failure (likely rate-limited) with 30s wait each
+    if (runWeight) {
+      let wtOk = 0, wtFail = 0, wtRows = 0
+      const wtStart = Date.now()
+      const wtAid = await activityStart(supabase, { type: logType, source: 'vercel', step: 'weight', domain: siteFilter ?? undefined })
+
+      for (const site of sites) {
+        let fetched = false
+        let lastData: { pc: number; mobile: number; indexCount: number } | null = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 30000))
+            const { pc, mobile, indexCount, pcIpMin, pcIpMax, mobileIpMin, mobileIpMax } = await fetchAizhanData(site.domain)
+            await Promise.all([
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (supabase.from('weight_history') as any).upsert(
+                { site_id: site.id, record_date: today, pc_weight: pc, mobile_weight: mobile, pc_ip: pcIpMin, pc_ip_max: pcIpMax, mobile_ip: mobileIpMin, mobile_ip_max: mobileIpMax },
+                { onConflict: 'site_id,record_date' }
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (supabase.from('index_snapshots') as any).upsert(
+                { site_id: site.id, snapshot_date: today, index_count: indexCount },
+                { onConflict: 'site_id,snapshot_date' }
+              ),
+            ])
+            lastData = { pc, mobile, indexCount }
+            fetched = true
+            break
+          } catch {
+            // retry on next attempt
+          }
+        }
+        // Always pace between sites — skipping delay on failure causes immediate hammering of the next site
+        await new Promise((r) => setTimeout(r, 3000))
+
+        if (fetched && lastData) {
+          wtOk++
+          wtRows += 2
+          if (wtAid) await siteLog(supabase, wtAid, {
+            domain: site.domain, status: 'ok', rowsWritten: 2,
+            detail: `pc=${lastData.pc} mobile=${lastData.mobile} index=${lastData.indexCount}`,
+          })
+        } else {
+          wtFail++
+          if (wtAid) await siteLog(supabase, wtAid, { domain: site.domain, status: 'fail', detail: '3次重试后放弃' })
+          results.push({ site: site.domain, count: -1, error: '权重抓取失败（3次重试后放弃）' })
+        }
+      }
+
+      if (wtAid) await activityEnd(supabase, wtAid, {
+        status: wtFail > 0 ? 'warn' : 'done',
+        ok: wtOk, fail: wtFail, rowsWritten: wtRows,
+        durationMs: Date.now() - wtStart,
+      })
     }
 
     return NextResponse.json({ date: today, yesterday, results })
@@ -329,4 +407,3 @@ export async function GET(request: Request) {
     )
   }
 }
-

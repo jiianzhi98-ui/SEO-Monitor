@@ -1,335 +1,553 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { getBrowserClient } from '@/lib/supabase'
+import { CRAWL_RULES } from '@/lib/crawl-rules'
+
+type ActivityLog = {
+  id: string
+  type: 'cron_task' | 'cron_manual' | 'search'
+  source: string | null
+  step: string | null
+  domain: string | null
+  group_index: number | null
+  total_groups: number | null
+  ip: string | null
+  status: 'running' | 'done' | 'warn' | 'fail'
+  ok_count: number
+  empty_count: number
+  skip_count: number
+  fail_count: number
+  rows_written: number
+  duration_ms: number | null
+  summary: string | null
+  logged_at: string
+}
+
+type SiteLog = {
+  id: string
+  domain: string
+  status: 'ok' | 'empty' | 'skip' | 'fail'
+  rows_written: number
+  detail: string | null
+  logged_at: string
+}
+
+function getMalaysiaToday(): string {
+  const myt = new Date(Date.now() + 8 * 60 * 60 * 1000)
+  return myt.toISOString().slice(0, 10)
+}
+
+function getMytDayRange(mytDate: string): { from: string; to: string } {
+  return {
+    from: new Date(mytDate + 'T00:00:00+08:00').toISOString(),
+    to: new Date(mytDate + 'T23:59:59.999+08:00').toISOString(),
+  }
+}
+
+function formatDuration(ms: number | null): string {
+  if (!ms) return '-'
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  return `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000)
+  return d.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+const STEP_LABELS: Record<string, string> = {
+  keywords: '关键词',
+  rank: '排名',
+  weight: '权重+收录',
+}
+
+const STEP_TIMES: Record<string, string> = {
+  keywords: '每日 00:00',
+  rank: '每日 02:00',
+  weight: '每日 07:00',
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  cron_task: '任务cron',
+  cron_manual: '手动cron',
+  search: '搜索',
+}
+
+const SITE_STATUS_LABELS: Record<string, string> = {
+  ok: '成功', empty: '空', skip: '跳过', fail: '失败',
+}
+
+const SITE_STATUS_COLORS: Record<string, string> = {
+  ok: 'text-green-700', empty: 'text-yellow-600', skip: 'text-gray-400', fail: 'text-red-500',
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cls = {
+    running: 'bg-blue-50 text-blue-600',
+    done: 'bg-green-50 text-green-700',
+    warn: 'bg-yellow-50 text-yellow-700',
+    fail: 'bg-red-50 text-red-600',
+  }[status] ?? 'bg-gray-100 text-gray-600'
+  const label = {
+    running: '进行中', done: '完成', warn: '有空值', fail: '失败',
+  }[status] ?? status
+  return <span className={`text-xs px-2 py-0.5 rounded font-medium ${cls}`}>{label}</span>
+}
+
 export default function CrawlLogPage() {
+  const [todayLogs, setTodayLogs] = useState<Record<string, ActivityLog[]>>({
+    keywords: [], rank: [], weight: [],
+  })
+  const [logs, setLogs] = useState<ActivityLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<'all' | 'cron_task' | 'cron_manual' | 'search'>('all')
+  const [onlyProblems, setOnlyProblems] = useState(false)
+
+  const [rulesStep, setRulesStep] = useState<string | null>(null)
+  const [detailActivity, setDetailActivity] = useState<ActivityLog | null>(null)
+  const [siteLogs, setSiteLogs] = useState<SiteLog[]>([])
+  const [siteLogsLoading, setSiteLogsLoading] = useState(false)
+
+  const [expandedStep, setExpandedStep] = useState<string | null>(null)
+  const [expandedSites, setExpandedSites] = useState<Record<string, SiteLog[]>>({})
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    const supabase = getBrowserClient()
+    const today = getMalaysiaToday()
+    const { from, to } = getMytDayRange(today)
+
+    const { data: todayData } = await supabase
+      .from('activity_log')
+      .select('*')
+      .gte('logged_at', from)
+      .lte('logged_at', to)
+      .in('type', ['cron_task', 'cron_manual'])
+      .order('logged_at', { ascending: false })
+
+    const grouped: Record<string, ActivityLog[]> = { keywords: [], rank: [], weight: [] }
+    for (const row of (todayData || []) as ActivityLog[]) {
+      if (row.step && grouped[row.step]) grouped[row.step].push(row)
+    }
+    setTodayLogs(grouped)
+
+    const { data: logsData } = await supabase
+      .from('activity_log')
+      .select('*')
+      .order('logged_at', { ascending: false })
+      .limit(100)
+
+    setLogs((logsData || []) as ActivityLog[])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  async function openDetail(activity: ActivityLog) {
+    setDetailActivity(activity)
+    setSiteLogsLoading(true)
+    setSiteLogs([])
+    const supabase = getBrowserClient()
+    const { data } = await supabase
+      .from('activity_site_log')
+      .select('*')
+      .eq('activity_id', activity.id)
+      .order('logged_at', { ascending: true })
+    setSiteLogs((data || []) as SiteLog[])
+    setSiteLogsLoading(false)
+  }
+
+  async function toggleExpandStep(step: string) {
+    if (expandedStep === step) { setExpandedStep(null); return }
+    setExpandedStep(step)
+    if (expandedSites[step]) return
+    const supabase = getBrowserClient()
+    const ids = todayLogs[step].map(l => l.id)
+    if (ids.length === 0) { setExpandedSites(p => ({ ...p, [step]: [] })); return }
+    const { data } = await supabase
+      .from('activity_site_log')
+      .select('*')
+      .in('activity_id', ids)
+      .in('status', ['empty', 'fail'])
+      .order('status', { ascending: true })
+    setExpandedSites(p => ({ ...p, [step]: (data || []) as SiteLog[] }))
+  }
+
+  const filteredLogs = logs.filter(log => {
+    if (filter !== 'all' && log.type !== filter) return false
+    if (onlyProblems && log.status !== 'warn' && log.status !== 'fail') return false
+    return true
+  })
+
+  function getTodaySummary(step: string) {
+    const stepLogs = todayLogs[step] || []
+    return {
+      ok: stepLogs.reduce((s, l) => s + l.ok_count, 0),
+      empty: stepLogs.reduce((s, l) => s + l.empty_count, 0),
+      fail: stepLogs.reduce((s, l) => s + l.fail_count, 0),
+      latestStatus: stepLogs[0]?.status ?? null,
+      runs: stepLogs.length,
+    }
+  }
+
+  const rulesSection = CRAWL_RULES.find(r => r.key === rulesStep)
+
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">抓取日志</h1>
-        <p className="text-gray-500 text-sm mt-1">各模块自动抓取逻辑、数据来源与保留策略</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">抓取日志</h1>
+          <p className="text-gray-500 text-sm mt-1">今日运行状态 · 历史记录 · 抓取规则</p>
+        </div>
+        <button
+          onClick={fetchData}
+          className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          刷新
+        </button>
       </div>
 
-      <div className="space-y-4">
+      {loading ? (
+        <div className="text-gray-400 text-sm py-12 text-center">加载中…</div>
+      ) : (
+        <div className="space-y-6">
 
-        {/* 抓取架构 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">抓取架构</h2>
-            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium">cron-job.org → Vercel /api/cron</span>
+          {/* Today's task status cards */}
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">今日任务状态</h2>
+            <div className="grid grid-cols-3 gap-4">
+              {(['keywords', 'rank', 'weight'] as const).map(step => {
+                const { ok, empty, fail, latestStatus, runs } = getTodaySummary(step)
+                const hasProblems = empty > 0 || fail > 0
+                const isExpanded = expandedStep === step
+                return (
+                  <div key={step} className="card p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">{STEP_LABELS[step]}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{STEP_TIMES[step]} MYT</p>
+                      </div>
+                      {latestStatus ? (
+                        <StatusBadge status={latestStatus} />
+                      ) : (
+                        <span className="text-xs text-gray-400">尚无记录</span>
+                      )}
+                    </div>
+
+                    {runs > 0 ? (
+                      <>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-500">成功</span>
+                            <span className="font-medium text-green-700">{ok} 站</span>
+                          </div>
+                          {empty > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">空值</span>
+                              <span className="font-medium text-yellow-600">{empty} 站</span>
+                            </div>
+                          )}
+                          {fail > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">失败</span>
+                              <span className="font-medium text-red-600">{fail} 站</span>
+                            </div>
+                          )}
+                        </div>
+                        {hasProblems && (
+                          <button
+                            onClick={() => toggleExpandStep(step)}
+                            className="mt-3 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                          >
+                            {isExpanded ? '▲ 收起' : '▼ 查看问题站点'}
+                          </button>
+                        )}
+                        {isExpanded && (
+                          <div className="mt-2 border-t border-gray-100 pt-2 space-y-1">
+                            {!expandedSites[step] ? (
+                              <p className="text-xs text-gray-400">加载中…</p>
+                            ) : expandedSites[step].length === 0 ? (
+                              <p className="text-xs text-gray-400">无问题站点记录</p>
+                            ) : (
+                              expandedSites[step].map(sl => (
+                                <div key={sl.id} className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-700 truncate max-w-[130px]" title={sl.domain}>{sl.domain}</span>
+                                  <span className={sl.status === 'fail' ? 'text-red-500' : 'text-yellow-600'}>
+                                    {sl.status === 'fail' ? '失败' : '空'}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-400 mt-2">今日暂无记录</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
-          <div className="space-y-2 text-sm text-gray-600">
-            <p>cron-job.org 按时间触发，直接调用 Vercel <code className="text-xs bg-gray-100 px-1 rounded">/api/cron?step=步骤</code>，请求头带 <code className="text-xs bg-gray-100 px-1 rounded">Authorization: Bearer …</code> 验证。API 内部遍历所有已启用站点，三个步骤相互独立，某步骤失败不影响其他步骤。GitHub Actions 仅保留 <code className="text-xs bg-gray-100 px-1 rounded">workflow_dispatch</code> 供手动触发。</p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">步骤</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">触发时间（Malaysia UTC+8）</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">站点间隔</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium border border-gray-100">预计用时（25站）</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  <tr>
-                    <td className="px-3 py-2 border border-gray-100 font-medium text-gray-700">关键词抓取</td>
-                    <td className="px-3 py-2 border border-gray-100">00:00（<code>0 16 * * *</code> UTC）</td>
-                    <td className="px-3 py-2 border border-gray-100">无</td>
-                    <td className="px-3 py-2 border border-gray-100">~10 分钟</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 border border-gray-100 font-medium text-gray-700">排名变动</td>
-                    <td className="px-3 py-2 border border-gray-100">02:00（<code>0 18 * * *</code> UTC）</td>
-                    <td className="px-3 py-2 border border-gray-100">无</td>
-                    <td className="px-3 py-2 border border-gray-100">~10 分钟</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 border border-gray-100 font-medium text-gray-700">权重 + 收录</td>
-                    <td className="px-3 py-2 border border-gray-100">07:00（<code>0 23 * * *</code> UTC）</td>
-                    <td className="px-3 py-2 border border-gray-100">3 秒（API 内置）</td>
-                    <td className="px-3 py-2 border border-gray-100">~10 分钟</td>
-                  </tr>
-                </tbody>
-              </table>
+
+          {/* Run log table */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">运行记录</h2>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 text-xs">
+                  {(['all', 'cron_task', 'cron_manual', 'search'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`px-2.5 py-1 rounded-md font-medium ${
+                        filter === f
+                          ? 'bg-gray-800 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {f === 'all' ? '全部' : TYPE_LABELS[f]}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setOnlyProblems(p => !p)}
+                  className={`text-xs px-2.5 py-1 rounded-md font-medium ${
+                    onlyProblems ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  只看问题
+                </button>
+              </div>
+            </div>
+
+            <div className="card overflow-hidden">
+              {filteredLogs.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-sm">暂无记录</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50">
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">时间 (MYT)</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">类型</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">步骤 / 域名</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">IP</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">成 / 空 / 失</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">状态</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">时长</th>
+                        <th className="px-4 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredLogs.map(log => (
+                        <tr key={log.id} className="hover:bg-gray-50/50">
+                          <td className="px-4 py-2.5 text-xs text-gray-500 tabular-nums whitespace-nowrap">
+                            {formatDateTime(log.logged_at)}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                              {TYPE_LABELS[log.type] ?? log.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-700">
+                            {log.step ? (STEP_LABELS[log.step] ?? log.step) : ''}
+                            {log.domain && (
+                              <span className="ml-1 text-gray-400">{log.domain}</span>
+                            )}
+                            {log.group_index != null && log.total_groups != null && (
+                              <span className="ml-1 text-gray-400">
+                                #{log.group_index}/{log.total_groups}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums">
+                            {log.ip ?? '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs tabular-nums">
+                            <span className="text-green-700">{log.ok_count}</span>
+                            <span className="text-gray-300 mx-1">/</span>
+                            <span className={log.empty_count > 0 ? 'text-yellow-600' : 'text-gray-400'}>
+                              {log.empty_count}
+                            </span>
+                            <span className="text-gray-300 mx-1">/</span>
+                            <span className={log.fail_count > 0 ? 'text-red-500' : 'text-gray-400'}>
+                              {log.fail_count}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <StatusBadge status={log.status} />
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums">
+                            {formatDuration(log.duration_ms)}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              {log.step && (
+                                <button
+                                  onClick={() => setRulesStep(log.step as string)}
+                                  className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5 hover:border-gray-300"
+                                >
+                                  规则
+                                </button>
+                              )}
+                              <button
+                                onClick={() => openDetail(log)}
+                                className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200"
+                              >
+                                查看
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* Rules Modal */}
+      {rulesStep && rulesSection && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setRulesStep(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-xl w-full max-h-[80vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">{rulesSection.title}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{rulesSection.badge}</p>
+              </div>
+              <button onClick={() => setRulesStep(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              {rulesSection.items.map(item => (
+                <div key={item.label} className="flex gap-3 text-sm">
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0 h-fit mt-0.5">
+                    {item.label}
+                  </span>
+                  <span className="text-gray-600">{item.text}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
+      )}
 
-        {/* 关键词抓取 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">关键词抓取</h2>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">step=keywords · 每日 00:00</span>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">抓取逻辑</p>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">页面抓取</span>
-                  <span>爬取各站点 HTML 列表页，提取标题作为关键词；每日抓取最多 3 页，3 日频率最多 5 页，每周最多 10 页</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">翻页延迟</span>
-                  <span>每次翻页随机等待 <strong>10～15 秒</strong>，模拟人工操作防止被目标站检测；User-Agent 随机轮换</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">去重逻辑</span>
-                  <span>新词与数据库近 <strong>7 天</strong>内已有关键词对比去重，重复词不计入新增；批次内也去重（同一次抓取不重复入库）</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">写入</span>
-                  <span>新词写入 <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code>，每日新增数（含 0 条）写入 <code className="text-xs bg-gray-100 px-1 rounded">daily_stats</code>（有配置爬取地址的站点才写）</span>
-                </div>
+      {/* Detail Modal */}
+      {detailActivity && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setDetailActivity(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  {detailActivity.step
+                    ? (STEP_LABELS[detailActivity.step] ?? detailActivity.step)
+                    : (detailActivity.domain ?? '详情')}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {formatDateTime(detailActivity.logged_at)} MYT
+                  {' · '}{TYPE_LABELS[detailActivity.type] ?? detailActivity.type}
+                  {detailActivity.source && ` · ${detailActivity.source}`}
+                  {detailActivity.ip && ` · IP ${detailActivity.ip}`}
+                </p>
               </div>
+              <button onClick={() => setDetailActivity(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-4">
+              <div className="flex items-center flex-wrap gap-4 mb-4 text-sm">
+                <StatusBadge status={detailActivity.status} />
+                <span className="text-gray-500">
+                  成功 <span className="font-medium text-green-700">{detailActivity.ok_count}</span>
+                </span>
+                <span className="text-gray-500">
+                  空 <span className="font-medium text-yellow-600">{detailActivity.empty_count}</span>
+                </span>
+                <span className="text-gray-500">
+                  跳过 <span className="font-medium text-gray-500">{detailActivity.skip_count}</span>
+                </span>
+                <span className="text-gray-500">
+                  失败 <span className="font-medium text-red-500">{detailActivity.fail_count}</span>
+                </span>
+                <span className="text-gray-400">
+                  写入 {detailActivity.rows_written} 行
+                </span>
+                <span className="text-gray-400">{formatDuration(detailActivity.duration_ms)}</span>
+              </div>
+
+              {detailActivity.summary && (
+                <p className="text-xs text-gray-500 mb-4 bg-gray-50 rounded px-3 py-2">
+                  {detailActivity.summary}
+                </p>
+              )}
+
+              {siteLogsLoading ? (
+                <div className="text-center text-gray-400 text-sm py-8">加载中…</div>
+              ) : siteLogs.length === 0 ? (
+                <div className="text-center text-gray-400 text-sm py-8">无站点明细记录</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-2 text-xs font-medium text-gray-500">域名</th>
+                      <th className="text-left py-2 text-xs font-medium text-gray-500">状态</th>
+                      <th className="text-left py-2 text-xs font-medium text-gray-500">写入</th>
+                      <th className="text-left py-2 text-xs font-medium text-gray-500 max-w-[200px]">详情</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {siteLogs.map(sl => (
+                      <tr key={sl.id}>
+                        <td className="py-1.5 text-xs text-gray-700">{sl.domain}</td>
+                        <td className="py-1.5 text-xs">
+                          <span className={SITE_STATUS_COLORS[sl.status] ?? 'text-gray-500'}>
+                            {SITE_STATUS_LABELS[sl.status] ?? sl.status}
+                          </span>
+                        </td>
+                        <td className="py-1.5 text-xs text-gray-400">
+                          {sl.rows_written > 0 ? `${sl.rows_written} 行` : '-'}
+                        </td>
+                        <td className="py-1.5 text-xs text-gray-400 max-w-[200px] truncate" title={sl.detail ?? ''}>
+                          {sl.detail ?? ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
-
-        {/* 排名变动 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">排名变动</h2>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">step=rank · 每日 02:00</span>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">抓取逻辑</p>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">数据来源</span>
-                  <span>爱站<strong>移动端</strong> <code className="text-xs bg-gray-100 px-1 rounded">baidurank.aizhan.com/mobile/…</code>（非 PC 端 <code className="text-xs bg-gray-100 px-1 rounded">/baidu/…</code>），抓取当日涨入词与跌出词及搜索量</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">并行策略</span>
-                  <span>排名段 1-5 <strong>同时并行</strong>抓取，每段内部按页顺序抓取，每页间隔 <strong>300ms</strong>，某段无数据即停止翻页</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">UA 轮换</span>
-                  <span>每个站点、每次重试均随机选取一个新 User-Agent，避免同一 UA 连续请求被识别限流</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">限流保护</span>
-                  <span>涨入抓完后等 <strong>2 秒</strong> 再抓跌出；当涨入和跌出均为 0 时视为被限流，等待 <strong>5 秒</strong>后重试，最多重试 <strong>1 次</strong>（每次重试换新 UA）</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">去重</span>
-                  <span>同一关键词可能出现在多个排名段，以<strong>搜索量最高</strong>的记录为准去重后入库</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">写入</span>
-                  <span>有数据时先删除当日旧记录再写入 <code className="text-xs bg-gray-100 px-1 rounded">rank_changes</code>；涨入词同步更新 <code className="text-xs bg-gray-100 px-1 rounded">keyword_volume</code>（搜索量永久表，已有记录不被 0 覆盖）</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 权重+收录 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">权重 + 收录</h2>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">step=weight · 每日 07:00</span>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">抓取逻辑</p>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">数据来源</span>
-                  <span>爱站 aizhan.com，抓取 PC/移动权重、收录数、预估来路 IP 区间</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">UA 轮换</span>
-                  <span>每个站点、每次重试均随机选取一个新 User-Agent，避免同一 UA 连续请求被识别限流</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">限流保护</span>
-                  <span>请求失败时等待 <strong>30 秒</strong>后重试，最多重试 <strong>2 次</strong>（共 3 次尝试，每次换新 UA）；无论成功与否，每站点后等待 <strong>3 秒</strong>再打下一个</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">失败记录</span>
-                  <span>3 次重试仍失败时，cron 响应 JSON 记录该站点 <code className="text-xs bg-gray-100 px-1 rounded">count: -1</code> 及错误说明</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">写入</span>
-                  <span>权重/IP 写入 <code className="text-xs bg-gray-100 px-1 rounded">weight_history</code>，收录数写入 <code className="text-xs bg-gray-100 px-1 rounded">index_snapshots</code>（按日期 upsert，同日重跑不重复）</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 自动删除 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">数据保留策略</h2>
-          </div>
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">自动删除（每日随关键词步骤执行）</p>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-16 text-center flex-shrink-0">30 天</span>
-                  <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code>
-                  <span className="text-gray-500">— discovered_at 早于 30 天</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-16 text-center flex-shrink-0">30 天</span>
-                  <code className="text-xs bg-gray-100 px-1 rounded">rank_changes</code>
-                  <span className="text-gray-500">— stat_date 早于 30 天</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded font-medium w-16 text-center flex-shrink-0">30 天</span>
-                  <code className="text-xs bg-gray-100 px-1 rounded">daily_stats</code>
-                  <span className="text-gray-500">— stat_date 早于 30 天</span>
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-gray-100 pt-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">永久保留</p>
-              <div className="flex flex-wrap gap-2 text-sm text-gray-500">
-                <code className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">weight_history</code>
-                <code className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">index_snapshots</code>
-                <code className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">keyword_volume</code>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 状态判断规则 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">状态判断规则</h2>
-          </div>
-          <div className="space-y-5">
-
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">收录监控</p>
-              <p className="text-xs text-gray-400 mb-2">对比「最新快照」与「7天前快照」的周变化率</p>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">正常</span>
-                  <span className="text-gray-600">周变化率 ≥ −10%，或数据不足 7 天</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">警告</span>
-                  <span className="text-gray-600">周变化率 −20% ~ −10%</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">危险</span>
-                  <span className="text-gray-600">周变化率 &lt; −20%</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-sm font-medium text-gray-700 mb-2">新增异常（首页快报）</p>
-              <p className="text-xs text-gray-400 mb-2">对比「昨日新增」与「近7日均值」的比例；缺少日期记录视为 0</p>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">异常</span>
-                  <span className="text-gray-600">昨日新增 &lt; 7日均值 × 30%</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">偏低</span>
-                  <span className="text-gray-600">昨日新增在 7日均值 × 30%~60% 之间</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">偏高</span>
-                  <span className="text-gray-600">昨日新增 &gt; 7日均值 × 150%</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium w-12 text-center flex-shrink-0">正常</span>
-                  <span className="text-gray-600">昨日新增在 7日均值 × 60%~150% 之间，或均值为 0</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-sm font-medium text-gray-700 mb-2">权重监控排序</p>
-              <p className="text-xs text-gray-400 mb-2">三级排序优先级：关注度 → 站点分类 → 平均 IP</p>
-              <div className="space-y-1.5 text-sm text-gray-600">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">第一级</span>
-                  <span>关注度：重点关注 → 侧重关注 → 普通关注</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">第二级</span>
-                  <span>站点分类：大站 → 中站 → 小站</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">第三级</span>
-                  <span>PC/移动来路 IP 均值（高到低）</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* 热词雷达 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">热词雷达</h2>
-            <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-medium">/api/hot-radar · 按需查询</span>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">数据来源</p>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex gap-3">
-                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium flex-shrink-0">共新增词</span>
-                  <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code>，按关键词聚合，找出被 N 个以上竞品同时新增的词</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded font-medium flex-shrink-0">竞品涨排名</span>
-                  <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">rank_changes</code>（type=rankup），找出多个竞品同时涨排名的关键词及最高搜索量</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded font-medium flex-shrink-0">交叉词</span>
-                  <span>同一关键词同时命中共新增词与竞品涨排名，为最强趋势信号；页面默认展示此 Tab</span>
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">聚合规则</p>
-              <div className="space-y-1.5 text-sm text-gray-600">
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">阈值</span>
-                  <span>API 返回站点数 ≥ 2 的词，页面默认过滤为 ≥ 3 站，可手动调整为 2～5 站</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">触发方式</span>
-                  <span>进入热词雷达页面时按需查询，无定时任务，不写入额外数据表</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 竞品日收手动操作 */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-base font-semibold text-gray-900">竞品日收（手动按钮）</h2>
-          </div>
-          <div className="space-y-2 text-sm text-gray-600">
-            <div className="flex gap-3">
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">昨日新词</span>
-              <span>读取 <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code> 指定日期数据；需配置 HTML 抓取地址才可用</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">更新词库</span>
-              <span>读取近30天 <code className="text-xs bg-gray-100 px-1 rounded">raw_keywords</code>，按前缀自动归类，显示有2个以上变体的词组</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">排名变动</span>
-              <span>读取 <code className="text-xs bg-gray-100 px-1 rounded">rank_changes</code> 指定日期的涨入/跌出词，两个 tab 均默认显示词条数量</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium flex-shrink-0">不稳定词</span>
-              <span>统计 <code className="text-xs bg-gray-100 px-1 rounded">rank_changes</code> 近30天中涨入与跌出均出现、总天数 ≥ 3 的词</span>
-            </div>
-          </div>
-        </div>
-
-      </div>
+      )}
     </div>
   )
 }
