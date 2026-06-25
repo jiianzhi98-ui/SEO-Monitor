@@ -104,6 +104,7 @@ export default function CrawlLogPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'cron_task' | 'cron_manual' | 'search'>('all')
   const [onlyProblems, setOnlyProblems] = useState(false)
+  const [page, setPage] = useState(1)
 
   const [rulesStep, setRulesStep] = useState<string | null>(null)
   const [detailActivity, setDetailActivity] = useState<ActivityLog | null>(null)
@@ -137,7 +138,7 @@ export default function CrawlLogPage() {
       .from('activity_log')
       .select('*')
       .order('logged_at', { ascending: false })
-      .limit(100)
+      .limit(200)
 
     setLogs((logsData || []) as ActivityLog[])
     setLoading(false)
@@ -180,6 +181,14 @@ export default function CrawlLogPage() {
     if (onlyProblems && log.status !== 'warn' && log.status !== 'fail') return false
     return true
   })
+
+  const PAGE_SIZE = 20
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pagedLogs = filteredLogs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  function setFilterAndReset(f: typeof filter) { setFilter(f); setPage(1) }
+  function setOnlyProblemsAndReset(v: boolean) { setOnlyProblems(v); setPage(1) }
 
   function getTodaySummary(step: string) {
     const stepLogs = todayLogs[step] || []
@@ -305,7 +314,7 @@ export default function CrawlLogPage() {
                   {(['all', 'cron_task', 'cron_manual', 'search'] as const).map(f => (
                     <button
                       key={f}
-                      onClick={() => setFilter(f)}
+                      onClick={() => setFilterAndReset(f)}
                       className={`px-2.5 py-1 rounded-md font-medium ${
                         filter === f
                           ? 'bg-gray-800 text-white'
@@ -317,7 +326,7 @@ export default function CrawlLogPage() {
                   ))}
                 </div>
                 <button
-                  onClick={() => setOnlyProblems(p => !p)}
+                  onClick={() => setOnlyProblemsAndReset(!onlyProblems)}
                   className={`text-xs px-2.5 py-1 rounded-md font-medium ${
                     onlyProblems ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
@@ -346,7 +355,7 @@ export default function CrawlLogPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {filteredLogs.map(log => (
+                      {pagedLogs.map(log => (
                         <tr key={log.id} className="hover:bg-gray-50/50">
                           <td className="px-4 py-2.5 text-xs text-gray-500 tabular-nums whitespace-nowrap">
                             {formatDateTime(log.logged_at)}
@@ -409,6 +418,53 @@ export default function CrawlLogPage() {
                       ))}
                     </tbody>
                   </table>
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+                      <span className="text-xs text-gray-400">
+                        第 {safePage} / {totalPages} 页 · 共 {filteredLogs.length} 条
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setPage(p => Math.max(1, p - 1))}
+                          disabled={safePage === 1}
+                          className="px-2.5 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          上一页
+                        </button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(n => n === 1 || n === totalPages || Math.abs(n - safePage) <= 1)
+                          .reduce<(number | '…')[]>((acc, n, i, arr) => {
+                            if (i > 0 && n - (arr[i - 1] as number) > 1) acc.push('…')
+                            acc.push(n)
+                            return acc
+                          }, [])
+                          .map((item, i) =>
+                            item === '…' ? (
+                              <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span>
+                            ) : (
+                              <button
+                                key={item}
+                                onClick={() => setPage(item as number)}
+                                className={`w-7 py-1 text-xs rounded border ${
+                                  safePage === item
+                                    ? 'bg-gray-800 text-white border-gray-800'
+                                    : 'border-gray-200 text-gray-600 hover:bg-white'
+                                }`}
+                              >
+                                {item}
+                              </button>
+                            )
+                          )}
+                        <button
+                          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                          disabled={safePage === totalPages}
+                          className="px-2.5 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          下一页
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

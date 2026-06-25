@@ -269,6 +269,7 @@ export async function GET(request: Request) {
       await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
       await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
       await supabase.from('competitor_kw_stats').delete().lt('stat_date', getMalaysiaDate(-10))
+      await supabase.from('activity_log').delete().lt('logged_at', new Date(Date.now() - 7 * 86400000).toISOString())
     }
 
     // ── Rank ─────────────────────────────────────────────────────────────────────

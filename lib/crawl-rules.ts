@@ -89,6 +89,6 @@ export const RETENTION = {
   weight_history: '永久保留',
   index_snapshots: '永久保留',
   keyword_volume: '永久保留',
-  activity_log: '30天（按 logged_at）',
-  activity_site_log: '30天（随 activity_log 级联删除）',
+  activity_log: '7天（按 logged_at）',
+  activity_site_log: '7天（随 activity_log 级联删除）',
 }
