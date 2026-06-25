@@ -358,7 +358,7 @@ export default function CrawlLogPage() {
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">类型</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">步骤 / 域名</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">IP</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">成 / 空 / 失</th>
+                        <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">成 / 空 / 失</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">状态</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">时长</th>
                         <th className="text-right pr-4 py-2.5 text-xs font-medium text-gray-500"></th>
@@ -370,8 +370,12 @@ export default function CrawlLogPage() {
                           <td className="px-4 py-2.5 text-xs text-gray-500 tabular-nums whitespace-nowrap">
                             {formatDateTime(log.logged_at)}
                           </td>
-                          <td className="px-4 py-2.5">
-                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded whitespace-nowrap">
+                          <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                            <span className={
+                              log.type === 'cron_task' ? 'text-blue-600' :
+                              log.type === 'cron_manual' ? 'text-violet-600' :
+                              'text-gray-500'
+                            }>
                               {TYPE_LABELS[log.type] ?? log.type}
                             </span>
                           </td>
@@ -389,16 +393,12 @@ export default function CrawlLogPage() {
                           <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums whitespace-nowrap">
                             {log.ip ?? '-'}
                           </td>
-                          <td className="px-4 py-2.5 text-xs tabular-nums whitespace-nowrap">
+                          <td className="px-4 py-2.5 text-xs tabular-nums text-center whitespace-nowrap">
                             <span className="text-green-700">{log.ok_count}</span>
                             <span className="text-gray-300 mx-1">/</span>
-                            <span className={log.empty_count > 0 ? 'text-yellow-600' : 'text-gray-400'}>
-                              {log.empty_count}
-                            </span>
+                            <span className={log.empty_count > 0 ? 'text-yellow-600' : 'text-gray-400'}>{log.empty_count}</span>
                             <span className="text-gray-300 mx-1">/</span>
-                            <span className={log.fail_count > 0 ? 'text-red-500' : 'text-gray-400'}>
-                              {log.fail_count}
-                            </span>
+                            <span className={log.fail_count > 0 ? 'text-red-500' : 'text-gray-400'}>{log.fail_count}</span>
                           </td>
                           <td className="px-4 py-2.5 whitespace-nowrap">
                             <StatusBadge status={log.status} />
