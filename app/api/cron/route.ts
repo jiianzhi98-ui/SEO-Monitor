@@ -1,6 +1,12 @@
 export const maxDuration = 300
 
 import { NextResponse } from 'next/server'
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
+  return chunks
+}
 import { createServiceClient } from '@/lib/supabase-server'
 import {
   fetchHtmlListPages,
@@ -179,16 +185,17 @@ export async function GET(request: Request) {
           newCount = newEntries.length
 
           if (newEntries.length > 0) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('raw_keywords') as any).insert(
-              newEntries.map((e) => ({
-                keyword: e.keyword,
-                site_id: site.id,
-                discovered_at: new Date().toISOString(),
-                content_date: e.content_date || yesterday,
-                content_type: e.content_type || 'app',
-              }))
-            )
+            const rows = newEntries.map((e) => ({
+              keyword: e.keyword,
+              site_id: site.id,
+              discovered_at: new Date().toISOString(),
+              content_date: e.content_date || yesterday,
+              content_type: e.content_type || 'app',
+            }))
+            for (const chunk of chunkArray(rows, 500)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (supabase.from('raw_keywords') as any).insert(chunk)
+            }
           }
         }
 
@@ -254,22 +261,22 @@ export async function GET(request: Request) {
         ]
         if (rankRows.length > 0) {
           await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', rankDate)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('rank_changes') as any).insert(rankRows)
+          for (const chunk of chunkArray(rankRows, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('rank_changes') as any).insert(chunk)
+          }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
         }
-        // Upsert rankup keywords to permanent keyword_volume store (one record per keyword)
         const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: rankDate }))
         const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: rankDate }))
-        if (kwWithVol.length > 0) {
+        for (const chunk of chunkArray(kwWithVol, 500)) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('keyword_volume') as any).upsert(kwWithVol, { onConflict: 'keyword' })
+          await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
         }
-        if (kwNoVol.length > 0) {
-          // Insert only — don't overwrite existing volume with 0
+        for (const chunk of chunkArray(kwNoVol, 500)) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('keyword_volume') as any).upsert(kwNoVol, { onConflict: 'keyword', ignoreDuplicates: true })
+          await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
         }
       } catch (rankErr) {
         const msg = rankErr instanceof Error ? rankErr.message : '排名抓取失败'
