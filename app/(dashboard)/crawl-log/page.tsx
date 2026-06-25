@@ -345,7 +345,7 @@ export default function CrawlLogPage() {
                     <colgroup>
                       <col style={{ width: '160px' }} />
                       <col style={{ width: '90px' }} />
-                      <col />
+                      <col style={{ width: '170px' }} />
                       <col style={{ width: '136px' }} />
                       <col style={{ width: '88px' }} />
                       <col style={{ width: '76px' }} />
