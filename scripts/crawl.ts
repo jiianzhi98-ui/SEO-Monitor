@@ -263,17 +263,61 @@ async function runRank(sites: SiteRecord[], today: string) {
   console.log(`${'═'.repeat(60)}`)
 
   let ok = 0, failed = 0, consecutiveEmpty = 0
+  const retryQueue: SiteRecord[] = [] // 因限流而为空的站，熔断后补抓
+
+  // 将一个站点的抓取结果写入数据库
+  async function saveRankResult(s: SiteRecord, up: { keyword: string; volume: number }[], down: { keyword: string; volume: number }[]) {
+    const rows = [
+      ...up.map((e) => ({ site_id: s.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
+      ...down.map((e) => ({ site_id: s.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
+    ]
+    if (rows.length > 0) {
+      await withRetry(async () => {
+        await supabase.from('rank_changes').delete().eq('site_id', s.id).eq('stat_date', today)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sbCheck(await (supabase.from('rank_changes') as any).insert(rows), 'rank_changes insert')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', s.id)
+      })
+    }
+    const kwWithVol = up.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
+    const kwNoVol = up.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: today }))
+    if (kwWithVol.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from('keyword_volume') as any).upsert(kwWithVol, { onConflict: 'keyword' })
+    }
+    if (kwNoVol.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from('keyword_volume') as any).upsert(kwNoVol, { onConflict: 'keyword', ignoreDuplicates: true })
+    }
+  }
 
   for (let idx = 0; idx < sites.length; idx++) {
     const site = sites[idx]
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
-    // 熔断：连续 3 站均为空，说明 IP 被限流，暂停 5 分钟
+    // 熔断：连续 3 站均为空，说明 IP 被限流，暂停 5 分钟，然后补抓队列里的站
     if (consecutiveEmpty >= 3) {
-      console.log(`\n  ⏸ 连续 ${consecutiveEmpty} 站为空，疑似 IP 被限流，暂停 5 分钟… (${ts()})`)
+      const toRetry = retryQueue.splice(0)
+      console.log(`\n  ⏸ 连续 ${consecutiveEmpty} 站为空，疑似 IP 被限流，暂停 5 分钟后补抓 ${toRetry.length} 个站… (${ts()})`)
       await delay(5 * 60 * 1000)
       consecutiveEmpty = 0
-      console.log(`  ▶ 恢复抓取 (${ts()})`)
+      console.log(`  ▶ 恢复，先补抓 ${toRetry.length} 个空站 (${ts()})`)
+      for (const rs of toRetry) {
+        const rp = `  [补抓] ${rs.domain.padEnd(30)}`
+        try {
+          const up = await fetchRankChanges(rs.domain, today, 'rankup')
+          await delay(2000)
+          const down = await fetchRankChanges(rs.domain, today, 'rankdown')
+          await saveRankResult(rs, up, down)
+          const stillEmpty = up.length === 0 && down.length === 0
+          console.log(`${rp} ✓  涨入=${String(up.length).padStart(4)}  跌出=${String(down.length).padStart(4)}${stillEmpty ? '  ⚠ 仍为空' : '  ✓ 已补数据'}`)
+        } catch (e) {
+          console.error(`${rp} ✗  ${e instanceof Error ? e.message : e}`)
+        }
+        await delay(30000)
+      }
+      console.log(`  ▶ 继续主流程 (${ts()})`)
     }
 
     try {
@@ -295,37 +339,16 @@ async function runRank(sites: SiteRecord[], today: string) {
         await delay(2000)
       }
 
-      const rankRows = [
-        ...rankupEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankup', keyword: e.keyword, volume: e.volume })),
-        ...rankdownEntries.map((e) => ({ site_id: site.id, stat_date: today, type: 'rankdown', keyword: e.keyword, volume: e.volume })),
-      ]
-      if (rankRows.length > 0) {
-        await withRetry(async () => {
-          await supabase.from('rank_changes').delete().eq('site_id', site.id).eq('stat_date', today)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          sbCheck(await (supabase.from('rank_changes') as any).insert(rankRows), 'rank_changes insert')
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
-        })
-      }
-
-      const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
-      const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: today }))
-      if (kwWithVol.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('keyword_volume') as any).upsert(kwWithVol, { onConflict: 'keyword' })
-      }
-      if (kwNoVol.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('keyword_volume') as any).upsert(kwNoVol, { onConflict: 'keyword', ignoreDuplicates: true })
-      }
+      await saveRankResult(site, rankupEntries, rankdownEntries)
 
       const bothZero = rankupEntries.length === 0 && rankdownEntries.length === 0
       if (bothZero) {
         consecutiveEmpty++
+        retryQueue.push(site)
         console.log(`${prefix} ✓  涨入=   0  跌出=   0  ⚠ 涨跌均为空 (连续${consecutiveEmpty}站)`)
       } else {
         consecutiveEmpty = 0
+        retryQueue.length = 0
         console.log(`${prefix} ✓  涨入=${String(rankupEntries.length).padStart(4)}  跌出=${String(rankdownEntries.length).padStart(4)}`)
       }
       ok++
@@ -333,6 +356,7 @@ async function runRank(sites: SiteRecord[], today: string) {
       console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)
       failed++
       consecutiveEmpty++
+      retryQueue.push(site)
     }
     await delay(45000) // 站点间 45s，避免触发爱站限流
   }
