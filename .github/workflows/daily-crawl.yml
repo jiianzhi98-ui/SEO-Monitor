@@ -17,6 +17,10 @@ jobs:
   crawl:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    strategy:
+      fail-fast: false          # 一组失败不影响其他组
+      matrix:
+        group: [0, 1, 2, 3, 4] # 5 个 job，各用不同 IP
 
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +51,7 @@ jobs:
           echo "Running step: $STEP"
 
       - name: Run crawl
-        run: npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }}
+        run: npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=5
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

@@ -106,7 +106,7 @@ interface SiteRecord {
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
 
-async function runKeywords(sites: SiteRecord[], today: string, yesterday: string) {
+async function runKeywords(sites: SiteRecord[], today: string, yesterday: string, isMainGroup = true) {
   const stepStart = Date.now()
   console.log(`\n${'═'.repeat(60)}`)
   console.log(`  KEYWORDS   日期=${yesterday}   ${ts()}`)
@@ -247,11 +247,13 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
     await delay(5000)
   }
 
-  // 清理旧数据
-  await supabase.rpc('delete_old_raw_keywords').maybeSingle()
-  await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
-  await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
-  await supabase.from('competitor_kw_stats').delete().lt('stat_date', getMalaysiaDate(-10))
+  // 清理旧数据（只由 group 0 执行，避免多个 job 同时清理）
+  if (isMainGroup) {
+    await supabase.rpc('delete_old_raw_keywords').maybeSingle()
+    await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
+    await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
+    await supabase.from('competitor_kw_stats').delete().lt('stat_date', getMalaysiaDate(-10))
+  }
 
   console.log(`\n  KEYWORDS 完成  ✓${ok}  ⊘${skipped}  ✗${failed}  耗时=${elapsed(Date.now() - stepStart)}`)
 }
@@ -417,11 +419,13 @@ async function main() {
   const args = process.argv.slice(2)
   const step = args.find((a) => a.startsWith('--step='))?.split('=')[1] ?? 'all'
   const siteFilter = args.find((a) => a.startsWith('--site='))?.split('=')[1] ?? null
+  const group = parseInt(args.find((a) => a.startsWith('--group='))?.split('=')[1] ?? '0', 10)
+  const totalGroups = parseInt(args.find((a) => a.startsWith('--total-groups='))?.split('=')[1] ?? '1', 10)
 
   const totalStart = Date.now()
   console.log(`\n${'▶'.repeat(60)}`)
   console.log(`  SEO Monitor Crawl`)
-  console.log(`  step=${step}   site=${siteFilter ?? 'all'}   启动时间=${ts()} MYT`)
+  console.log(`  step=${step}  site=${siteFilter ?? 'all'}  group=${group}/${totalGroups}  启动时间=${ts()} MYT`)
   console.log(`${'▶'.repeat(60)}`)
 
   const today = getMalaysiaDate()
@@ -432,10 +436,15 @@ async function main() {
   const { data: sitesRaw, error } = await query
   if (error) throw error
 
-  const sites = shuffle((sitesRaw || []) as SiteRecord[])
-  console.log(`  共 ${sites.length} 个站点  today=${today}  yesterday=${yesterday}`)
+  const allSites = (sitesRaw || []) as SiteRecord[]
+  // 多组时按域名排序确保分组稳定；单组时随机打乱
+  const sites = totalGroups > 1
+    ? [...allSites].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
+    : shuffle(allSites)
 
-  if (step === 'keywords' || step === 'all') await runKeywords(sites, today, yesterday)
+  console.log(`  共 ${allSites.length} 个站点，本组 ${sites.length} 个  today=${today}  yesterday=${yesterday}`)
+
+  if (step === 'keywords' || step === 'all') await runKeywords(sites, today, yesterday, group === 0)
   if (step === 'weight'   || step === 'all') await runWeight(sites, today)
   if (step === 'rank'     || step === 'all') await runRank(sites, today)
 
