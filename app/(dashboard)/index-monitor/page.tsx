@@ -28,9 +28,6 @@ const statusConfig = {
   rising:  { label: '涨入', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-medium' },
 }
 
-function getMalaysiaDate(offsetDays = 0) {
-  return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
-}
 
 function Sparkline({ data }: { data: { date: string; count: number }[] }) {
   if (data.length < 2) return <span className="text-gray-300 text-xs">暂无趋势</span>
@@ -119,7 +116,8 @@ export default function IndexMonitorPage() {
         if (a.focus_level >= 3) {
           const pd = statusPriority(a) - statusPriority(b)
           if (pd !== 0) return pd
-          return a.weeklyChange - b.weeklyChange
+          const wd = a.weeklyChange - b.weeklyChange
+          if (wd !== 0) return wd
         }
         return b.latest - a.latest
       }))
