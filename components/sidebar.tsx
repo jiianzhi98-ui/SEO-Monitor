@@ -70,11 +70,6 @@ const NAV_GROUPS = [
   },
 ]
 
-const ROLE_LABEL: Record<string, string> = {
-  super: '超级管理员',
-  admin: '管理员',
-  normal: '普通用户',
-}
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -111,71 +106,35 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* ── Nav groups ── */}
-      <nav className="flex-1 px-3 pb-3 overflow-y-auto space-y-5">
-        {NAV_GROUPS.map(group => {
-          const visibleItems = group.items.filter(item => {
-            if ('superOnly' in item && item.superOnly && role !== 'super') return false
-            if ('hideNormal' in item && item.hideNormal && role === 'normal') return false
-            return true
-          })
-          if (visibleItems.length === 0) return null
-
+      {/* ── Nav ── */}
+      <nav className="flex-1 px-3 pb-3 overflow-y-auto space-y-0.5">
+        {NAV_GROUPS.flatMap(group => group.items).filter(item => {
+          if ('superOnly' in item && item.superOnly && role !== 'super') return false
+          if ('hideNormal' in item && item.hideNormal && role === 'normal') return false
+          return true
+        }).map(item => {
+          const isActive = item.href === '/'
+            ? pathname === '/'
+            : pathname.startsWith(item.href)
           return (
-            <div key={group.label}>
-              <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest"
-                style={{ color: 'rgba(255,255,255,0.25)' }}>
-                {group.label}
-              </p>
-              <div className="space-y-0.5">
-                {visibleItems.map(item => {
-                  const isActive = item.href === '/'
-                    ? pathname === '/'
-                    : pathname.startsWith(item.href)
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150"
-                      style={isActive ? {
-                        background: 'rgba(22,163,74,0.15)',
-                        color: '#4ade80',
-                      } : {
-                        color: 'rgba(255,255,255,0.45)',
-                      }}
-                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.cssText += ';background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.85)' }}
-                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.cssText = '' }}
-                    >
-                      {/* Active indicator bar */}
-                      <span
-                        className="absolute left-0 w-0.5 h-5 rounded-r-full transition-opacity"
-                        style={{
-                          background: '#4ade80',
-                          opacity: isActive ? 1 : 0,
-                          position: 'relative',
-                          display: 'none',
-                        }}
-                      />
-                      {item.icon}
-                      {item.label}
-                      {isActive && (
-                        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                      )}
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                isActive
+                  ? 'bg-green-600 text-white'
+                  : 'text-white/45 hover:bg-white/8 hover:text-white/90'
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </Link>
           )
         })}
       </nav>
 
-      {/* ── User + Logout ── */}
+      {/* ── Logout ── */}
       <div className="px-3 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        {/* Role badge */}
-        <div className="px-3 py-2 mb-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
-          <p className="text-xs font-medium text-white/70">{ROLE_LABEL[role] ?? '用户'}</p>
-        </div>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150"
