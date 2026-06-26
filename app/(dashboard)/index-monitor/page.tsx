@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { useUser } from '@/lib/user-context'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -41,6 +42,7 @@ function Sparkline({ data }: { data: { date: string; count: number }[] }) {
 }
 
 export default function IndexMonitorPage() {
+  const { role, accessibleSiteIds } = useUser()
   const [rows, setRows] = useState<IndexRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -80,7 +82,10 @@ export default function IndexMonitorPage() {
           .order('snapshot_date', { ascending: true }),
       ])
 
-      const sites = (sitesRaw || []) as SiteRow[]
+      const allSites = (sitesRaw || []) as SiteRow[]
+      const sites = accessibleSiteIds
+        ? allSites.filter(s => accessibleSiteIds.includes(s.id))
+        : allSites
       const snaps = (snapsRaw || []) as SnapRow[]
 
       const result: IndexRow[] = sites.map((site) => {
@@ -201,13 +206,15 @@ export default function IndexMonitorPage() {
                             >
                               详情
                             </button>
-                            <button
-                              onClick={() => crawling !== row.domain && triggerCrawl(row.domain)}
-                              disabled={crawling === row.domain}
-                              className="text-xs text-gray-400 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50 transition-colors disabled:opacity-40"
-                            >
-                              {crawling === row.domain ? '抓取中…' : '重抓'}
-                            </button>
+                            {role !== 'normal' && (
+                              <button
+                                onClick={() => crawling !== row.domain && triggerCrawl(row.domain)}
+                                disabled={crawling === row.domain}
+                                className="text-xs text-gray-400 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50 transition-colors disabled:opacity-40"
+                              >
+                                {crawling === row.domain ? '抓取中…' : '重抓'}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

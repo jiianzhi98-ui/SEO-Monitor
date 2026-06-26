@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { type ReactNode } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { useUser } from '@/lib/user-context'
 import {
   LineChart,
   Line,
@@ -88,6 +89,7 @@ function fmtNum(n: number): string {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { role, accessibleSiteIds } = useUser()
   const [sites, setSites] = useState<Site[]>([])
   const [indexSnaps, setIndexSnaps] = useState<IndexSnap[]>([])
   const [weightRecs, setWeightRecs] = useState<WeightRec[]>([])
@@ -104,7 +106,7 @@ export default function DashboardPage() {
     large: [], medium: [], small: [],
   })
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true)
@@ -142,7 +144,10 @@ export default function DashboardPage() {
         db.from('weight_history').select('site_id, pc_weight, mobile_weight').eq('record_date', getMY(-7)),
       ])
 
-      const siteList = (sitesRaw || []) as Site[]
+      const rawList = (sitesRaw || []) as Site[]
+      const siteList = accessibleSiteIds
+        ? rawList.filter(s => accessibleSiteIds.includes(s.id))
+        : rawList
       setSites(siteList)
       setIndexSnaps((snapsRaw || []) as IndexSnap[])
       setWeightRecs((wrecsRaw || []) as WeightRec[])
@@ -359,9 +364,9 @@ export default function DashboardPage() {
           empty="各站收录正常"
           action={
             <div className="flex items-center gap-1.5">
-              <RankupExportButton />
-              <span className="text-gray-200 select-none">|</span>
-              <RankdownExportButton />
+              {role !== 'admin' && <RankupExportButton />}
+              {role !== 'admin' && <span className="text-gray-200 select-none">|</span>}
+              {role !== 'admin' && <RankdownExportButton />}
             </div>
           }
         >
@@ -475,6 +480,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-semibold text-gray-600 mb-3">收录趋势</p>
               <CompareChart
+                key={activeCategory + '-index'}
                 data={getIndexData(activeIds)}
                 siteIds={activeIds}
                 colorMap={Object.fromEntries(activeIds.map(id => [id, siteColor(activeCategory, id)]))}
@@ -485,6 +491,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-semibold text-gray-600 mb-3">移动 IP 均值趋势</p>
               <CompareChart
+                key={activeCategory + '-mobile'}
                 data={getMobileIPData(activeIds)}
                 siteIds={activeIds}
                 colorMap={Object.fromEntries(activeIds.map(id => [id, siteColor(activeCategory, id)]))}
@@ -506,6 +513,8 @@ export default function DashboardPage() {
 interface KwVolRow { keyword: string; volume: number }
 
 function KeywordSearchCard() {
+  const { role } = useUser()
+  const isAdmin = role === 'admin'
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<KwVolRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -522,6 +531,8 @@ function KeywordSearchCard() {
   const [verifying, setVerifying] = useState(false)
 
   async function handleSearch(pg = 0) {
+    // admin cannot empty-search
+    if (isAdmin && !query.trim()) return
     setLoading(true)
     try {
       const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(query)}&page=${pg}`)
@@ -586,21 +597,23 @@ function KeywordSearchCard() {
             <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400" />
             <span className="text-sm font-medium text-gray-600">搜索量查询</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => openExportDialog('today')}
-              className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
-            >
-              导出今日
-            </button>
-            <span className="text-gray-300 select-none">|</span>
-            <button
-              onClick={() => openExportDialog('all')}
-              className="text-xs text-gray-400 hover:text-green-600 transition-colors"
-            >
-              导出全部
-            </button>
-          </div>
+          {!isAdmin && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openExportDialog('today')}
+                className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+              >
+                导出今日
+              </button>
+              <span className="text-gray-300 select-none">|</span>
+              <button
+                onClick={() => openExportDialog('all')}
+                className="text-xs text-gray-400 hover:text-green-600 transition-colors"
+              >
+                导出全部
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-1.5 mb-3">
@@ -1288,6 +1301,11 @@ function CompareChart({
   const [focusedIds, setFocusedIds] = useState<Set<string>>(new Set())
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const lineClickedRef = useRef(false)
+
+  useEffect(() => {
+    setFocusedIds(new Set())
+    setHoveredId(null)
+  }, [siteIds.join(',')])
 
   function toggleFocus(id: string) {
     setFocusedIds(prev => {

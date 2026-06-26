@@ -14,6 +14,7 @@ export type Database = {
           title_selector: string | null
           date_selector: string | null
           crawl_frequency: 'daily' | 'every3days' | 'weekly'
+          focus_level: number
           enable_version_clean: boolean
           version_suffixes: string[]
           is_enabled: boolean
@@ -22,6 +23,16 @@ export type Database = {
         }
         Insert: Omit<Database['public']['Tables']['sites']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['sites']['Insert']>
+      }
+      user_profiles: {
+        Row: { id: string; role: 'super' | 'admin' | 'normal'; created_at: string }
+        Insert: { id: string; role?: 'super' | 'admin' | 'normal' }
+        Update: { role?: 'super' | 'admin' | 'normal' }
+      }
+      user_site_access: {
+        Row: { user_id: string; site_id: string }
+        Insert: { user_id: string; site_id: string }
+        Update: { user_id?: string; site_id?: string }
       }
       raw_keywords: {
         Row: {

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
+import { useUser } from '@/lib/user-context'
 
 const navItems = [
   {
@@ -112,6 +113,13 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { role } = useUser()
+
+  const visibleNavItems = navItems.filter(item => {
+    if (item.href === '/sites' && role === 'admin') return false
+    if (item.href === '/crawl-log' && role === 'normal') return false
+    return true
+  })
 
   async function handleLogout() {
     const supabase = getBrowserClient()
@@ -140,7 +148,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = item.href === '/'
             ? pathname === '/'
             : pathname.startsWith(item.href)

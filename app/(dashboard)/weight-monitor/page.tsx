@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { useUser } from '@/lib/user-context'
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 
@@ -81,6 +82,7 @@ function Sparkline({ data }: { data: { date: string; pcAvg: number; mobileAvg: n
 }
 
 export default function WeightMonitorPage() {
+  const { accessibleSiteIds } = useUser()
   const [rows, setRows] = useState<WeightRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -104,7 +106,10 @@ export default function WeightMonitorPage() {
           .order('record_date', { ascending: true }),
       ])
 
-      const sites = (sitesRaw || []) as SiteRow[]
+      const allSites = (sitesRaw || []) as SiteRow[]
+      const sites = accessibleSiteIds
+        ? allSites.filter(s => accessibleSiteIds.includes(s.id))
+        : allSites
       const history = (historyRaw || []) as HistoryRow[]
 
       const result: WeightRow[] = sites.map((site) => {

@@ -1,0 +1,82 @@
+import { NextResponse } from 'next/server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
+import type { UserRole } from '@/lib/user-context'
+
+async function getCallerRole(): Promise<UserRole | null> {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const service = createServiceClient() as any
+  const { data } = await service.from('user_profiles').select('role').eq('id', user.id).single()
+  return ((data?.role ?? 'normal') as UserRole)
+}
+
+// GET /api/admin/users
+export async function GET() {
+  const callerRole = await getCallerRole()
+  if (!callerRole || callerRole === 'normal') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const service = createServiceClient() as any
+  const { data: { users }, error } = await service.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const { data: profiles } = await service.from('user_profiles').select('id, role')
+  const roleMap = new Map<string, UserRole>(
+    ((profiles ?? []) as { id: string; role: UserRole }[]).map((p) => [p.id, p.role])
+  )
+
+  const result = (users as { id: string; email: string; created_at: string }[]).map(u => ({
+    id: u.id,
+    email: u.email ?? '',
+    role: roleMap.get(u.id) ?? 'normal' as UserRole,
+    created_at: u.created_at,
+  }))
+
+  const filtered = callerRole === 'admin'
+    ? result.filter(u => u.role !== 'super')
+    : result
+
+  return NextResponse.json({ users: filtered })
+}
+
+// POST /api/admin/users
+export async function POST(req: Request) {
+  const callerRole = await getCallerRole()
+  if (!callerRole || callerRole === 'normal') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { email, password, role } = await req.json() as {
+    email: string
+    password: string
+    role: UserRole
+  }
+
+  if (!email || !password || !role) {
+    return NextResponse.json({ error: '缺少必填字段' }, { status: 400 })
+  }
+
+  if (callerRole === 'admin' && role !== 'normal') {
+    return NextResponse.json({ error: '管理员只能新增普通账号' }, { status: 403 })
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const service = createServiceClient() as any
+  const { data: { user }, error } = await service.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!user) return NextResponse.json({ error: '创建失败' }, { status: 500 })
+
+  await service.from('user_profiles').insert({ id: user.id, role })
+
+  return NextResponse.json({
+    user: { id: user.id, email: user.email ?? '', role, created_at: user.created_at }
+  })
+}

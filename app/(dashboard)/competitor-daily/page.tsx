@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { useUser } from '@/lib/user-context'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 
 interface CompetitorRow {
@@ -101,6 +102,7 @@ function cleanTitleClient(title: string, suffixes: string[]): string {
 }
 
 export default function CompetitorDailyPage() {
+  const { role, accessibleSiteIds } = useUser()
   const [rows, setRows] = useState<CompetitorRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -171,7 +173,10 @@ export default function CompetitorDailyPage() {
           .gte('stat_date', d7ago)
           .lte('stat_date', yesterday),
       ])
-      const sites = (sitesRaw || []) as SiteRow[]
+      const allSites = (sitesRaw || []) as SiteRow[]
+      const sites = accessibleSiteIds
+        ? allSites.filter(s => accessibleSiteIds.includes(s.id))
+        : allSites
       const stats = (statsRaw || []) as KwStatRow[]
 
       const result: CompetitorRow[] = sites.map((site) => {
@@ -658,13 +663,15 @@ export default function CompetitorDailyPage() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={triggerKwCrawl}
-                  disabled={kwCrawling}
-                  className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-40"
-                >
-                  {kwCrawling ? '抓取中…' : '重抓'}
-                </button>
+                {role !== 'normal' && (
+                  <button
+                    onClick={triggerKwCrawl}
+                    disabled={kwCrawling}
+                    className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-40"
+                  >
+                    {kwCrawling ? '抓取中…' : '重抓'}
+                  </button>
+                )}
                 <button onClick={() => setSelectedSite(null)} className="text-gray-400 hover:text-gray-600">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -819,13 +826,15 @@ export default function CompetitorDailyPage() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={triggerRankCrawl}
-                  disabled={rankCrawling}
-                  className="text-xs text-gray-400 hover:text-purple-600 px-2 py-1 rounded hover:bg-purple-50 transition-colors disabled:opacity-40"
-                >
-                  {rankCrawling ? '抓取中…' : '重抓'}
-                </button>
+                {role !== 'normal' && (
+                  <button
+                    onClick={triggerRankCrawl}
+                    disabled={rankCrawling}
+                    className="text-xs text-gray-400 hover:text-purple-600 px-2 py-1 rounded hover:bg-purple-50 transition-colors disabled:opacity-40"
+                  >
+                    {rankCrawling ? '抓取中…' : '重抓'}
+                  </button>
+                )}
                 <button onClick={() => setRankSite(null)} className="text-gray-400 hover:text-gray-600">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
