@@ -116,6 +116,7 @@ interface SiteRecord {
   source_types: string | null
   enable_version_clean: boolean
   version_suffixes: string[]
+  is_enabled: boolean
   has_rank_data: boolean
   created_at: string
 }
