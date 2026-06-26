@@ -1274,6 +1274,15 @@ function CompareChart({
     )
   }
 
+  // Fill missing values with 0 so lines start from 0 instead of creating gaps
+  const filledData = data.map(row => {
+    const filled: Record<string, string | number> = { ...row }
+    for (const id of siteIds) {
+      if (filled[id] === undefined || filled[id] === null) filled[id] = 0
+    }
+    return filled
+  })
+
   let rawMax = 0
   for (const row of data) {
     for (const id of siteIds) {
@@ -1286,7 +1295,7 @@ function CompareChart({
 
   return (
     <ResponsiveContainer width="100%" height={420}>
-      <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+      <LineChart data={filledData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis
           dataKey="date"
@@ -1313,8 +1322,12 @@ function CompareChart({
             name={id}
             stroke={colorMap[id]}
             strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4 }}
+            dot={(props: { cx: number; cy: number; value: number; index: number }) => {
+              const { cx, cy, value, index } = props
+              if (!value) return <g key={index} />
+              return <circle key={index} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} />
+            }}
+            activeDot={{ r: 4, fill: colorMap[id], stroke: 'white', strokeWidth: 2 }}
           />
         ))}
       </LineChart>
