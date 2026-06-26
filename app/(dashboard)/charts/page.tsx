@@ -70,7 +70,7 @@ function ShowMoreList({ items, initialCount = 10 }: { items: React.ReactNode[]; 
 
 interface HotItem { rank: number; name: string; labels: string[] }
 interface TodayGame { title: string; tag: string; startDate: string; startTime: string; endDate: string; rating: number | null; labels: string[]; icon: string }
-interface HaoyouItem { name: string; tags: string[]; score: string; status: string; url: string; btnText: string }
+interface HaoyouItem { name: string; tags: string[]; score: string; status: string; url: string; btnText: string; date: string }
 
 const haoyouTagColors: Record<string, string> = {
   '限量测试': 'bg-purple-100 text-purple-700',
@@ -99,14 +99,13 @@ function deriveHaoyouTag(status: string, btnText: string): string {
 
 function HaoyouGameItem({ g, hideDownload }: { g: HaoyouItem; hideDownload?: boolean }) {
   const tag = deriveHaoyouTag(g.status, g.btnText)
-  const firstTag = g.tags[0] ?? ''
   const showTag = hideDownload ? tag !== '下载' : true
   return (
     <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
       <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
-        {g.status && <span className="text-gray-400 font-normal">{g.status} · </span>}
+        {g.date && <span className="text-gray-400 font-normal">{g.date} · </span>}
         {g.name}
-        {firstTag && <span className="text-gray-400 font-normal"> · {firstTag}</span>}
+        {g.status && <span className="text-gray-400 font-normal"> · {g.status}</span>}
       </p>
       {showTag && tag && (
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${haoyouTagColors[tag] || 'bg-gray-100 text-gray-500'}`}>

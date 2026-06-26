@@ -18,6 +18,7 @@ export interface HaoyouItem {
   status: string
   url: string
   btnText: string
+  date: string
 }
 
 async function loadPage() {
@@ -75,10 +76,20 @@ function parseItem($: ReturnType<typeof cheerio.load>, li: Element): HaoyouItem 
 
 function parseTab($: ReturnType<typeof cheerio.load>, rel: string): HaoyouItem[] {
   const items: HaoyouItem[] = []
-  $(`.panelList[rel="${rel}"]`).find('.foreList li').each((_, el) => {
+  const panel = $(`.panelList[rel="${rel}"]`)
+  let currentDate = ''
+
+  // Walk in document order: .foredate updates currentDate, li items get stamped with it
+  panel.find('.foredate, .foreList li').each((_, el) => {
+    const $el = $(el)
+    if ($el.hasClass('foredate')) {
+      const m = $el.text().trim().match(/(\d+)月(\d+)日/)
+      if (m) currentDate = `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}`
+      return
+    }
     if (isPc($, el) || isPaid($, el)) return
     const item = parseItem($, el)
-    if (item) items.push(item)
+    if (item) items.push({ ...item, date: currentDate })
   })
   return items
 }
