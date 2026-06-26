@@ -66,18 +66,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ keywords: allRows })
   }
 
-  let query = supabase
+  const PAGE_SIZE = 50
+  const pg = Math.max(0, parseInt(searchParams.get('page') || '0', 10))
+  const offset = pg * PAGE_SIZE
+
+  let countQuery = supabase.from('keyword_volume').select('*', { count: 'exact', head: true })
+  if (q) countQuery = countQuery.ilike('keyword', `%${q}%`)
+
+  let dataQuery = supabase
     .from('keyword_volume')
     .select('keyword, volume')
     .order('volume', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1)
+  if (q) dataQuery = dataQuery.ilike('keyword', `%${q}%`)
 
-  if (q) query = query.ilike('keyword', `%${q}%`)
-  query = query.limit(50)
-
-  const { data, error } = await query
+  const [{ count }, { data, error }] = await Promise.all([countQuery, dataQuery])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const results = data || []
-  if (q) await log(supabase, 'kw-search', results.length, `搜索「${q}」→ ${results.length} 个词`, t0)
-  return NextResponse.json({ keywords: results })
+  const total = count ?? 0
+  if (q && pg === 0) await log(supabase, 'kw-search', total, `搜索「${q}」→ ${total} 个词`, t0)
+  return NextResponse.json({ keywords: results, total })
 }

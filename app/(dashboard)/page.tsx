@@ -510,6 +510,8 @@ function KeywordSearchCard() {
   const [rows, setRows] = useState<KwVolRow[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
 
   // Export auth dialog
   const [showDialog, setShowDialog] = useState(false)
@@ -519,12 +521,14 @@ function KeywordSearchCard() {
   const [verifyError, setVerifyError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
 
-  async function handleSearch() {
+  async function handleSearch(pg = 0) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(query)}`)
+      const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(query)}&page=${pg}`)
       const data = await res.json()
       setRows(data.keywords || [])
+      setTotal(data.total ?? 0)
+      setPage(pg)
       setSearched(true)
     } finally {
       setLoading(false)
@@ -604,12 +608,12 @@ function KeywordSearchCard() {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onKeyDown={e => e.key === 'Enter' && handleSearch(0)}
             placeholder="搜索词..."
             className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
           />
           <button
-            onClick={handleSearch}
+            onClick={() => handleSearch(0)}
             disabled={loading}
             className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
           >
@@ -617,7 +621,7 @@ function KeywordSearchCard() {
           </button>
         </div>
 
-        <div className="max-h-28 overflow-y-auto">
+        <div className={`${searched && total > 50 ? 'max-h-20' : 'max-h-28'} overflow-y-auto`}>
           {!searched ? (
             <p className="text-xs text-gray-400">输入关键词后搜索</p>
           ) : rows.length === 0 ? (
@@ -635,6 +639,28 @@ function KeywordSearchCard() {
             </div>
           )}
         </div>
+
+        {searched && total > 50 && (
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+            <button
+              onClick={() => handleSearch(page - 1)}
+              disabled={page === 0 || loading}
+              className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30 px-1.5 py-0.5 rounded transition-colors"
+            >
+              ← 上一页
+            </button>
+            <span className="text-xs text-gray-400 tabular-nums">
+              第 {page + 1} / {Math.ceil(total / 50)} 页 · 共 {total} 个
+            </span>
+            <button
+              onClick={() => handleSearch(page + 1)}
+              disabled={(page + 1) * 50 >= total || loading}
+              className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30 px-1.5 py-0.5 rounded transition-colors"
+            >
+              下一页 →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Export auth dialog */}
