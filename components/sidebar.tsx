@@ -116,7 +116,7 @@ export default function Sidebar() {
   const { role } = useUser()
 
   const visibleNavItems = navItems.filter(item => {
-    if (item.href === '/sites' && role === 'admin') return false
+    if (item.href === '/sites' && role !== 'super') return false
     if (item.href === '/crawl-log' && role === 'normal') return false
     return true
   })

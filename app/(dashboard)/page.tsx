@@ -364,9 +364,9 @@ export default function DashboardPage() {
           empty="各站收录正常"
           action={
             <div className="flex items-center gap-1.5">
-              {role !== 'admin' && <RankupExportButton />}
-              {role !== 'admin' && <span className="text-gray-200 select-none">|</span>}
-              {role !== 'admin' && <RankdownExportButton />}
+              {role === 'super' && <RankupExportButton />}
+              {role === 'super' && <span className="text-gray-200 select-none">|</span>}
+              {role === 'super' && <RankdownExportButton />}
             </div>
           }
         >
@@ -514,7 +514,7 @@ interface KwVolRow { keyword: string; volume: number }
 
 function KeywordSearchCard() {
   const { role } = useUser()
-  const isAdmin = role === 'admin'
+  const isAdmin = role !== 'super'
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<KwVolRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -597,7 +597,7 @@ function KeywordSearchCard() {
             <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400" />
             <span className="text-sm font-medium text-gray-600">搜索量查询</span>
           </div>
-          {!isAdmin && (
+          {role === 'super' && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => openExportDialog('today')}
