@@ -120,27 +120,33 @@ export default function LoginPage() {
       return
     }
 
-    if (!turnstileToken) {
-      setError('请完成人机验证')
-      return
-    }
+    const hasTurnstile = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
-    setLoading(true)
-
-    const tsRes = await fetch('/api/auth/verify-turnstile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: turnstileToken }),
-    })
-    if (!tsRes.ok) {
-      const d = await tsRes.json()
-      setError(d.error ?? '人机验证失败，请重试')
-      setLoading(false)
-      setTurnstileToken(null)
-      if (turnstileWidgetId.current && window.turnstile) {
-        window.turnstile.reset(turnstileWidgetId.current)
+    if (hasTurnstile) {
+      if (!turnstileToken) {
+        setError('请完成人机验证')
+        return
       }
-      return
+
+      setLoading(true)
+
+      const tsRes = await fetch('/api/auth/verify-turnstile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: turnstileToken }),
+      })
+      if (!tsRes.ok) {
+        const d = await tsRes.json()
+        setError(d.error ?? '人机验证失败，请重试')
+        setLoading(false)
+        setTurnstileToken(null)
+        if (turnstileWidgetId.current && window.turnstile) {
+          window.turnstile.reset(turnstileWidgetId.current)
+        }
+        return
+      }
+    } else {
+      setLoading(true)
     }
 
     const resolveRes = await fetch('/api/auth/resolve-username', {
