@@ -153,17 +153,65 @@ export default function LoginPage() {
       style={{ background: '#080d15' }}>
 
       {/* ── Background atmosphere ── */}
-      {/* Green glow top-left */}
-      <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(22,163,74,0.18) 0%, transparent 65%)' }} />
-      {/* Teal glow bottom-right */}
-      <div className="absolute -bottom-60 -right-40 w-[700px] h-[700px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(6,182,212,0.10) 0%, transparent 65%)' }} />
-      {/* Subtle dot grid */}
+
+      {/* Green glow — top left */}
+      <div className="absolute -top-32 -left-32 w-[620px] h-[620px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(22,163,74,0.22) 0%, transparent 65%)' }} />
+      {/* Teal glow — bottom right */}
+      <div className="absolute -bottom-48 -right-32 w-[680px] h-[680px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 65%)' }} />
+      {/* Indigo glow — center right, adds depth */}
+      <div className="absolute top-1/2 -right-20 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 65%)' }} />
+      {/* Small bright green accent — upper center */}
+      <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[300px] h-[200px] pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse, rgba(74,222,128,0.08) 0%, transparent 70%)' }} />
+
+      {/* Dot grid */}
       <div className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
+          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+        }} />
+
+      {/* Abstract data chart decoration — bottom left */}
+      <svg className="absolute bottom-12 left-8 pointer-events-none opacity-[0.07]"
+        width="320" height="160" viewBox="0 0 320 160" fill="none">
+        <polyline points="0,140 40,120 80,125 120,80 160,90 200,45 240,55 280,20 320,30"
+          stroke="url(#chartGreen)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="0,155 40,145 80,148 120,128 160,135 200,110 240,118 280,90 320,100"
+          stroke="url(#chartTeal)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        {[0,40,80,120,160,200,240,280,320].map((x, i) => {
+          const y1 = [140,120,125,80,90,45,55,20,30][i]
+          return <circle key={x} cx={x} cy={y1} r="3" fill="#4ade80" />
+        })}
+        <defs>
+          <linearGradient id="chartGreen" x1="0" y1="0" x2="320" y2="0">
+            <stop offset="0%" stopColor="#22c55e" />
+            <stop offset="100%" stopColor="#4ade80" />
+          </linearGradient>
+          <linearGradient id="chartTeal" x1="0" y1="0" x2="320" y2="0">
+            <stop offset="0%" stopColor="#06b6d4" />
+            <stop offset="100%" stopColor="#22d3ee" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* Abstract rings — top right */}
+      <svg className="absolute -top-20 -right-20 pointer-events-none opacity-[0.06]"
+        width="400" height="400" viewBox="0 0 400 400" fill="none">
+        <circle cx="200" cy="200" r="160" stroke="#4ade80" strokeWidth="1" />
+        <circle cx="200" cy="200" r="120" stroke="#22d3ee" strokeWidth="1" />
+        <circle cx="200" cy="200" r="80"  stroke="#818cf8" strokeWidth="1" />
+        <circle cx="200" cy="200" r="40"  stroke="#4ade80" strokeWidth="1.5" />
+      </svg>
+
+      {/* Horizontal scan line — mid */}
+      <div className="absolute left-0 right-0 pointer-events-none"
+        style={{
+          top: '38%',
+          height: '1px',
+          background: 'linear-gradient(90deg, transparent 0%, rgba(74,222,128,0.12) 30%, rgba(34,211,238,0.12) 70%, transparent 100%)',
         }} />
 
       {/* ── Card ── */}
