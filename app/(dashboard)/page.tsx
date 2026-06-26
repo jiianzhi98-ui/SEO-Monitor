@@ -1216,39 +1216,56 @@ function AlertCard({
 // ─── SortedTooltip ───────────────────────────────────────────────────────────
 
 function SortedTooltip({
-  active, payload, label, siteMap,
+  active, payload, label, siteMap, siteIds, colorMap,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   active?: boolean; payload?: readonly any[]; label?: string | number
   siteMap: Map<string, Site>
+  siteIds?: string[]
+  colorMap?: Record<string, string>
 }) {
-  if (!active || !payload || payload.length === 0) return null
-  const sorted = [...payload]
-    .filter(p => p.value != null)
-    .sort((a, b) => b.value - a.value)
+  if (!active || !payload) return null
 
-  const cols = sorted.length <= 8 ? 1 : sorted.length <= 18 ? 2 : 3
-  // Split into equal column chunks so reading order goes DOWN each column then to the next
-  const perCol = Math.ceil(sorted.length / cols)
-  const chunks = Array.from({ length: cols }, (_, c) => sorted.slice(c * perCol, (c + 1) * perCol))
+  // Build value map from payload for quick lookup
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const valueMap = new Map<string, any>()
+  for (const p of payload) {
+    if (p.name != null) valueMap.set(String(p.name), p)
+  }
 
-  const renderItem = (p: { name: string; value: number; color: string }, i: number) => (
-    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 0' }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: p.color, flexShrink: 0 }} />
-      <span style={{ color: '#374151', whiteSpace: 'nowrap' }}>
-        {siteMap.get(p.name)?.domain ?? p.name}
-        <span style={{ color: '#9ca3af' }}> : </span>
-        {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
-      </span>
-    </div>
-  )
+  // Use siteIds as the definitive order (sorted by value desc, nulls last)
+  const ids = siteIds ?? payload.map(p => String(p.name))
+  const withData = ids.filter(id => valueMap.get(id)?.value != null).sort((a, b) => (valueMap.get(b)?.value ?? 0) - (valueMap.get(a)?.value ?? 0))
+  const noData = ids.filter(id => valueMap.get(id)?.value == null)
+  const all = [...withData, ...noData]
+  if (all.length === 0) return null
+
+  const cols = all.length <= 8 ? 1 : all.length <= 18 ? 2 : 3
+  const perCol = Math.ceil(all.length / cols)
+  const chunks = Array.from({ length: cols }, (_, c) => all.slice(c * perCol, (c + 1) * perCol))
+
+  const renderItem = (id: string, i: number) => {
+    const p = valueMap.get(id)
+    const color = p?.color ?? colorMap?.[id] ?? '#9ca3af'
+    const hasValue = p?.value != null
+    return (
+      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 0' }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
+        <span style={{ color: hasValue ? '#374151' : '#9ca3af', whiteSpace: 'nowrap' }}>
+          {siteMap.get(id)?.domain ?? id}
+          <span style={{ color: '#9ca3af' }}> : </span>
+          {hasValue ? (typeof p.value === 'number' ? p.value.toLocaleString() : p.value) : '—'}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
       <p style={{ color: '#6b7280', marginBottom: 6, fontWeight: 500 }}>日期：{label}</p>
       <div style={{ display: 'flex', gap: 20 }}>
         {chunks.map((chunk, ci) => (
-          <div key={ci}>{chunk.map((p, i) => renderItem(p, i))}</div>
+          <div key={ci}>{chunk.map((id, i) => renderItem(id, i))}</div>
         ))}
       </div>
     </div>
@@ -1304,7 +1321,7 @@ function CompareChart({
           ticks={yTicks}
           tickFormatter={(v: number) => yFormatter(v)}
         />
-        <Tooltip content={(props) => <SortedTooltip {...props} siteMap={siteMap} />} />
+        <Tooltip content={(props) => <SortedTooltip {...props} siteMap={siteMap} siteIds={siteIds} colorMap={colorMap} />} />
         {siteIds.map(id => (
           <Line
             key={id}
