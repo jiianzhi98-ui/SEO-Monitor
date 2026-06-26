@@ -21,6 +21,12 @@ export interface HaoyouItem {
   date: string
 }
 
+export interface HaoyouHotItem {
+  rank: number
+  name: string
+  tags: string[]
+}
+
 async function loadPage() {
   try {
     const res = await fetch('https://www.3839.com/timeline.html', {
@@ -94,12 +100,44 @@ function parseTab($: ReturnType<typeof cheerio.load>, rel: string): HaoyouItem[]
   return items
 }
 
+async function fetchHotChart(): Promise<HaoyouHotItem[]> {
+  try {
+    const res = await fetch('https://www.3839.com/top/hot.html', {
+      headers: HEADERS,
+      next: { revalidate: 3600 },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!res.ok) return []
+    const buf = Buffer.from(await res.arrayBuffer())
+    const peek = buf.subarray(0, 4096).toString('ascii')
+    const meta = peek.match(/<meta[^>]+charset=["']?\s*([^"'\s;>]+)/i)?.[1]?.toLowerCase() ?? 'utf-8'
+    const charset = (meta === 'gb2312' || meta === 'gb18030') ? 'gbk' : meta
+    const $h = cheerio.load(iconv.decode(buf, charset))
+
+    const items: HaoyouHotItem[] = []
+    $h('ul.foreList li, ol li, .rankList li, .list li').each((_, el) => {
+      if (items.length >= 20) return false as unknown as void
+      const $el = $h(el)
+      const name = $el.find('.name em').first().text().trim()
+        || $el.find('em').first().text().trim()
+        || $el.find('a').first().text().trim()
+      if (!name || name.length < 2) return
+      const tags = $el.find('p.tags .it').map((_, t) => $h(t).text().trim()).get()
+      items.push({ rank: items.length + 1, name, tags })
+    })
+    return items
+  } catch { return [] }
+}
+
 export async function GET() {
   const $ = await loadPage()
-  if (!$) return NextResponse.json({ upcoming: [], updates: [] })
+  if (!$) return NextResponse.json({ upcoming: [], updates: [], hotItems: [] })
+
+  const [hotItems] = await Promise.all([fetchHotChart()])
 
   return NextResponse.json({
     upcoming: parseTab($, '1'),  // 即将上线
     updates: parseTab($, '3'),   // 即将更新
+    hotItems,
   })
 }

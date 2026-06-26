@@ -71,6 +71,7 @@ function ShowMoreList({ items, initialCount = 10 }: { items: React.ReactNode[]; 
 interface HotItem { rank: number; name: string; labels: string[] }
 interface TodayGame { title: string; tag: string; startDate: string; startTime: string; endDate: string; rating: number | null; labels: string[]; icon: string }
 interface HaoyouItem { name: string; tags: string[]; score: string; status: string; url: string; btnText: string; date: string }
+interface HaoyouHotItem { rank: number; name: string; tags: string[] }
 
 const haoyouTagColors: Record<string, string> = {
   '限量测试': 'bg-purple-100 text-purple-700',
@@ -155,6 +156,7 @@ export default function ChartsPage() {
 
   const [haoyouUpcoming, setHaoyouUpcoming] = useState<HaoyouItem[]>([])
   const [haoyouUpdates, setHaoyouUpdates] = useState<HaoyouItem[]>([])
+  const [haoyouHotItems, setHaoyouHotItems] = useState<HaoyouHotItem[]>([])
   const [haoyouLoading, setHaoyouLoading] = useState(true)
   const [haoyouUpdatedAt, setHaoyouUpdatedAt] = useState('')
   const [haoyouUpcomingExpanded, setHaoyouUpcomingExpanded] = useState(false)
@@ -184,6 +186,7 @@ export default function ChartsPage() {
       .then((d) => {
         setHaoyouUpcoming(d.upcoming ?? [])
         setHaoyouUpdates(d.updates ?? [])
+        setHaoyouHotItems(d.hotItems ?? [])
         setHaoyouUpdatedAt(ts)
       })
       .catch(() => {})
@@ -354,9 +357,23 @@ export default function ChartsPage() {
             )}
           </Card>
 
-          {/* 第三个名片 TBD */}
-          <Card title="敬请期待" subtitle="即将加入" icon="⭐" accent="bg-green-50">
-            <p className="text-xs text-gray-400 py-4 text-center">第三个榜单即将配置</p>
+          {/* 热门榜 */}
+          <Card title={`热门榜 TOP 20`} subtitle="实时热门游戏" icon="🔥" accent="bg-green-50">
+            {haoyouLoading ? (
+              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+            ) : haoyouHotItems.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+            ) : (
+              <ShowMoreList initialCount={10} items={haoyouHotItems.map((g) => (
+                <li key={g.rank} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                  <RankBadge rank={g.rank} />
+                  <p className="flex-1 text-xs font-medium text-gray-800 truncate">{g.name}</p>
+                  {g.tags[0] && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 flex-shrink-0">{g.tags[0]}</span>
+                  )}
+                </li>
+              ))} />
+            )}
           </Card>
 
         </div>
