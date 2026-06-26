@@ -124,11 +124,11 @@ export default function SitesPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">网站管理</h1>
-          <p className="text-gray-500 text-sm mt-1">管理所有监控站点的抓取配置</p>
+          <p className="text-gray-400 text-sm mt-0.5">管理所有监控站点的抓取配置</p>
         </div>
         <button
           onClick={() => { setEditSite(null); setShowModal(true) }}

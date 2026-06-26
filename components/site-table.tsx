@@ -67,8 +67,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
       <table className="w-full">
         <thead className="bg-gray-50">
           <tr>
-            <th className="table-th">域名</th>
-            <th className="table-th">名称</th>
+            <th className="table-th">域名 / 名称</th>
             <th className="table-th">分类</th>
             <th className="table-th">关注</th>
             <th className="table-th">频率</th>
@@ -81,17 +80,19 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
         <tbody className="divide-y divide-gray-100">
           {paged.map((site) => (
             <tr key={site.id} className="hover:bg-gray-50 transition-colors">
-              <td className="table-td">
+              <td className="px-4 py-2.5">
                 <a
                   href={`https://${site.domain}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-green-600 hover:underline font-medium"
+                  className="text-sm text-green-600 hover:underline font-medium"
                 >
                   {site.domain}
                 </a>
+                {site.name && (
+                  <p className="text-xs text-gray-400 mt-0.5 leading-tight">{site.name}</p>
+                )}
               </td>
-              <td className="table-td text-gray-600">{site.name}</td>
               <td className="table-td">
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
                   {categoryLabel[site.category]}
