@@ -67,85 +67,74 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
       <table className="w-full">
         <thead className="bg-gray-50">
           <tr>
-            <th className="table-th">域名 / 名称</th>
+            <th className="table-th">域名</th>
+            <th className="table-th">名称</th>
             <th className="table-th">分类</th>
             <th className="table-th">关注</th>
             <th className="table-th">频率</th>
             <th className="table-th text-center">版本清洗</th>
-            <th className="table-th text-center">关键词数据</th>
-            <th className="table-th text-center">排名数据</th>
+            <th className="table-th text-center">关键词</th>
+            <th className="table-th text-center">排名</th>
             <th className="table-th text-right">操作</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-50">
           {paged.map((site) => (
-            <tr key={site.id} className="hover:bg-gray-50 transition-colors">
-              <td className="px-4 py-2.5">
+            <tr key={site.id} className="hover:bg-gray-50/50 transition-colors">
+              <td className="table-td">
                 <a
                   href={`https://${site.domain}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-green-600 hover:underline font-medium"
+                  className="text-green-600 hover:underline font-medium"
                 >
                   {site.domain}
                 </a>
-                {site.name && (
-                  <p className="text-xs text-gray-400 mt-0.5 leading-tight">{site.name}</p>
-                )}
               </td>
+              <td className="table-td text-gray-500">{site.name}</td>
               <td className="table-td">
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">
                   {categoryLabel[site.category]}
                 </span>
               </td>
               <td className="table-td">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${focusConfig[site.focus_level]?.className ?? 'bg-gray-50 text-gray-400'}`}>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${focusConfig[site.focus_level]?.className ?? 'bg-gray-50 text-gray-400'}`}>
                   {focusConfig[site.focus_level]?.label ?? '普通'}
                 </span>
               </td>
-              <td className="table-td text-gray-600 text-xs">{frequencyLabel[site.crawl_frequency]}</td>
+              <td className="table-td text-gray-500">{frequencyLabel[site.crawl_frequency]}</td>
               <td className="table-td text-center">
-                {site.enable_version_clean ? (
-                  <span className="text-green-600 text-xs font-medium">启用</span>
-                ) : (
-                  <span className="text-gray-400 text-xs">关闭</span>
-                )}
+                {site.enable_version_clean
+                  ? <span className="text-green-600 font-medium">启用</span>
+                  : <span className="text-gray-300">—</span>}
               </td>
               <td className="table-td text-center">
                 <button
                   onClick={() => onToggle(site)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${
-                    site.is_enabled ? 'bg-green-600' : 'bg-gray-300'
-                  }`}
+                  className={`relative w-9 h-[18px] rounded-full transition-colors ${site.is_enabled ? 'bg-green-600' : 'bg-gray-200'}`}
                 >
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    site.is_enabled ? 'translate-x-5' : 'translate-x-0'
-                  }`} />
+                  <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${site.is_enabled ? 'translate-x-[18px]' : 'translate-x-0'}`} />
                 </button>
               </td>
               <td className="table-td text-center">
                 <button
                   onClick={() => onToggleRank(site)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${
-                    site.has_rank_data ? 'bg-purple-500' : 'bg-gray-300'
-                  }`}
+                  className={`relative w-9 h-[18px] rounded-full transition-colors ${site.has_rank_data ? 'bg-purple-500' : 'bg-gray-200'}`}
                 >
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    site.has_rank_data ? 'translate-x-5' : 'translate-x-0'
-                  }`} />
+                  <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${site.has_rank_data ? 'translate-x-[18px]' : 'translate-x-0'}`} />
                 </button>
               </td>
               <td className="table-td text-right">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1.5">
                   <button
                     onClick={() => onEdit(site)}
-                    className="text-xs text-gray-600 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                    className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5 hover:border-gray-300 transition-colors"
                   >
                     编辑
                   </button>
                   <button
                     onClick={() => onDelete(site)}
-                    className="text-xs text-gray-600 hover:text-red-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                    className="text-xs text-red-400 hover:text-red-600 border border-red-100 rounded px-1.5 py-0.5 hover:border-red-200 transition-colors"
                   >
                     删除
                   </button>
