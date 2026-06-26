@@ -116,8 +116,12 @@ export default function IndexMonitorPage() {
         if (a.focus_level >= 3) {
           const pd = statusPriority(a) - statusPriority(b)
           if (pd !== 0) return pd
-          const wd = a.weeklyChange - b.weeklyChange
-          if (wd !== 0) return wd
+          if (a.weeklyChange !== b.weeklyChange) {
+            // Negative: ascending (跌得多的靠前); Positive: descending (涨得多的靠前)
+            return (a.weeklyChange < 0 || b.weeklyChange < 0)
+              ? a.weeklyChange - b.weeklyChange
+              : b.weeklyChange - a.weeklyChange
+          }
         }
         return b.latest - a.latest
       }))
