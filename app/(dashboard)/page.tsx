@@ -1357,7 +1357,20 @@ function CompareChart({
                 if (!value || cx == null || cy == null) return <g key={index ?? 0} />
                 return <circle key={index ?? 0} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} strokeOpacity={dimmed ? 0.15 : 1} />
               }}
-              activeDot={false}
+              activeDot={(props: { cx?: number; cy?: number }) => {
+                const { cx, cy } = props
+                if (cx == null || cy == null) return <g />
+                return (
+                  <circle
+                    cx={cx} cy={cy} r={5}
+                    fill={colorMap[id]} stroke="white" strokeWidth={2}
+                    style={{ cursor: 'pointer' }}
+                    onMouseEnter={() => setHoveredId(id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    onClick={(e) => { e.stopPropagation(); lineClickedRef.current = true; toggleFocus(id) }}
+                  />
+                )
+              }}
               onClick={() => { lineClickedRef.current = true; toggleFocus(id) }}
               onMouseEnter={() => setHoveredId(id)}
               onMouseLeave={() => setHoveredId(null)}
