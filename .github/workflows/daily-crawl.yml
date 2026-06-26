@@ -9,9 +9,9 @@ on:
         options: [all, keywords, rank, weight]
         default: all
   schedule:
-    - cron: '0 16 * * *'   # 00:00 MYT — keywords
-    - cron: '0 18 * * *'   # 02:00 MYT — weight
-    - cron: '0 19 * * *'   # 03:00 MYT — rank
+    - cron: '0 13 * * *'   # 21:00 MYT (target ~02:00 MYT after ~5h queue) — keywords
+    - cron: '0 15 * * *'   # 23:00 MYT (target ~04:00 MYT after ~5h queue) — weight
+    - cron: '0 16 * * *'   # 00:00 MYT (target ~05:00 MYT after ~5h queue) — rank
 
 jobs:
   crawl:

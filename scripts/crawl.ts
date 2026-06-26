@@ -364,14 +364,14 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
       await delay(2000)
 
       if (rankupEntries.length === 0) {
-        console.log(`${prefix}   ↺ 涨入为空，重试中…`)
-        await delay(5000)
+        console.log(`${prefix}   ↺ 涨入为空，等30s后重试…`)
+        await delay(30000)
         rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
         await delay(2000)
       }
       if (rankdownEntries.length === 0) {
-        console.log(`${prefix}   ↺ 跌出为空，重试中…`)
-        await delay(5000)
+        console.log(`${prefix}   ↺ 跌出为空，等30s后重试…`)
+        await delay(30000)
         rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
         await delay(2000)
       }
