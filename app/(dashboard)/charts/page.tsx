@@ -97,17 +97,18 @@ function deriveHaoyouTag(status: string, btnText: string): string {
   return btnText || ''
 }
 
-function HaoyouGameItem({ g }: { g: HaoyouItem }) {
+function HaoyouGameItem({ g, hideDownload }: { g: HaoyouItem; hideDownload?: boolean }) {
   const tag = deriveHaoyouTag(g.status, g.btnText)
   const firstTag = g.tags[0] ?? ''
-  const sub = [g.status, firstTag].filter(Boolean).join(' · ')
+  const showTag = hideDownload ? tag !== '下载' : true
   return (
     <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
       <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
+        {g.status && <span className="text-gray-400 font-normal">{g.status} · </span>}
         {g.name}
-        {sub && <span className="text-gray-400 font-normal"> · {sub}</span>}
+        {firstTag && <span className="text-gray-400 font-normal"> · {firstTag}</span>}
       </p>
-      {tag && (
+      {showTag && tag && (
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${haoyouTagColors[tag] || 'bg-gray-100 text-gray-500'}`}>
           {tag}
         </span>
@@ -129,12 +130,12 @@ const tagColors2: Record<string, string> = {
 
 function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
   const timeStr = showDate && g.startDate ? g.startDate : g.startTime || g.startDate
-  const subParts = [timeStr, g.labels.length > 0 ? g.labels[0] : ''].filter(Boolean).join(' · ')
   return (
     <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
       <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
+        {timeStr && <span className="text-gray-400 font-normal">{timeStr} · </span>}
         {g.title}
-        {subParts && <span className="text-gray-400 font-normal"> · {subParts}</span>}
+        {g.labels.length > 0 && <span className="text-gray-400 font-normal"> · {g.labels[0]}</span>}
       </p>
       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${tagColors2[g.tag] || 'bg-gray-100 text-gray-500'}`}>{g.tag}</span>
     </li>
@@ -339,7 +340,7 @@ export default function ChartsPage() {
               <>
                 <ul>
                   {(haoyouUpdatesExpanded ? haoyouUpdates : haoyouUpdates.slice(0, 6)).map((g, i) => (
-                    <HaoyouGameItem key={i} g={g} />
+                    <HaoyouGameItem key={i} g={g} hideDownload />
                   ))}
                 </ul>
                 {haoyouUpdates.length > 6 && (
