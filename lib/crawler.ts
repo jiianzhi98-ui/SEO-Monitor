@@ -456,6 +456,83 @@ export async function fetchRankdownWithTitle(
     .sort((a, b) => b.volume - a.volume)
 }
 
+// Fetch one page of rankup results including the title column (标题).
+async function fetchRankupPage(
+  domain: string,
+  rankPos: number,
+  date: string,
+  page: number,
+  cookie = '',
+  ua: string,
+  isToday = false
+): Promise<{ keyword: string; volume: number; title: string }[]> {
+  const pageSuffix = page === 1 ? '' : `${page}/`
+  const url = isToday
+    ? `https://baidurank.aizhan.com/mobile/${domain}/rankup/${rankPos}/${pageSuffix}`
+    : `https://baidurank.aizhan.com/mobile/${domain}/rankup/${rankPos}/${date}/${pageSuffix}`
+  try {
+    const headers: Record<string, string> = { ...getRankHeaders(ua) }
+    if (cookie) headers['Cookie'] = cookie
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000), next: { revalidate: 0 } })
+    if (!res.ok) return []
+    const html = await res.text()
+    const cookieMatch = html.match(/\.cookie\s*=\s*"([^"]+)"/)
+    if (cookieMatch) {
+      const challengeCookie = cookieMatch[1].split(';')[0]
+      if (challengeCookie === cookie) return []
+      return fetchRankupPage(domain, rankPos, date, page, challengeCookie, ua, isToday)
+    }
+    const $ = cheerio.load(html)
+    const results: { keyword: string; volume: number; title: string }[] = []
+    $('tbody tr').each((_, tr) => {
+      const keyword = $(tr).find('td.title a').first().text().trim()
+      const volume = parseInt($(tr).find('td.ip').eq(2).text().trim(), 10) || 0
+      const titleTd = $(tr).find('td').eq(5)
+      const title = (titleTd.length ? titleTd : $(tr).find('td').last()).text().trim()
+      if (keyword) results.push({ keyword, volume, title })
+    })
+    return results
+  } catch {
+    return []
+  }
+}
+
+// Fetch all rankup (涨入) keywords for a domain on a given date, including page title.
+export async function fetchRankupWithTitle(
+  domain: string,
+  date: string,
+): Promise<{ keyword: string; volume: number; title: string }[]> {
+  const ua = randomUA()
+  const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
+  const isToday = date === todayMY
+  const prefetchUrl = isToday
+    ? `https://baidurank.aizhan.com/mobile/${domain}/rankup/1/`
+    : undefined
+  const sharedCookie = await prefetchRankCookie(domain, 'rankup', date, ua, prefetchUrl)
+
+  const allResults = await Promise.all(
+    [1, 2, 3, 4, 5].map(async (rankPos) => {
+      const entries: { keyword: string; volume: number; title: string }[] = []
+      for (let page = 1; page <= 15; page++) {
+        const pageEntries = await fetchRankupPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
+        if (pageEntries.length === 0) break
+        entries.push(...pageEntries.filter(e => e.volume > 0))
+        if (page < 15) await new Promise((r) => setTimeout(r, 300))
+      }
+      return entries
+    })
+  )
+
+  const seen = new Map<string, { volume: number; title: string }>()
+  for (const e of allResults.flat()) {
+    const cur = seen.get(e.keyword)
+    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title })
+  }
+  return Array.from(seen.entries())
+    .map(([keyword, { volume, title }]) => ({ keyword, volume, title }))
+    .sort((a, b) => b.volume - a.volume)
+}
+
 // @deprecated use fetchAizhanData instead
 export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; mobile: number }> {
   const { pc, mobile } = await fetchAizhanData(domain)

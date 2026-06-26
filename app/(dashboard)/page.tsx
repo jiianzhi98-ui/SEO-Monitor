@@ -357,7 +357,13 @@ export default function DashboardPage() {
           count={indexAlerts.length}
           color={indexAlerts.some(a => a.status === 'danger') ? 'red' : indexAlerts.some(a => a.status === 'warning') ? 'orange' : indexAlerts.some(a => a.status === 'rising') ? 'teal' : 'gray'}
           empty="各站收录正常"
-          action={<RankdownExportButton />}
+          action={
+            <div className="flex items-center gap-1.5">
+              <RankupExportButton />
+              <span className="text-gray-200 select-none">|</span>
+              <RankdownExportButton />
+            </div>
+          }
         >
           {indexAlerts.map((a, i) => (
             <div key={i} className="flex items-center justify-between gap-2 py-0.5">
@@ -681,6 +687,218 @@ function KeywordSearchCard() {
               >
                 {verifying ? '验证中...' : '确认导出'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ─── RankupExportButton ───────────────────────────────────────────────────────
+
+function RankupExportButton() {
+  const [open, setOpen] = useState(false)
+  const [domain, setDomain] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [status, setStatus] = useState<'idle' | 'verifying' | 'crawling' | 'done'>('idle')
+  const [progress, setProgress] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+
+  function openDialog() {
+    setDomain('')
+    setStartDate(getMY(-6))
+    setEndDate(getMY())
+    setEmail('')
+    setPassword('')
+    setStatus('idle')
+    setProgress('')
+    setErr(null)
+    setOpen(true)
+  }
+
+  async function handleStart() {
+    if (!domain || !startDate || !endDate) { setErr('请填写网站和日期'); return }
+
+    setStatus('verifying')
+    setErr(null)
+    const verRes = await fetch('/api/keyword-volume/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    if (!verRes.ok) {
+      const d = await verRes.json()
+      setErr(d.error || '验证失败')
+      setStatus('idle')
+      return
+    }
+
+    const dates: string[] = []
+    let cur = new Date(startDate + 'T12:00:00+08:00')
+    const end = new Date(endDate + 'T12:00:00+08:00')
+    while (cur <= end) {
+      dates.push(cur.toISOString().slice(0, 10))
+      cur = new Date(cur.getTime() + 86400000)
+    }
+    if (dates.length === 0) { setErr('日期范围无效'); setStatus('idle'); return }
+
+    setStatus('crawling')
+    const allData: Record<string, { keyword: string; volume: number; title: string }[]> = {}
+
+    for (let i = 0; i < dates.length; i++) {
+      const date = dates[i]
+      let items: { keyword: string; volume: number; title: string }[] = []
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+          setProgress(`${date} 无数据，第 ${attempt} 次重试（等待 30 秒）...`)
+          await new Promise(r => setTimeout(r, 30000))
+        } else {
+          setProgress(`正在抓取 ${date} (${i + 1}/${dates.length})...`)
+        }
+        try {
+          const res = await fetch(`/api/export-rankup-history?domain=${encodeURIComponent(domain)}&date=${date}`)
+          const data = await res.json()
+          items = data.items || []
+          if (items.length > 0) break
+        } catch {
+          items = []
+        }
+      }
+
+      allData[date] = items
+      if (i < dates.length - 1) {
+        setProgress(`${date} 完成，等待 5 秒...`)
+        await new Promise(r => setTimeout(r, 5000))
+      }
+    }
+
+    setProgress('生成 Excel 文件...')
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    for (const [date, items] of Object.entries(allData)) {
+      const rows = items.map(r => ({ 关键词: r.keyword, 搜索量: r.volume, 标题: r.title }))
+      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ 关键词: '', 搜索量: 0, 标题: '无数据' }])
+      XLSX.utils.book_append_sheet(wb, ws, date)
+    }
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([wbout], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `涨词-${domain}-${startDate}至${endDate}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+    setStatus('done')
+    setProgress('导出完成')
+  }
+
+  const busy = status === 'verifying' || status === 'crawling'
+  const dayDiff = startDate && endDate
+    ? Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000)
+    : 0
+  const rangeExceeds = dayDiff > 6
+
+  return (
+    <>
+      <button
+        onClick={openDialog}
+        className="text-xs text-gray-400 hover:text-green-600 transition-colors"
+      >
+        涨词导出
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">涨词导出</h3>
+            <p className="text-xs text-gray-400 mb-4">从爱站抓取指定站点的涨入关键词并导出 Excel</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">网站域名</label>
+                <input
+                  type="text"
+                  value={domain}
+                  onChange={e => setDomain(e.target.value)}
+                  disabled={busy}
+                  placeholder="例如 xxx.com"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-50"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">开始日期</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    disabled={busy}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-50"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">结束日期</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    disabled={busy}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-50"
+                  />
+                </div>
+              </div>
+              {rangeExceeds && (
+                <p className="text-xs text-red-500">抓取范围超出 7 天（爱站最多保留 7 天数据）</p>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">邮箱</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  disabled={busy}
+                  placeholder="your@email.com"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">密码</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  disabled={busy}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-50"
+                />
+              </div>
+
+              {err && <p className="text-xs text-red-500">{err}</p>}
+              {progress && <p className="text-xs text-blue-500">{progress}</p>}
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+              >
+                {status === 'done' ? '关闭' : '取消'}
+              </button>
+              {status !== 'done' && (
+                <button
+                  onClick={handleStart}
+                  disabled={busy || !domain || !email || !password || rangeExceeds}
+                  className="flex-1 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 font-medium"
+                >
+                  {status === 'verifying' ? '验证中...' : status === 'crawling' ? '抓取中...' : '开始导出'}
+                </button>
+              )}
             </div>
           </div>
         </div>
