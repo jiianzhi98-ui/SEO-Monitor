@@ -32,8 +32,8 @@ function Card({ title, subtitle, icon, list, footer, accent }: {
   list: React.ReactNode; footer?: React.ReactNode; accent?: string
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[400px]">
-      <div className={`px-4 py-3 border-b border-gray-100 flex-shrink-0 ${accent || 'bg-gray-50'}`}>
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className={`px-4 py-3 border-b border-gray-100 ${accent || 'bg-gray-50'}`}>
         <div className="flex items-center gap-2">
           <span className="text-sm">{icon}</span>
           <div>
@@ -42,14 +42,12 @@ function Card({ title, subtitle, icon, list, footer, accent }: {
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-2 min-h-0">
+      <div className="px-4 py-2">
         {list}
       </div>
-      {footer && (
-        <div className="px-4 pb-3 flex-shrink-0">
-          {footer}
-        </div>
-      )}
+      <div className="px-4 pb-3 min-h-[36px]">
+        {footer}
+      </div>
     </div>
   )
 }
@@ -266,7 +264,7 @@ export default function ChartsPage() {
                 {topEvents.length > 0 && (
                   <button
                     onClick={() => openModal('近期焦点', topEvents.map((g, i) => <GameItem key={i} g={g} showDate />))}
-                    className="w-full flex items-center justify-between px-3 py-2 mb-2 bg-teal-50 hover:bg-teal-100 border border-teal-100 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-1.5 mb-0.5 bg-teal-50 hover:bg-teal-100 border border-teal-100 rounded-lg transition-colors"
                   >
                     <span className="text-[11px] font-semibold text-teal-700">近期焦点 · {topEvents.length} 条</span>
                     <span className="text-[10px] text-teal-500">查看 ›</span>
@@ -274,11 +272,11 @@ export default function ChartsPage() {
                 )}
                 {todayGames.length === 0
                   ? <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
-                  : <ul>{todayGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} />)}</ul>}
+                  : <ul>{todayGames.slice(0, topEvents.length > 0 ? PREVIEW - 1 : PREVIEW).map((g, i) => <GameItem key={i} g={g} />)}</ul>}
               </>
             )}
-            footer={!todayLoading && todayGames.length > PREVIEW
-              ? <MoreButton total={todayGames.length} shown={PREVIEW} onClick={() => openModal(`今日游戏 · ${todayGames.length} 款`, todayGames.map((g, i) => <GameItem key={i} g={g} />))} />
+            footer={!todayLoading && todayGames.length > (topEvents.length > 0 ? PREVIEW - 1 : PREVIEW)
+              ? <MoreButton total={todayGames.length} shown={topEvents.length > 0 ? PREVIEW - 1 : PREVIEW} onClick={() => openModal(`今日游戏 · ${todayGames.length} 款`, todayGames.map((g, i) => <GameItem key={i} g={g} />))} />
               : undefined}
           />
 
