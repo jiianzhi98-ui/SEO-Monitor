@@ -173,7 +173,9 @@ export default function ChartsPage() {
   const [todayLoading, setTodayLoading] = useState(true)
   const [hotUpdatedAt, setHotUpdatedAt] = useState('')
 
+  const [haoyouUpcomingToday, setHaoyouUpcomingToday] = useState<HaoyouItem[]>([])
   const [haoyouUpcoming, setHaoyouUpcoming] = useState<HaoyouItem[]>([])
+  const [haoyouUpcomingBaoliao, setHaoyouUpcomingBaoliao] = useState<HaoyouItem[]>([])
   const [haoyouUpdates, setHaoyouUpdates] = useState<HaoyouItem[]>([])
   const [haoyouHotItems, setHaoyouHotItems] = useState<HaoyouHotItem[]>([])
   const [haoyouLoading, setHaoyouLoading] = useState(true)
@@ -203,7 +205,9 @@ export default function ChartsPage() {
     fetch('/api/charts/haoyou')
       .then((r) => r.json())
       .then((d) => {
+        setHaoyouUpcomingToday(d.upcomingToday ?? [])
         setHaoyouUpcoming(d.upcoming ?? [])
+        setHaoyouUpcomingBaoliao(d.upcomingBaoliao ?? [])
         setHaoyouUpdates(d.updates ?? [])
         setHaoyouHotItems(d.hotItems ?? [])
         setHaoyouUpdatedAt(ts)
@@ -312,16 +316,36 @@ export default function ChartsPage() {
         <div className="grid grid-cols-3 gap-5">
 
           {/* 即将上线 */}
-          <Card
-            title={`即将上线${haoyouUpcoming.length ? ` · ${haoyouUpcoming.length} 款` : ''}`}
-            subtitle="手机游戏 / 免费" icon="🚀" accent="bg-green-50"
-            list={haoyouLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-              : haoyouUpcoming.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-              : <ul>{haoyouUpcoming.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} />)}</ul>}
-            footer={!haoyouLoading && haoyouUpcoming.length > PREVIEW
-              ? <MoreButton total={haoyouUpcoming.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将上线 · ${haoyouUpcoming.length} 款`, haoyouUpcoming.map((g, i) => <HaoyouGameItem key={i} g={g} />))} />
-              : undefined}
-          />
+          {(() => {
+            const allUpcoming = [...haoyouUpcomingToday, ...haoyouUpcoming]
+            const hasBaoliao = haoyouUpcomingBaoliao.length > 0
+            const preview = hasBaoliao ? PREVIEW - 1 : PREVIEW
+            return (
+              <Card
+                title={`即将上线${allUpcoming.length ? ` · ${allUpcoming.length} 款` : ''}`}
+                subtitle="手机游戏 / 免费" icon="🚀" accent="bg-green-50"
+                list={haoyouLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p> : (
+                  <>
+                    {hasBaoliao && (
+                      <button
+                        onClick={() => openModal('好游快爆 抢先爆料', haoyouUpcomingBaoliao.map((g, i) => <HaoyouGameItem key={i} g={g} />))}
+                        className="w-full h-8 flex items-center justify-between px-3 mb-0.5 bg-green-50 hover:bg-green-100 border border-green-100 rounded-lg transition-colors"
+                      >
+                        <span className="text-xs font-semibold text-green-700">抢先爆料 · {haoyouUpcomingBaoliao.length} 条</span>
+                        <span className="text-xs text-green-500">查看 ›</span>
+                      </button>
+                    )}
+                    {allUpcoming.length === 0
+                      ? <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
+                      : <ul>{allUpcoming.slice(0, preview).map((g, i) => <HaoyouGameItem key={i} g={g} />)}</ul>}
+                  </>
+                )}
+                footer={!haoyouLoading && allUpcoming.length > preview
+                  ? <MoreButton total={allUpcoming.length} shown={preview} onClick={() => openModal(`好游快爆 即将上线 · ${allUpcoming.length} 款`, allUpcoming.map((g, i) => <HaoyouGameItem key={i} g={g} />))} />
+                  : undefined}
+              />
+            )
+          })()}
 
           {/* 即将更新 */}
           <Card

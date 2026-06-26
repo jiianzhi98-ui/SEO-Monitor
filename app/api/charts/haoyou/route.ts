@@ -80,24 +80,41 @@ function parseItem($: ReturnType<typeof cheerio.load>, li: Element): HaoyouItem 
   return { name, tags, score, status, url, btnText, date: '' }
 }
 
-function parseTab($: ReturnType<typeof cheerio.load>, rel: string): HaoyouItem[] {
-  const items: HaoyouItem[] = []
-  const panel = $(`.panelList[rel="${rel}"]`)
-  let currentDate = ''
+interface ParsedPanel {
+  today: HaoyouItem[]
+  upcoming: HaoyouItem[]
+  baoliao: HaoyouItem[]
+}
 
-  // Walk in document order: .foredate updates currentDate, li items get stamped with it
-  panel.find('.foredate, .foreList li').each((_, el) => {
-    const $el = $(el)
-    if ($el.hasClass('foredate')) {
-      const m = $el.text().trim().match(/(\d+)月(\d+)日/)
-      if (m) currentDate = `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}`
-      return
-    }
-    if (isPc($, el) || isPaid($, el)) return
-    const item = parseItem($, el)
-    if (item) items.push({ ...item, date: currentDate })
+function parsePanel($: ReturnType<typeof cheerio.load>, panelRel: string): ParsedPanel {
+  const panel = $(`.panelList[rel="${panelRel}"]`)
+  const today: HaoyouItem[] = []
+  const upcoming: HaoyouItem[] = []
+  const baoliao: HaoyouItem[] = []
+
+  panel.find('.foreCard').each((_, card) => {
+    const $card = $(card)
+    const cardRel = $card.attr('rel') || ''
+    if (cardRel === 'last7') return // skip past 7 days
+
+    const hdText = $card.find('.foreCard-hd').first().text().trim()
+    const dateMatch = hdText.match(/(\d+)月(\d+)日/)
+    const date = dateMatch
+      ? `${dateMatch[1].padStart(2, '0')}/${dateMatch[2].padStart(2, '0')}`
+      : ''
+
+    $card.find('.foreList li').each((_, li) => {
+      if (isPc($, li as Element) || isPaid($, li as Element)) return
+      const item = parseItem($, li as Element)
+      if (!item) return
+      const stamped = { ...item, date }
+      if (cardRel === 'now') today.push(stamped)
+      else if (cardRel === 'baoliao') baoliao.push(stamped)
+      else upcoming.push(stamped) // tomorrow + beyond
+    })
   })
-  return items
+
+  return { today, upcoming, baoliao }
 }
 
 async function fetchHotChart(): Promise<HaoyouHotItem[]> {
@@ -131,13 +148,18 @@ async function fetchHotChart(): Promise<HaoyouHotItem[]> {
 
 export async function GET() {
   const $ = await loadPage()
-  if (!$) return NextResponse.json({ upcoming: [], updates: [], hotItems: [] })
+  if (!$) return NextResponse.json({ upcomingToday: [], upcoming: [], upcomingBaoliao: [], updates: [], hotItems: [] })
 
   const [hotItems] = await Promise.all([fetchHotChart()])
 
+  const upcomingPanel = parsePanel($, '1')
+  const updatesPanel = parsePanel($, '3')
+
   return NextResponse.json({
-    upcoming: parseTab($, '1'),  // 即将上线
-    updates: parseTab($, '3'),   // 即将更新
+    upcomingToday: upcomingPanel.today,
+    upcoming: upcomingPanel.upcoming,
+    upcomingBaoliao: upcomingPanel.baoliao,
+    updates: [...updatesPanel.today, ...updatesPanel.upcoming],
     hotItems,
   })
 }
