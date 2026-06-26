@@ -104,7 +104,7 @@ function parsePanel($: ReturnType<typeof cheerio.load>, panelRel: string): Parse
       : ''
 
     $card.find('.foreList li').each((_, li) => {
-      if (isPc($, li as Element) || isPaid($, li as Element)) return
+      if (cardRel !== 'baoliao' && (isPc($, li as Element) || isPaid($, li as Element))) return
       const item = parseItem($, li as Element)
       if (!item) return
       const stamped = { ...item, date }
