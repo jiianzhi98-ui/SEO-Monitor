@@ -27,12 +27,13 @@ function SectionHeader({ title, color, updatedAt }: { title: string; color: stri
   )
 }
 
-function Card({ title, subtitle, icon, children, accent }: {
-  title: string; subtitle?: string; icon: string; children: React.ReactNode; accent?: string
+function Card({ title, subtitle, icon, list, footer, accent }: {
+  title: string; subtitle?: string; icon: string
+  list: React.ReactNode; footer?: React.ReactNode; accent?: string
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className={`px-4 py-3 border-b border-gray-100 ${accent || 'bg-gray-50'}`}>
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[400px]">
+      <div className={`px-4 py-3 border-b border-gray-100 flex-shrink-0 ${accent || 'bg-gray-50'}`}>
         <div className="flex items-center gap-2">
           <span className="text-sm">{icon}</span>
           <div>
@@ -41,9 +42,14 @@ function Card({ title, subtitle, icon, children, accent }: {
           </div>
         </div>
       </div>
-      <div className="px-4 py-2">
-        {children}
+      <div className="flex-1 overflow-y-auto px-4 py-2 min-h-0">
+        {list}
       </div>
+      {footer && (
+        <div className="px-4 pb-3 flex-shrink-0">
+          {footer}
+        </div>
+      )}
     </div>
   )
 }
@@ -252,10 +258,10 @@ export default function ChartsPage() {
         <div className="grid grid-cols-3 gap-5">
 
           {/* 今日游戏 */}
-          <Card title={`今日游戏${todayGames.length ? ` · ${todayGames.length} 款` : ''}`} subtitle="首发 / 新游预约 / 测试" icon="🎮" accent="bg-teal-50">
-            {todayLoading ? (
-              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : (
+          <Card
+            title={`今日游戏${todayGames.length ? ` · ${todayGames.length} 款` : ''}`}
+            subtitle="首发 / 新游预约 / 测试" icon="🎮" accent="bg-teal-50"
+            list={todayLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p> : (
               <>
                 {topEvents.length > 0 && (
                   <button
@@ -266,45 +272,38 @@ export default function ChartsPage() {
                     <span className="text-[10px] text-teal-500">查看 ›</span>
                   </button>
                 )}
-                {todayGames.length === 0 ? (
-                  <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
-                ) : (
-                  <>
-                    <ul>{todayGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} />)}</ul>
-                    <MoreButton total={todayGames.length} shown={PREVIEW} onClick={() => openModal(`今日游戏 · ${todayGames.length} 款`, todayGames.map((g, i) => <GameItem key={i} g={g} />))} />
-                  </>
-                )}
+                {todayGames.length === 0
+                  ? <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
+                  : <ul>{todayGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} />)}</ul>}
               </>
             )}
-          </Card>
+            footer={!todayLoading && todayGames.length > PREVIEW
+              ? <MoreButton total={todayGames.length} shown={PREVIEW} onClick={() => openModal(`今日游戏 · ${todayGames.length} 款`, todayGames.map((g, i) => <GameItem key={i} g={g} />))} />
+              : undefined}
+          />
 
           {/* 即将上线 */}
-          <Card title={`即将上线${upcomingGames.length ? ` · ${upcomingGames.length} 款` : ''}`} subtitle="未来 30 天预约 / 首发" icon="📅" accent="bg-teal-50">
-            {todayLoading ? (
-              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : upcomingGames.length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-            ) : (
-              <>
-                <ul>{upcomingGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>
-                <MoreButton total={upcomingGames.length} shown={PREVIEW} onClick={() => openModal(`即将上线 · ${upcomingGames.length} 款`, upcomingGames.map((g, i) => <GameItem key={i} g={g} showDate />))} />
-              </>
-            )}
-          </Card>
+          <Card
+            title={`即将上线${upcomingGames.length ? ` · ${upcomingGames.length} 款` : ''}`}
+            subtitle="未来 30 天预约 / 首发" icon="📅" accent="bg-teal-50"
+            list={todayLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+              : upcomingGames.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+              : <ul>{upcomingGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>}
+            footer={!todayLoading && upcomingGames.length > PREVIEW
+              ? <MoreButton total={upcomingGames.length} shown={PREVIEW} onClick={() => openModal(`即将上线 · ${upcomingGames.length} 款`, upcomingGames.map((g, i) => <GameItem key={i} g={g} showDate />))} />
+              : undefined}
+          />
 
           {/* 热搜榜 */}
-          <Card title="热搜榜 TOP 20" subtitle="每 20 分钟更新" icon="🔥" accent="bg-teal-50">
-            {hotLoading ? (
-              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : hotItems.length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-            ) : (
-              <>
-                <ul>{hotItemNodes.slice(0, PREVIEW)}</ul>
-                <MoreButton total={hotItemNodes.length} shown={PREVIEW} onClick={() => openModal('TapTap 热搜榜', hotItemNodes)} />
-              </>
-            )}
-          </Card>
+          <Card
+            title="热搜榜 TOP 20" subtitle="每 20 分钟更新" icon="🔥" accent="bg-teal-50"
+            list={hotLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+              : hotItems.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+              : <ul>{hotItemNodes.slice(0, PREVIEW)}</ul>}
+            footer={!hotLoading && hotItemNodes.length > PREVIEW
+              ? <MoreButton total={hotItemNodes.length} shown={PREVIEW} onClick={() => openModal('TapTap 热搜榜', hotItemNodes)} />
+              : undefined}
+          />
 
         </div>
       </div>
@@ -317,54 +316,37 @@ export default function ChartsPage() {
           {/* 即将上线 */}
           <Card
             title={`即将上线${haoyouUpcoming.length ? ` · ${haoyouUpcoming.length} 款` : ''}`}
-            subtitle="手机游戏 / 免费"
-            icon="🚀"
-            accent="bg-green-50"
-          >
-            {haoyouLoading ? (
-              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : haoyouUpcoming.length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-            ) : (
-              <>
-                <ul>{haoyouUpcoming.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} />)}</ul>
-                <MoreButton total={haoyouUpcoming.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将上线 · ${haoyouUpcoming.length} 款`, haoyouUpcoming.map((g, i) => <HaoyouGameItem key={i} g={g} />))} />
-              </>
-            )}
-          </Card>
+            subtitle="手机游戏 / 免费" icon="🚀" accent="bg-green-50"
+            list={haoyouLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+              : haoyouUpcoming.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+              : <ul>{haoyouUpcoming.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} />)}</ul>}
+            footer={!haoyouLoading && haoyouUpcoming.length > PREVIEW
+              ? <MoreButton total={haoyouUpcoming.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将上线 · ${haoyouUpcoming.length} 款`, haoyouUpcoming.map((g, i) => <HaoyouGameItem key={i} g={g} />))} />
+              : undefined}
+          />
 
           {/* 即将更新 */}
           <Card
             title={`即将更新${haoyouUpdates.length ? ` · ${haoyouUpdates.length} 款` : ''}`}
-            subtitle="手机游戏 / 免费"
-            icon="🔄"
-            accent="bg-green-50"
-          >
-            {haoyouLoading ? (
-              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : haoyouUpdates.length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-            ) : (
-              <>
-                <ul>{haoyouUpdates.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />)}</ul>
-                <MoreButton total={haoyouUpdates.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将更新 · ${haoyouUpdates.length} 款`, haoyouUpdates.map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />))} />
-              </>
-            )}
-          </Card>
+            subtitle="手机游戏 / 免费" icon="🔄" accent="bg-green-50"
+            list={haoyouLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+              : haoyouUpdates.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+              : <ul>{haoyouUpdates.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />)}</ul>}
+            footer={!haoyouLoading && haoyouUpdates.length > PREVIEW
+              ? <MoreButton total={haoyouUpdates.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将更新 · ${haoyouUpdates.length} 款`, haoyouUpdates.map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />))} />
+              : undefined}
+          />
 
           {/* 热门榜 */}
-          <Card title="热门榜 TOP 20" subtitle="实时热门游戏" icon="🔥" accent="bg-green-50">
-            {haoyouLoading ? (
-              <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-            ) : haoyouHotItems.length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-            ) : (
-              <>
-                <ul>{haoyouHotNodes.slice(0, PREVIEW)}</ul>
-                <MoreButton total={haoyouHotNodes.length} shown={PREVIEW} onClick={() => openModal('好游快爆 热门榜', haoyouHotNodes)} />
-              </>
-            )}
-          </Card>
+          <Card
+            title="热门榜 TOP 20" subtitle="实时热门游戏" icon="🔥" accent="bg-green-50"
+            list={haoyouLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
+              : haoyouHotItems.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
+              : <ul>{haoyouHotNodes.slice(0, PREVIEW)}</ul>}
+            footer={!haoyouLoading && haoyouHotNodes.length > PREVIEW
+              ? <MoreButton total={haoyouHotNodes.length} shown={PREVIEW} onClick={() => openModal('好游快爆 热门榜', haoyouHotNodes)} />
+              : undefined}
+          />
 
         </div>
       </div>
