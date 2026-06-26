@@ -31,7 +31,7 @@ function Card({ title, subtitle, icon, children, accent }: {
   title: string; subtitle?: string; icon: string; children: React.ReactNode; accent?: string
 }) {
   return (
-    <div className={`bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden`}>
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className={`px-4 py-3 border-b border-gray-100 ${accent || 'bg-gray-50'}`}>
         <div className="flex items-center gap-2">
           <span className="text-sm">{icon}</span>
@@ -48,21 +48,38 @@ function Card({ title, subtitle, icon, children, accent }: {
   )
 }
 
-function ShowMoreList({ items, initialCount = 10 }: { items: React.ReactNode[]; initialCount?: number }) {
-  const [expanded, setExpanded] = useState(false)
-  const visible = expanded ? items : items.slice(0, initialCount)
+function MoreModal({ title, items, onClose }: { title: string; items: React.ReactNode[]; onClose: () => void }) {
   return (
-    <>
-      <ul>{visible}</ul>
-      {items.length > initialCount && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg"
-        >
-          {expanded ? '收起' : `查看更多 (${items.length - initialCount} 条)`}
-        </button>
-      )}
-    </>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm flex flex-col" style={{ maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-4 py-1">
+          <ul>{items}</ul>
+        </div>
+        <div className="px-4 py-2 border-t border-gray-100 flex-shrink-0 text-center">
+          <span className="text-xs text-gray-400">共 {items.length} 条</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MoreButton({ total, shown, onClick }: { total: number; shown: number; onClick: () => void }) {
+  if (total <= shown) return null
+  return (
+    <button
+      onClick={onClick}
+      className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg"
+    >
+      查看全部 {total} 条
+    </button>
   )
 }
 
@@ -72,6 +89,7 @@ interface HotItem { rank: number; name: string; labels: string[] }
 interface TodayGame { title: string; tag: string; startDate: string; startTime: string; endDate: string; rating: number | null; labels: string[]; icon: string }
 interface HaoyouItem { name: string; tags: string[]; score: string; status: string; url: string; btnText: string; date: string }
 interface HaoyouHotItem { rank: number; name: string; tags: string[] }
+interface ModalState { title: string; items: React.ReactNode[] }
 
 const haoyouTagColors: Record<string, string> = {
   '限量测试': 'bg-purple-100 text-purple-700',
@@ -149,9 +167,6 @@ export default function ChartsPage() {
   const [upcomingGames, setUpcomingGames] = useState<TodayGame[]>([])
   const [topEvents, setTopEvents] = useState<TodayGame[]>([])
   const [todayLoading, setTodayLoading] = useState(true)
-  const [topExpanded, setTopExpanded] = useState(false)
-  const [todayExpanded, setTodayExpanded] = useState(false)
-  const [upcomingExpanded, setUpcomingExpanded] = useState(false)
   const [hotUpdatedAt, setHotUpdatedAt] = useState('')
 
   const [haoyouUpcoming, setHaoyouUpcoming] = useState<HaoyouItem[]>([])
@@ -159,8 +174,8 @@ export default function ChartsPage() {
   const [haoyouHotItems, setHaoyouHotItems] = useState<HaoyouHotItem[]>([])
   const [haoyouLoading, setHaoyouLoading] = useState(true)
   const [haoyouUpdatedAt, setHaoyouUpdatedAt] = useState('')
-  const [haoyouUpcomingExpanded, setHaoyouUpcomingExpanded] = useState(false)
-  const [haoyouUpdatesExpanded, setHaoyouUpdatesExpanded] = useState(false)
+
+  const [modal, setModal] = useState<ModalState | null>(null)
 
   useEffect(() => {
     const now = new Date()
@@ -193,8 +208,37 @@ export default function ChartsPage() {
       .finally(() => setHaoyouLoading(false))
   }, [])
 
-  const visibleToday = todayExpanded ? todayGames : todayGames.slice(0, 5)
-  const visibleUpcoming = upcomingExpanded ? upcomingGames : upcomingGames.slice(0, 6)
+  function openModal(title: string, items: React.ReactNode[]) {
+    setModal({ title, items })
+  }
+
+  const PREVIEW = 6
+  const RANK_PREVIEW = 10
+
+  // Pre-build ranked list items for reuse
+  const hotItemNodes = hotItems.map((g) => (
+    <li key={g.rank} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+      <RankBadge rank={g.rank} />
+      <p className="flex-1 text-xs font-medium text-gray-800 truncate">{g.name}</p>
+      {g.labels.length > 0 && (
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+          g.labels[0] === '上升' ? 'bg-orange-100 text-orange-600' :
+          g.labels[0] === '首发' ? 'bg-green-100 text-green-700' :
+          'bg-purple-100 text-purple-700'
+        }`}>{g.labels[0]}</span>
+      )}
+    </li>
+  ))
+
+  const haoyouHotNodes = haoyouHotItems.map((g) => (
+    <li key={g.rank} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+      <RankBadge rank={g.rank} />
+      <p className="flex-1 text-xs font-medium text-gray-800 truncate">{g.name}</p>
+      {g.tags[0] && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 flex-shrink-0">{g.tags[0]}</span>
+      )}
+    </li>
+  ))
 
   return (
     <div className="p-8 space-y-10">
@@ -208,40 +252,27 @@ export default function ChartsPage() {
         <SectionHeader title="TapTap" color="bg-teal-500" updatedAt={hotUpdatedAt || '加载中…'} />
         <div className="grid grid-cols-3 gap-5">
 
-          {/* 今日游戏（含近期焦点折叠） */}
+          {/* 今日游戏 */}
           <Card title={`今日游戏${todayGames.length ? ` · ${todayGames.length} 款` : ''}`} subtitle="首发 / 新游预约 / 测试" icon="🎮" accent="bg-teal-50">
             {todayLoading ? (
               <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
             ) : (
               <>
-                {/* 近期焦点 折叠区 */}
                 {topEvents.length > 0 && (
-                  <div className="mb-3 border border-teal-100 rounded-lg overflow-hidden">
-                    <button
-                      onClick={() => setTopExpanded(!topExpanded)}
-                      className="w-full flex items-center justify-between px-3 py-2 bg-teal-50 hover:bg-teal-100 transition-colors"
-                    >
-                      <span className="text-[11px] font-semibold text-teal-700">近期焦点 · {topEvents.length} 条</span>
-                      <span className="text-[10px] text-teal-500">{topExpanded ? '▲ 收起' : '▼ 展开'}</span>
-                    </button>
-                    {topExpanded && (
-                      <ul className="px-3">
-                        {topEvents.map((g, i) => <GameItem key={i} g={g} showDate />)}
-                      </ul>
-                    )}
-                  </div>
+                  <button
+                    onClick={() => openModal('近期焦点', topEvents.map((g, i) => <GameItem key={i} g={g} showDate />))}
+                    className="w-full flex items-center justify-between px-3 py-2 mb-2 bg-teal-50 hover:bg-teal-100 border border-teal-100 rounded-lg transition-colors"
+                  >
+                    <span className="text-[11px] font-semibold text-teal-700">近期焦点 · {topEvents.length} 条</span>
+                    <span className="text-[10px] text-teal-500">查看 ›</span>
+                  </button>
                 )}
-                {/* 今日游戏列表 */}
                 {todayGames.length === 0 ? (
                   <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
                 ) : (
                   <>
-                    <ul>{visibleToday.map((g, i) => <GameItem key={i} g={g} />)}</ul>
-                    {todayGames.length > 5 && (
-                      <button onClick={() => setTodayExpanded(!todayExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
-                        {todayExpanded ? '收起' : `查看更多 (${todayGames.length - 5} 款)`}
-                      </button>
-                    )}
+                    <ul>{todayGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} />)}</ul>
+                    <MoreButton total={todayGames.length} shown={PREVIEW} onClick={() => openModal(`今日游戏 · ${todayGames.length} 款`, todayGames.map((g, i) => <GameItem key={i} g={g} />))} />
                   </>
                 )}
               </>
@@ -256,12 +287,8 @@ export default function ChartsPage() {
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
               <>
-                <ul>{visibleUpcoming.map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>
-                {upcomingGames.length > 6 && (
-                  <button onClick={() => setUpcomingExpanded(!upcomingExpanded)} className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg">
-                    {upcomingExpanded ? '收起' : `查看更多 (${upcomingGames.length - 6} 款)`}
-                  </button>
-                )}
+                <ul>{upcomingGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>
+                <MoreButton total={upcomingGames.length} shown={PREVIEW} onClick={() => openModal(`即将上线 · ${upcomingGames.length} 款`, upcomingGames.map((g, i) => <GameItem key={i} g={g} showDate />))} />
               </>
             )}
           </Card>
@@ -273,19 +300,10 @@ export default function ChartsPage() {
             ) : hotItems.length === 0 ? (
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
-              <ShowMoreList initialCount={10} items={hotItems.map((g) => (
-                <li key={g.rank} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-                  <RankBadge rank={g.rank} />
-                  <p className="flex-1 text-xs font-medium text-gray-800 truncate">{g.name}</p>
-                  {g.labels.length > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                      g.labels[0] === '上升' ? 'bg-orange-100 text-orange-600' :
-                      g.labels[0] === '首发' ? 'bg-green-100 text-green-700' :
-                      'bg-purple-100 text-purple-700'
-                    }`}>{g.labels[0]}</span>
-                  )}
-                </li>
-              ))} />
+              <>
+                <ul>{hotItemNodes.slice(0, RANK_PREVIEW)}</ul>
+                <MoreButton total={hotItemNodes.length} shown={RANK_PREVIEW} onClick={() => openModal('TapTap 热搜榜', hotItemNodes)} />
+              </>
             )}
           </Card>
 
@@ -310,19 +328,8 @@ export default function ChartsPage() {
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
               <>
-                <ul>
-                  {(haoyouUpcomingExpanded ? haoyouUpcoming : haoyouUpcoming.slice(0, 6)).map((g, i) => (
-                    <HaoyouGameItem key={i} g={g} />
-                  ))}
-                </ul>
-                {haoyouUpcoming.length > 6 && (
-                  <button
-                    onClick={() => setHaoyouUpcomingExpanded(!haoyouUpcomingExpanded)}
-                    className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg"
-                  >
-                    {haoyouUpcomingExpanded ? '收起' : `查看更多 (${haoyouUpcoming.length - 6} 款)`}
-                  </button>
-                )}
+                <ul>{haoyouUpcoming.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} />)}</ul>
+                <MoreButton total={haoyouUpcoming.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将上线 · ${haoyouUpcoming.length} 款`, haoyouUpcoming.map((g, i) => <HaoyouGameItem key={i} g={g} />))} />
               </>
             )}
           </Card>
@@ -340,45 +347,30 @@ export default function ChartsPage() {
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
               <>
-                <ul>
-                  {(haoyouUpdatesExpanded ? haoyouUpdates : haoyouUpdates.slice(0, 6)).map((g, i) => (
-                    <HaoyouGameItem key={i} g={g} hideDownload />
-                  ))}
-                </ul>
-                {haoyouUpdates.length > 6 && (
-                  <button
-                    onClick={() => setHaoyouUpdatesExpanded(!haoyouUpdatesExpanded)}
-                    className="w-full mt-2 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors border border-dashed border-gray-200 rounded-lg"
-                  >
-                    {haoyouUpdatesExpanded ? '收起' : `查看更多 (${haoyouUpdates.length - 6} 款)`}
-                  </button>
-                )}
+                <ul>{haoyouUpdates.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />)}</ul>
+                <MoreButton total={haoyouUpdates.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将更新 · ${haoyouUpdates.length} 款`, haoyouUpdates.map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />))} />
               </>
             )}
           </Card>
 
           {/* 热门榜 */}
-          <Card title={`热门榜 TOP 20`} subtitle="实时热门游戏" icon="🔥" accent="bg-green-50">
+          <Card title="热门榜 TOP 20" subtitle="实时热门游戏" icon="🔥" accent="bg-green-50">
             {haoyouLoading ? (
               <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
             ) : haoyouHotItems.length === 0 ? (
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
-              <ShowMoreList initialCount={10} items={haoyouHotItems.map((g) => (
-                <li key={g.rank} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-                  <RankBadge rank={g.rank} />
-                  <p className="flex-1 text-xs font-medium text-gray-800 truncate">{g.name}</p>
-                  {g.tags[0] && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 flex-shrink-0">{g.tags[0]}</span>
-                  )}
-                </li>
-              ))} />
+              <>
+                <ul>{haoyouHotNodes.slice(0, RANK_PREVIEW)}</ul>
+                <MoreButton total={haoyouHotNodes.length} shown={RANK_PREVIEW} onClick={() => openModal('好游快爆 热门榜', haoyouHotNodes)} />
+              </>
             )}
           </Card>
 
         </div>
       </div>
 
+      {modal && <MoreModal title={modal.title} items={modal.items} onClose={() => setModal(null)} />}
     </div>
   )
 }
