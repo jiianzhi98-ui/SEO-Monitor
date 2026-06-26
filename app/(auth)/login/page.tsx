@@ -244,11 +244,15 @@ export default function LoginPage() {
       </div>
 
       {/* ── Right form panel ── */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-slate-50">
-        <div className="w-full max-w-[400px]">
+      <div
+        className="flex-1 flex items-center justify-center px-6 py-12"
+        style={{ background: 'linear-gradient(160deg, #f0fdf4 0%, #f8fafc 50%, #f0f9ff 100%)' }}
+      >
+        {/* Form card */}
+        <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-xl shadow-gray-200/80 p-8 border border-gray-100">
 
           {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
+          <div className="flex items-center gap-2.5 mb-7 lg:hidden">
             <div className="flex items-center justify-center w-8 h-8 bg-green-600 rounded-lg">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -259,16 +263,16 @@ export default function LoginPage() {
           </div>
 
           {/* Heading */}
-          <div className="mb-8">
+          <div className="mb-7">
             <h1 className="text-2xl font-bold text-gray-900">欢迎回来</h1>
-            <p className="text-gray-500 text-sm mt-1.5">请登录您的管理账户</p>
+            <p className="text-gray-400 text-sm mt-1">请登录您的管理账户</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
 
             {/* Username */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">用户名</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">用户名</label>
               <input
                 type="text"
                 value={username}
@@ -276,13 +280,13 @@ export default function LoginPage() {
                 required
                 placeholder="输入用户名"
                 autoComplete="username"
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-400 transition-all"
               />
             </div>
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">密码</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">密码</label>
               <div className="relative">
                 <input
                   type={showPwd ? 'text' : 'password'}
@@ -291,7 +295,7 @@ export default function LoginPage() {
                   required
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="w-full px-4 py-2.5 pr-11 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all"
+                  className="w-full px-4 py-3 pr-11 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-400 transition-all"
                 />
                 <button
                   type="button"
@@ -318,8 +322,8 @@ export default function LoginPage() {
 
             {/* Canvas CAPTCHA */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">图形验证码</label>
-              <div className="flex gap-2.5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">图形验证码</label>
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={captchaInput}
@@ -328,15 +332,15 @@ export default function LoginPage() {
                   placeholder="输入右侧验证码"
                   maxLength={4}
                   autoComplete="off"
-                  className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all"
+                  className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-400 transition-all"
                 />
                 <canvas
                   ref={canvasRef}
                   width={116}
-                  height={44}
+                  height={48}
                   onClick={refreshCaptcha}
                   title="点击刷新"
-                  className="rounded-xl cursor-pointer flex-shrink-0 shadow-sm"
+                  className="rounded-xl cursor-pointer flex-shrink-0"
                 />
               </div>
               <p className="text-xs text-gray-400">不区分大小写 · 点击图片刷新</p>
@@ -344,13 +348,13 @@ export default function LoginPage() {
 
             {/* Turnstile */}
             {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
-              <div ref={turnstileRef} />
+              <div ref={turnstileRef} className="pt-1" />
             )}
 
             {/* Error */}
             {error && (
               <div className="flex items-center gap-2.5 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-                <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -362,7 +366,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl shadow-sm shadow-green-600/20 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 mt-1 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-semibold rounded-xl shadow-md shadow-green-600/25 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
