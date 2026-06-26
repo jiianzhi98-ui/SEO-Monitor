@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { type ReactNode } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import {
@@ -1216,13 +1216,14 @@ function AlertCard({
 // ─── SortedTooltip ───────────────────────────────────────────────────────────
 
 function SortedTooltip({
-  active, payload, label, siteMap, siteIds, colorMap,
+  active, payload, label, siteMap, siteIds, colorMap, hoveredId,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   active?: boolean; payload?: readonly any[]; label?: string | number
   siteMap: Map<string, Site>
   siteIds?: string[]
   colorMap?: Record<string, string>
+  hoveredId?: string | null
 }) {
   if (!active || !payload) return null
 
@@ -1248,12 +1249,13 @@ function SortedTooltip({
     const p = valueMap.get(id)
     const color = p?.color ?? colorMap?.[id] ?? '#9ca3af'
     const hasValue = p?.value != null
+    const isHovered = id === hoveredId
     return (
       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 0' }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
-        <span style={{ color: hasValue ? '#374151' : '#9ca3af', whiteSpace: 'nowrap' }}>
+        <span style={{ color: hasValue ? '#374151' : '#9ca3af', whiteSpace: 'nowrap', fontWeight: isHovered ? 700 : 400 }}>
           {siteMap.get(id)?.domain ?? id}
-          <span style={{ color: '#9ca3af' }}> : </span>
+          <span style={{ color: '#9ca3af', fontWeight: isHovered ? 700 : 400 }}> : </span>
           {hasValue ? (typeof p.value === 'number' ? p.value.toLocaleString() : p.value) : '—'}
         </span>
       </div>
@@ -1283,6 +1285,18 @@ function CompareChart({
   siteMap: Map<string, Site>
   yFormatter: (v: number) => string
 }) {
+  const [focusedIds, setFocusedIds] = useState<Set<string>>(new Set())
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const lineClickedRef = useRef(false)
+
+  function toggleFocus(id: string) {
+    setFocusedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
   if (siteIds.length === 0 || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-44 rounded-lg bg-gray-50 text-gray-400 text-sm">
@@ -1303,7 +1317,11 @@ function CompareChart({
 
   return (
     <ResponsiveContainer width="100%" height={420}>
-      <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+      <LineChart
+        data={data}
+        margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
+        onClick={() => { if (!lineClickedRef.current) setFocusedIds(new Set()); lineClickedRef.current = false }}
+      >
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis
           dataKey="date"
@@ -1321,24 +1339,31 @@ function CompareChart({
           ticks={yTicks}
           tickFormatter={(v: number) => yFormatter(v)}
         />
-        <Tooltip content={(props) => <SortedTooltip {...props} siteMap={siteMap} siteIds={siteIds} colorMap={colorMap} />} />
-        {siteIds.map(id => (
-          <Line
-            key={id}
-            type="monotone"
-            dataKey={id}
-            name={id}
-            stroke={colorMap[id]}
-            strokeWidth={2}
-            connectNulls
-            dot={(props: { cx?: number; cy?: number; value?: number; index?: number }) => {
-              const { cx, cy, value, index } = props
-              if (!value || cx == null || cy == null) return <g key={index ?? 0} />
-              return <circle key={index ?? 0} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} />
-            }}
-            activeDot={{ r: 4, fill: colorMap[id], stroke: 'white', strokeWidth: 2 }}
-          />
-        ))}
+        <Tooltip content={(props) => <SortedTooltip {...props} siteMap={siteMap} siteIds={siteIds} colorMap={colorMap} hoveredId={hoveredId} />} />
+        {siteIds.map(id => {
+          const dimmed = focusedIds.size > 0 && !focusedIds.has(id)
+          return (
+            <Line
+              key={id}
+              type="monotone"
+              dataKey={id}
+              name={id}
+              stroke={colorMap[id]}
+              strokeWidth={2}
+              strokeOpacity={dimmed ? 0.15 : 1}
+              connectNulls
+              dot={(props: { cx?: number; cy?: number; value?: number; index?: number }) => {
+                const { cx, cy, value, index } = props
+                if (!value || cx == null || cy == null) return <g key={index ?? 0} />
+                return <circle key={index ?? 0} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} strokeOpacity={dimmed ? 0.15 : 1} />
+              }}
+              activeDot={{ r: 4, fill: colorMap[id], stroke: 'white', strokeWidth: 2 }}
+              onClick={() => { lineClickedRef.current = true; toggleFocus(id) }}
+              onMouseEnter={() => setHoveredId(id)}
+              onMouseLeave={() => setHoveredId(null)}
+            />
+          )
+        })}
       </LineChart>
     </ResponsiveContainer>
   )
