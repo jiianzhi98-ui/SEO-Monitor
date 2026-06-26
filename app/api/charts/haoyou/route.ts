@@ -77,7 +77,7 @@ function parseItem($: ReturnType<typeof cheerio.load>, li: Element): HaoyouItem 
 
   const btnText = $(li).find('a.btn').text().trim()
 
-  return { name, tags, score, status, url, btnText }
+  return { name, tags, score, status, url, btnText, date: '' }
 }
 
 function parseTab($: ReturnType<typeof cheerio.load>, rel: string): HaoyouItem[] {
