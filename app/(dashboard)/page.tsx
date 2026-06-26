@@ -308,46 +308,10 @@ export default function DashboardPage() {
   const activeSelected = selected[activeCategory]
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">首页快报</h1>
-        <p className="text-gray-400 text-sm mt-0.5">{today} · 今日数据汇总</p>
-      </div>
-
-      {/* ── KPI 统计 ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <KpiCard
-          label="监控站点"
-          value={sites.length}
-          sub="当前启用"
-          iconBg="bg-blue-50"
-          iconColor="text-blue-500"
-          icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>}
-        />
-        <KpiCard
-          label="权重变动"
-          value={weightChanges.length}
-          sub={weightChanges.length > 0 ? '近7天有变化' : '暂无变动'}
-          iconBg={weightChanges.length > 0 ? 'bg-amber-50' : 'bg-gray-50'}
-          iconColor={weightChanges.length > 0 ? 'text-amber-500' : 'text-gray-300'}
-          icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>}
-        />
-        <KpiCard
-          label="新增异常"
-          value={kwAlerts.length}
-          sub={kwAlerts.length > 0 ? '有站点需关注' : '各站正常'}
-          iconBg={kwAlerts.some(a => a.status === 'danger') ? 'bg-red-50' : kwAlerts.length > 0 ? 'bg-orange-50' : 'bg-gray-50'}
-          iconColor={kwAlerts.some(a => a.status === 'danger') ? 'text-red-500' : kwAlerts.length > 0 ? 'text-orange-500' : 'text-gray-300'}
-          icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>}
-        />
-        <KpiCard
-          label="收录异常"
-          value={indexAlerts.length}
-          sub={indexAlerts.length > 0 ? '有站点需关注' : '各站正常'}
-          iconBg={indexAlerts.some(a => a.status === 'danger') ? 'bg-red-50' : indexAlerts.length > 0 ? 'bg-orange-50' : 'bg-gray-50'}
-          iconColor={indexAlerts.some(a => a.status === 'danger') ? 'text-red-500' : indexAlerts.length > 0 ? 'text-orange-500' : 'text-gray-300'}
-          icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16M10 11h4" /></svg>}
-        />
+        <p className="text-gray-500 text-sm mt-1">{today} · 今日数据汇总</p>
       </div>
 
       {/* ── Alert Cards ─────────────────────────────────────────────────── */}
@@ -425,7 +389,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Charts Section ──────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="card">
 
         {/* Header: category tabs + time range */}
         <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-4 border-b border-gray-100">
@@ -439,7 +403,7 @@ export default function DashboardPage() {
                   disabled={!has}
                   className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
                     activeCategory === cat
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-green-500 text-white'
                       : has
                         ? 'text-gray-500 hover:bg-gray-100'
                         : 'text-gray-300 cursor-not-allowed'
@@ -627,13 +591,11 @@ function KeywordSearchCard() {
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+      <div className="rounded-xl border border-green-300 bg-white p-4">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-md bg-green-50 flex items-center justify-center flex-shrink-0">
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-            </span>
-            <span className="text-sm font-semibold text-gray-700">搜索量查询</span>
+            <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400" />
+            <span className="text-sm font-medium text-gray-600">搜索量查询</span>
           </div>
           {role === 'super' && (
             <div className="flex items-center gap-2">
@@ -654,66 +616,64 @@ function KeywordSearchCard() {
           )}
         </div>
 
-        <div className="px-4 py-3">
-          <div className="flex gap-1.5 mb-3">
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch(0)}
-              placeholder="搜索词..."
-              className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-            <button
-              onClick={() => handleSearch(0)}
-              disabled={loading}
-              className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-            >
-              {loading ? '...' : '搜索'}
-            </button>
-          </div>
+        <div className="flex gap-1.5 mb-3">
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch(0)}
+            placeholder="搜索词..."
+            className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <button
+            onClick={() => handleSearch(0)}
+            disabled={loading}
+            className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? '...' : '搜索'}
+          </button>
+        </div>
 
-          <div className={`${searched && total > 50 ? 'max-h-20' : 'max-h-28'} overflow-y-auto`}>
-            {!searched ? (
-              <p className="text-xs text-gray-300 py-2">输入关键词后搜索</p>
-            ) : rows.length === 0 ? (
-              <p className="text-xs text-gray-400">未找到「{query}」</p>
-            ) : (
-              <div className="space-y-0.5">
-                {rows.map(r => (
-                  <div key={r.keyword} className="flex items-center justify-between py-0.5">
-                    <span className="text-xs text-gray-700 truncate mr-2">{r.keyword}</span>
-                    <span className="text-xs font-medium text-gray-500 flex-shrink-0 tabular-nums">
-                      {r.volume > 0 ? r.volume.toLocaleString() : '—'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {searched && total > 50 && (
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-              <button
-                onClick={() => handleSearch(page - 1)}
-                disabled={page === 0 || loading}
-                className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30 px-1.5 py-0.5 rounded transition-colors"
-              >
-                ← 上一页
-              </button>
-              <span className="text-xs text-gray-400 tabular-nums">
-                第 {page + 1} / {Math.ceil(total / 50)} 页 · 共 {total} 个
-              </span>
-              <button
-                onClick={() => handleSearch(page + 1)}
-                disabled={(page + 1) * 50 >= total || loading}
-                className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30 px-1.5 py-0.5 rounded transition-colors"
-              >
-                下一页 →
-              </button>
+        <div className={`${searched && total > 50 ? 'max-h-20' : 'max-h-28'} overflow-y-auto`}>
+          {!searched ? (
+            <p className="text-xs text-gray-400">输入关键词后搜索</p>
+          ) : rows.length === 0 ? (
+            <p className="text-xs text-gray-400">未找到「{query}」</p>
+          ) : (
+            <div className="space-y-0.5">
+              {rows.map(r => (
+                <div key={r.keyword} className="flex items-center justify-between py-0.5">
+                  <span className="text-xs text-gray-700 truncate mr-2">{r.keyword}</span>
+                  <span className="text-xs font-medium text-gray-500 flex-shrink-0 tabular-nums">
+                    {r.volume > 0 ? r.volume.toLocaleString() : '—'}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
+
+        {searched && total > 50 && (
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+            <button
+              onClick={() => handleSearch(page - 1)}
+              disabled={page === 0 || loading}
+              className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30 px-1.5 py-0.5 rounded transition-colors"
+            >
+              ← 上一页
+            </button>
+            <span className="text-xs text-gray-400 tabular-nums">
+              第 {page + 1} / {Math.ceil(total / 50)} 页 · 共 {total} 个
+            </span>
+            <button
+              onClick={() => handleSearch(page + 1)}
+              disabled={(page + 1) * 50 >= total || loading}
+              className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30 px-1.5 py-0.5 rounded transition-colors"
+            >
+              下一页 →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Export auth dialog */}
@@ -1218,12 +1178,12 @@ function RankdownExportButton() {
 // ─── AlertCard ────────────────────────────────────────────────────────────────
 
 const PALETTE = {
-  yellow: { count: 'text-amber-500',  pulse: 'bg-amber-400',  dot: 'bg-amber-50'  },
-  orange: { count: 'text-orange-500', pulse: 'bg-orange-400', dot: 'bg-orange-50' },
-  red:    { count: 'text-red-500',    pulse: 'bg-red-400',    dot: 'bg-red-50'    },
-  teal:   { count: 'text-teal-500',   pulse: 'bg-teal-400',   dot: 'bg-teal-50'   },
-  green:  { count: 'text-green-500',  pulse: 'bg-green-400',  dot: 'bg-green-50'  },
-  gray:   { count: 'text-gray-300',   pulse: 'bg-gray-300',   dot: 'bg-gray-50'   },
+  yellow: { border: 'border-yellow-100', count: 'text-yellow-500', pulse: 'bg-yellow-400' },
+  orange: { border: 'border-orange-100', count: 'text-orange-500', pulse: 'bg-orange-400' },
+  red:    { border: 'border-red-100',    count: 'text-red-500',    pulse: 'bg-red-400'    },
+  teal:   { border: 'border-teal-100',   count: 'text-teal-500',   pulse: 'bg-teal-400'   },
+  green:  { border: 'border-green-100',  count: 'text-green-500',  pulse: 'bg-green-400'  },
+  gray:   { border: 'border-gray-100',   count: 'text-gray-300',   pulse: 'bg-gray-300'   },
 }
 
 function AlertCard({
@@ -1237,55 +1197,30 @@ function AlertCard({
   action?: ReactNode
 }) {
   const c = PALETTE[color]
+  const isPlaceholder = count < 0
   const hasAlerts = count > 0
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+    <div className={`rounded-xl border ${c.border} bg-white p-4`}>
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className={`w-5 h-5 rounded-md ${c.dot} flex items-center justify-center flex-shrink-0`}>
-            <span className={`w-2 h-2 rounded-full ${hasAlerts ? c.pulse + ' animate-pulse' : 'bg-gray-200'}`} />
-          </span>
-          <span className="text-sm font-semibold text-gray-700">{title}</span>
+          {hasAlerts && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.pulse} animate-pulse`} />}
+          <span className="text-sm font-medium text-gray-600">{title}</span>
         </div>
         {action ?? (
-          <span className={`text-sm font-bold tabular-nums ${hasAlerts ? c.count : 'text-gray-300'}`}>
-            {count}
+          <span className={`text-2xl font-bold ${c.count}`}>
+            {isPlaceholder ? '—' : count}
           </span>
         )}
       </div>
-      <div className="px-4 py-3">
-        {!hasAlerts ? (
-          <p className="text-xs text-gray-300 py-2">{empty}</p>
+      <div>
+        {isPlaceholder || !hasAlerts ? (
+          <p className="text-xs text-gray-400">{empty}</p>
         ) : (
-          <div className="max-h-28 overflow-y-auto space-y-1 pr-0.5">
+          <div className="max-h-24 overflow-y-auto space-y-0.5 pr-1">
             {children}
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-// ─── KpiCard ─────────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, sub, icon, iconBg, iconColor }: {
-  label: string
-  value: number
-  sub?: string
-  icon: ReactNode
-  iconBg: string
-  iconColor: string
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-start justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-400 mb-1.5">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 tabular-nums leading-none">{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-1.5 truncate">{sub}</p>}
-      </div>
-      <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 ${iconColor}`}>
-        {icon}
       </div>
     </div>
   )
