@@ -14,6 +14,7 @@ function drawCaptcha(canvas: HTMLCanvasElement): string {
   ).join('')
   const ctx = canvas.getContext('2d')!
   const w = canvas.width, h = canvas.height
+  ctx.clearRect(0, 0, w, h)
   ctx.fillStyle = 'rgba(255,255,255,0.12)'
   ctx.fillRect(0, 0, w, h)
   ctx.strokeStyle = 'rgba(255,255,255,0.25)'
