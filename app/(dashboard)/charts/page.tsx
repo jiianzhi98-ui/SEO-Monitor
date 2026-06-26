@@ -120,20 +120,18 @@ function deriveHaoyouTag(status: string, btnText: string): string {
   return btnText || ''
 }
 
-function HaoyouGameItem({ g, hideDownload, index }: { g: HaoyouItem; hideDownload?: boolean; index?: number }) {
+function HaoyouGameItem({ g, hideDownload }: { g: HaoyouItem; hideDownload?: boolean }) {
   const rawTag = deriveHaoyouTag(g.status, g.btnText)
   const tag = hideDownload ? (rawTag === '下载' || !rawTag ? '更新' : rawTag) : rawTag
-  const showTag = !!tag
   return (
     <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-      <span className="inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-medium text-gray-400 bg-gray-50 flex-shrink-0">{index ?? ''}</span>
       <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
         {g.date && <span className="text-gray-400 font-normal">{g.date} · </span>}
         {g.name}
         {g.status && <span className="text-gray-400 font-normal"> · {g.status}</span>}
       </p>
-      {showTag && tag && (
-        <span className={`text-xs px-1.5 rounded-full font-medium flex-shrink-0 ${haoyouTagColors[tag] || 'bg-gray-100 text-gray-500'}`}>
+      {tag && (
+        <span className={`text-xs px-1.5 h-5 inline-flex items-center rounded-full font-medium flex-shrink-0 ${haoyouTagColors[tag] || 'bg-gray-100 text-gray-500'}`}>
           {tag}
         </span>
       )}
@@ -152,17 +150,16 @@ const tagColors2: Record<string, string> = {
   '活动': 'bg-pink-100 text-pink-700',
 }
 
-function GameItem({ g, showDate, index }: { g: TodayGame; showDate?: boolean; index?: number }) {
+function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
   const timeStr = showDate && g.startDate ? g.startDate : g.startTime || g.startDate
   return (
     <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-      <span className="inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-medium text-gray-400 bg-gray-50 flex-shrink-0">{index ?? ''}</span>
       <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
         {timeStr && <span className="text-gray-400 font-normal">{timeStr} · </span>}
         {g.title}
         {g.labels.length > 0 && <span className="text-gray-400 font-normal"> · {g.labels[0]}</span>}
       </p>
-      <span className={`text-xs px-1.5 rounded-full font-medium flex-shrink-0 ${tagColors2[g.tag] || 'bg-gray-100 text-gray-500'}`}>{g.tag}</span>
+      <span className={`text-xs px-1.5 h-5 inline-flex items-center rounded-full font-medium flex-shrink-0 ${tagColors2[g.tag] || 'bg-gray-100 text-gray-500'}`}>{g.tag}</span>
     </li>
   )
 }
@@ -262,27 +259,24 @@ export default function ChartsPage() {
           <Card
             title={`今日游戏${todayGames.length ? ` · ${todayGames.length} 款` : ''}`}
             subtitle="首发 / 新游预约 / 测试" icon="🎮" accent="bg-teal-50"
-            list={todayLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
-              : todayGames.length === 0 ? <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
-              : (
-                <ul>
-                  {topEvents.length > 0 && (
-                    <li className="flex items-center gap-2 py-1.5 border-b border-gray-50">
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-teal-100 text-teal-600 text-[10px] font-bold flex-shrink-0">★</span>
-                      <p className="flex-1 text-xs font-semibold text-teal-700 truncate min-w-0">近期焦点 · {topEvents.length} 条</p>
-                      <button
-                        onClick={() => openModal('近期焦点', topEvents.map((g, i) => <GameItem key={i} g={g} showDate index={i + 1} />))}
-                        className="text-xs text-teal-500 hover:text-teal-700 flex-shrink-0 border border-teal-200 rounded px-1.5 transition-colors"
-                      >查看</button>
-                    </li>
-                  )}
-                  {todayGames.slice(0, topEvents.length > 0 ? PREVIEW - 1 : PREVIEW).map((g, i) => (
-                    <GameItem key={i} g={g} index={topEvents.length > 0 ? i + 2 : i + 1} />
-                  ))}
-                </ul>
-              )}
+            list={todayLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p> : (
+              <>
+                {topEvents.length > 0 && (
+                  <button
+                    onClick={() => openModal('近期焦点', topEvents.map((g, i) => <GameItem key={i} g={g} showDate />))}
+                    className="w-full h-8 flex items-center justify-between px-3 mb-0.5 bg-teal-50 hover:bg-teal-100 border border-teal-100 rounded-lg transition-colors"
+                  >
+                    <span className="text-xs font-semibold text-teal-700">近期焦点 · {topEvents.length} 条</span>
+                    <span className="text-xs text-teal-500">查看 ›</span>
+                  </button>
+                )}
+                {todayGames.length === 0
+                  ? <p className="text-xs text-gray-400 py-3 text-center">暂无数据</p>
+                  : <ul>{todayGames.slice(0, topEvents.length > 0 ? PREVIEW - 1 : PREVIEW).map((g, i) => <GameItem key={i} g={g} />)}</ul>}
+              </>
+            )}
             footer={!todayLoading && todayGames.length > (topEvents.length > 0 ? PREVIEW - 1 : PREVIEW)
-              ? <MoreButton total={todayGames.length} shown={topEvents.length > 0 ? PREVIEW - 1 : PREVIEW} onClick={() => openModal(`今日游戏 · ${todayGames.length} 款`, todayGames.map((g, i) => <GameItem key={i} g={g} index={i + 1} />))} />
+              ? <MoreButton total={todayGames.length} shown={topEvents.length > 0 ? PREVIEW - 1 : PREVIEW} onClick={() => openModal(`今日游戏 · ${todayGames.length} 款`, todayGames.map((g, i) => <GameItem key={i} g={g} />))} />
               : undefined}
           />
 
@@ -292,9 +286,9 @@ export default function ChartsPage() {
             subtitle="未来 30 天预约 / 首发" icon="📅" accent="bg-teal-50"
             list={todayLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
               : upcomingGames.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-              : <ul>{upcomingGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} showDate index={i + 1} />)}</ul>}
+              : <ul>{upcomingGames.slice(0, PREVIEW).map((g, i) => <GameItem key={i} g={g} showDate />)}</ul>}
             footer={!todayLoading && upcomingGames.length > PREVIEW
-              ? <MoreButton total={upcomingGames.length} shown={PREVIEW} onClick={() => openModal(`即将上线 · ${upcomingGames.length} 款`, upcomingGames.map((g, i) => <GameItem key={i} g={g} showDate index={i + 1} />))} />
+              ? <MoreButton total={upcomingGames.length} shown={PREVIEW} onClick={() => openModal(`即将上线 · ${upcomingGames.length} 款`, upcomingGames.map((g, i) => <GameItem key={i} g={g} showDate />))} />
               : undefined}
           />
 
@@ -323,9 +317,9 @@ export default function ChartsPage() {
             subtitle="手机游戏 / 免费" icon="🚀" accent="bg-green-50"
             list={haoyouLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
               : haoyouUpcoming.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-              : <ul>{haoyouUpcoming.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} index={i + 1} />)}</ul>}
+              : <ul>{haoyouUpcoming.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} />)}</ul>}
             footer={!haoyouLoading && haoyouUpcoming.length > PREVIEW
-              ? <MoreButton total={haoyouUpcoming.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将上线 · ${haoyouUpcoming.length} 款`, haoyouUpcoming.map((g, i) => <HaoyouGameItem key={i} g={g} index={i + 1} />))} />
+              ? <MoreButton total={haoyouUpcoming.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将上线 · ${haoyouUpcoming.length} 款`, haoyouUpcoming.map((g, i) => <HaoyouGameItem key={i} g={g} />))} />
               : undefined}
           />
 
@@ -335,9 +329,9 @@ export default function ChartsPage() {
             subtitle="手机游戏 / 免费" icon="🔄" accent="bg-green-50"
             list={haoyouLoading ? <p className="text-xs text-gray-400 py-4 text-center">加载中…</p>
               : haoyouUpdates.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
-              : <ul>{haoyouUpdates.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload index={i + 1} />)}</ul>}
+              : <ul>{haoyouUpdates.slice(0, PREVIEW).map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />)}</ul>}
             footer={!haoyouLoading && haoyouUpdates.length > PREVIEW
-              ? <MoreButton total={haoyouUpdates.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将更新 · ${haoyouUpdates.length} 款`, haoyouUpdates.map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload index={i + 1} />))} />
+              ? <MoreButton total={haoyouUpdates.length} shown={PREVIEW} onClick={() => openModal(`好游快爆 即将更新 · ${haoyouUpdates.length} 款`, haoyouUpdates.map((g, i) => <HaoyouGameItem key={i} g={g} hideDownload />))} />
               : undefined}
           />
 
