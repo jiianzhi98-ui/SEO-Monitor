@@ -17,21 +17,18 @@ function drawCaptcha(canvas: HTMLCanvasElement): string {
   const w = canvas.width
   const h = canvas.height
 
-  // Dark background
   ctx.fillStyle = '#111827'
   ctx.fillRect(0, 0, w, h)
 
-  // Noise dots
   for (let i = 0; i < 40; i++) {
-    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.15})`
+    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.12})`
     ctx.beginPath()
-    ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 2, 0, Math.PI * 2)
+    ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 1.5, 0, Math.PI * 2)
     ctx.fill()
   }
 
-  // Interference lines
   for (let i = 0; i < 3; i++) {
-    ctx.strokeStyle = `rgba(255,255,255,0.12)`
+    ctx.strokeStyle = `rgba(255,255,255,0.1)`
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(Math.random() * w, Math.random() * h)
@@ -43,67 +40,17 @@ function drawCaptcha(canvas: HTMLCanvasElement): string {
     ctx.stroke()
   }
 
-  // Characters
   for (let i = 0; i < code.length; i++) {
-    const x = 14 + i * 28
-    const y = h / 2 + 8
     ctx.save()
-    ctx.translate(x, y)
-    ctx.rotate((Math.random() - 0.5) * 0.5)
-    ctx.font = `bold ${22 + Math.floor(Math.random() * 6)}px monospace`
+    ctx.translate(12 + i * 24, h / 2 + 7)
+    ctx.rotate((Math.random() - 0.5) * 0.4)
+    ctx.font = `bold ${20 + Math.floor(Math.random() * 5)}px monospace`
     ctx.fillStyle = CAPTCHA_COLORS[i % CAPTCHA_COLORS.length]
-    ctx.shadowColor = CAPTCHA_COLORS[i % CAPTCHA_COLORS.length]
-    ctx.shadowBlur = 4
     ctx.fillText(code[i], 0, 0)
     ctx.restore()
   }
 
   return code
-}
-
-// ─── Icon components ──────────────────────────────────────────────────────────
-
-function UserIcon() {
-  return (
-    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-    </svg>
-  )
-}
-
-function LockIcon() {
-  return (
-    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-    </svg>
-  )
-}
-
-function ShieldIcon() {
-  return (
-    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-    </svg>
-  )
-}
-
-function EyeIcon({ open }: { open: boolean }) {
-  return open ? (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  ) : (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-    </svg>
-  )
 }
 
 // ─── Login page ───────────────────────────────────────────────────────────────
@@ -126,9 +73,7 @@ export default function LoginPage() {
     setCaptchaInput('')
   }, [])
 
-  useEffect(() => {
-    refreshCaptcha()
-  }, [refreshCaptcha])
+  useEffect(() => { refreshCaptcha() }, [refreshCaptcha])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -168,97 +113,124 @@ export default function LoginPage() {
     }
   }
 
-  const inputClass = "flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
-
   return (
-    <div
-      className="min-h-screen bg-cover bg-center flex items-center justify-center px-4"
-      style={{ backgroundImage: "url('https://picsum.photos/seed/forest99/1920/1080')" }}
-    >
-      {/* subtle dark overlay so card stands out */}
-      <div className="absolute inset-0 bg-black/10" />
+    <div className="min-h-screen flex items-center justify-center px-4"
+      style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f2318 100%)' }}>
+      <div className="w-full max-w-md">
 
-      <div className="relative w-full max-w-[400px]">
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl px-10 py-10">
-          {/* Title */}
-          <h1 className="text-2xl font-bold text-gray-900 text-center mb-8 tracking-wide">
-            后台管理系统
-          </h1>
+        {/* Login Card */}
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          {/* Brand inside card */}
+          <div className="flex items-center gap-3 mb-8 pb-6 border-b border-gray-100">
+            <div className="flex items-center justify-center w-10 h-10 bg-green-600 rounded-lg flex-shrink-0">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">SEO Monitor</h1>
+          </div>
+
+          <h2 className="text-base font-semibold text-gray-700 mb-5">登录账户</h2>
+
+          <form onSubmit={handleLogin} className="space-y-5">
             {/* Username */}
-            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-              <UserIcon />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">用户名</label>
               <input
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required
-                placeholder="用户名"
+                placeholder="输入用户名"
                 autoComplete="username"
-                className={inputClass}
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
               />
             </div>
 
             {/* Password */}
-            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-              <LockIcon />
-              <input
-                type={showPwd ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                placeholder="密码"
-                autoComplete="current-password"
-                className={inputClass}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd(v => !v)}
-                className="text-gray-400 hover:text-gray-600 flex-shrink-0"
-                tabIndex={-1}
-              >
-                <EyeIcon open={showPwd} />
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">密码</label>
+              <div className="relative">
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="w-full px-3.5 py-2.5 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(v => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600"
+                  tabIndex={-1}
+                >
+                  {showPwd ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* CAPTCHA */}
-            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-              <ShieldIcon />
-              <input
-                type="text"
-                value={captchaInput}
-                onChange={e => setCaptchaInput(e.target.value)}
-                required
-                placeholder="图形验证码"
-                maxLength={4}
-                autoComplete="off"
-                className={inputClass}
-              />
-              <canvas
-                ref={canvasRef}
-                width={110}
-                height={40}
-                onClick={refreshCaptcha}
-                className="rounded cursor-pointer flex-shrink-0"
-                title="点击刷新"
-              />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">图形验证码</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={captchaInput}
+                  onChange={e => setCaptchaInput(e.target.value)}
+                  required
+                  placeholder="输入右侧验证码"
+                  maxLength={4}
+                  autoComplete="off"
+                  className="flex-1 px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
+                />
+                <canvas
+                  ref={canvasRef}
+                  width={110}
+                  height={42}
+                  onClick={refreshCaptcha}
+                  className="rounded-lg cursor-pointer flex-shrink-0"
+                  title="点击刷新"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">不区分大小写 · 点击图片可刷新</p>
             </div>
 
-            {/* Error */}
             {error && (
-              <div className="text-sm text-red-500 text-center py-1">
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
                 {error}
               </div>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? '登录中...' : '登录'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  登录中...
+                </span>
+              ) : '登录'}
             </button>
           </form>
         </div>
