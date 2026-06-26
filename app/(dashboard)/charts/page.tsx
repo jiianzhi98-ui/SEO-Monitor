@@ -124,7 +124,7 @@ function HaoyouGameItem({ g, hideDownload }: { g: HaoyouItem; hideDownload?: boo
   const tag = deriveHaoyouTag(g.status, g.btnText)
   const showTag = hideDownload ? tag !== '下载' : true
   return (
-    <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+    <li className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0">
       <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
         {g.date && <span className="text-gray-400 font-normal">{g.date} · </span>}
         {g.name}
@@ -153,7 +153,7 @@ const tagColors2: Record<string, string> = {
 function GameItem({ g, showDate }: { g: TodayGame; showDate?: boolean }) {
   const timeStr = showDate && g.startDate ? g.startDate : g.startTime || g.startDate
   return (
-    <li className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+    <li className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0">
       <p className="flex-1 text-xs text-gray-900 truncate min-w-0">
         {timeStr && <span className="text-gray-400 font-normal">{timeStr} · </span>}
         {g.title}
@@ -264,7 +264,7 @@ export default function ChartsPage() {
                 {topEvents.length > 0 && (
                   <button
                     onClick={() => openModal('近期焦点', topEvents.map((g, i) => <GameItem key={i} g={g} showDate />))}
-                    className="w-full flex items-center justify-between px-3 py-1.5 mb-0.5 bg-teal-50 hover:bg-teal-100 border border-teal-100 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-2 mb-0.5 bg-teal-50 hover:bg-teal-100 border border-teal-100 rounded-lg transition-colors"
                   >
                     <span className="text-[11px] font-semibold text-teal-700">近期焦点 · {topEvents.length} 条</span>
                     <span className="text-[10px] text-teal-500">查看 ›</span>
