@@ -212,8 +212,7 @@ export default function ChartsPage() {
     setModal({ title, items })
   }
 
-  const PREVIEW = 6
-  const RANK_PREVIEW = 10
+  const PREVIEW = 10
 
   // Pre-build ranked list items for reuse
   const hotItemNodes = hotItems.map((g) => (
@@ -301,8 +300,8 @@ export default function ChartsPage() {
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
               <>
-                <ul>{hotItemNodes.slice(0, RANK_PREVIEW)}</ul>
-                <MoreButton total={hotItemNodes.length} shown={RANK_PREVIEW} onClick={() => openModal('TapTap 热搜榜', hotItemNodes)} />
+                <ul>{hotItemNodes.slice(0, PREVIEW)}</ul>
+                <MoreButton total={hotItemNodes.length} shown={PREVIEW} onClick={() => openModal('TapTap 热搜榜', hotItemNodes)} />
               </>
             )}
           </Card>
@@ -361,8 +360,8 @@ export default function ChartsPage() {
               <p className="text-xs text-gray-400 py-4 text-center">暂无数据</p>
             ) : (
               <>
-                <ul>{haoyouHotNodes.slice(0, RANK_PREVIEW)}</ul>
-                <MoreButton total={haoyouHotNodes.length} shown={RANK_PREVIEW} onClick={() => openModal('好游快爆 热门榜', haoyouHotNodes)} />
+                <ul>{haoyouHotNodes.slice(0, PREVIEW)}</ul>
+                <MoreButton total={haoyouHotNodes.length} shown={PREVIEW} onClick={() => openModal('好游快爆 热门榜', haoyouHotNodes)} />
               </>
             )}
           </Card>
