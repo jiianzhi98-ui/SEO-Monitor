@@ -512,7 +512,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
                       {user.role === 'normal' && (
                         <button
                           onClick={() => setAccessUser(user)}
-                          className="text-xs text-gray-400 hover:text-purple-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-purple-200 transition-colors"
+                          className="text-xs text-purple-500 hover:text-purple-700 border border-purple-100 rounded px-1.5 py-0.5 hover:border-purple-200 transition-colors"
                         >
                           站点权限
                         </button>
