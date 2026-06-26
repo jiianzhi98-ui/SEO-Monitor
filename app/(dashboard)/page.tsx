@@ -1357,7 +1357,7 @@ function CompareChart({
                 if (!value || cx == null || cy == null) return <g key={index ?? 0} />
                 return <circle key={index ?? 0} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} strokeOpacity={dimmed ? 0.15 : 1} />
               }}
-              activeDot={{ r: 4, fill: colorMap[id], stroke: 'white', strokeWidth: 2 }}
+              activeDot={false}
               onClick={() => { lineClickedRef.current = true; toggleFocus(id) }}
               onMouseEnter={() => setHoveredId(id)}
               onMouseLeave={() => setHoveredId(null)}
