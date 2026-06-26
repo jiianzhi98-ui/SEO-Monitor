@@ -1217,7 +1217,7 @@ function AlertCard({
         {isPlaceholder || !hasAlerts ? (
           <p className="text-xs text-gray-400">{empty}</p>
         ) : (
-          <div className="max-h-24 overflow-y-auto space-y-0.5 pr-1">
+          <div className="max-h-44 overflow-y-auto space-y-0.5 pr-1">
             {children}
           </div>
         )}
@@ -1331,10 +1331,10 @@ function CompareChart({
     }
   }
   const maxVal = niceMax(rawMax)
-  const yTicks = Array.from({ length: 11 }, (_, i) => Math.round(maxVal * i / 10))
+  const yTicks = Array.from({ length: 9 }, (_, i) => Math.round(maxVal * i / 8))
 
   return (
-    <ResponsiveContainer width="100%" height={420}>
+    <ResponsiveContainer width="100%" height={280}>
       <LineChart
         data={data}
         margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
