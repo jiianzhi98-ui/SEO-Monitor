@@ -549,10 +549,10 @@ export default function CompetitorDailyPage() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
+    <div className="p-6">
+      <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-900">竞品日收</h1>
-        <p className="text-gray-500 text-sm mt-1">各站点每日新增关键词数量对比</p>
+        <p className="text-gray-400 text-sm mt-0.5">各站点每日新增关键词数量对比</p>
       </div>
 
       <div className="card">
@@ -581,7 +581,7 @@ export default function CompetitorDailyPage() {
                   <th className="table-th text-right">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-50">
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td>
@@ -590,45 +590,43 @@ export default function CompetitorDailyPage() {
                   rows.slice(mainPage * PAGE_SIZE, (mainPage + 1) * PAGE_SIZE).map((row) => {
                     const s = statusConfig[row.status]
                     return (
-                      <tr key={row.site_id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={row.site_id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="table-td">
-                          <div>
-                            <p className="font-medium text-gray-900">{row.domain}</p>
-                            <p className="text-xs text-gray-400">{row.name}</p>
-                          </div>
+                          <span className="font-medium text-gray-900">{row.domain}</span>
+                          {row.name && <span className="text-gray-400"> · {row.name}</span>}
                         </td>
-                        <td className="table-td text-right font-bold text-green-600">{row.yesterday.toLocaleString()}</td>
+                        <td className="table-td text-right font-semibold text-green-600">{row.yesterday.toLocaleString()}</td>
                         <td className="table-td text-right text-gray-600">{row.avg7d.toLocaleString()}</td>
                         <td className="table-td text-center">
                           <span className={s.className}>{s.label}</span>
                         </td>
                         <td className="table-td text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => row.hasHtml && viewYesterdayKeywords(row)}
                               disabled={!row.hasHtml}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasHtml ? 'text-gray-500 hover:text-green-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasHtml ? 'text-gray-400 hover:text-green-600 border-gray-200 hover:border-green-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               昨日新词
                             </button>
                             <button
                               onClick={() => row.hasHtml && viewCleanedKeywords(row)}
                               disabled={!row.hasHtml}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasHtml ? 'text-blue-500 hover:text-blue-700 hover:bg-blue-50' : 'text-gray-300 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasHtml ? 'text-gray-400 hover:text-blue-600 border-gray-200 hover:border-blue-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               更新词库
                             </button>
                             <button
                               onClick={() => row.hasRankData && openRankModal(row)}
                               disabled={!row.hasRankData}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasRankData ? 'text-purple-500 hover:text-purple-700 hover:bg-purple-50' : 'text-gray-300 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-gray-400 hover:text-purple-600 border-gray-200 hover:border-purple-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               排名变动
                             </button>
                             <button
                               onClick={() => row.hasRankData && openUnstableModal(row)}
                               disabled={!row.hasRankData}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${row.hasRankData ? 'text-orange-500 hover:text-orange-700 hover:bg-orange-50' : 'text-gray-300 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-gray-400 hover:text-orange-600 border-gray-200 hover:border-orange-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               不稳定词
                             </button>

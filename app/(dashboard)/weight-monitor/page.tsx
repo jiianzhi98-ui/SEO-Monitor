@@ -45,7 +45,7 @@ function fmt(n: number) {
 function WeightCell({ value, change }: { value: number; change: number }) {
   return (
     <div className="flex items-center justify-center gap-1.5">
-      <span className="text-lg tabular-nums font-medium text-gray-900">{value}</span>
+      <span className="text-sm tabular-nums font-semibold text-gray-900">{value}</span>
       {change !== 0 && (
         <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
           {change > 0 ? `+${change}` : change}
@@ -56,14 +56,14 @@ function WeightCell({ value, change }: { value: number; change: number }) {
 }
 
 function IpRangeCell({ min, max }: { min: number; max: number }) {
-  if (min === 0 && max === 0) return <span className="text-gray-300 text-sm">-</span>
-  return <span className="text-sm text-gray-800 tabular-nums">{fmt(min)} ~ {fmt(max)}</span>
+  if (min === 0 && max === 0) return <span className="text-gray-300 text-xs">-</span>
+  return <span className="text-xs text-gray-700 tabular-nums">{fmt(min)} ~ {fmt(max)}</span>
 }
 
 function IpChangeCell({ change }: { change: number }) {
-  if (change === 0) return <span className="text-gray-300 text-sm">-</span>
+  if (change === 0) return <span className="text-gray-300 text-xs">-</span>
   return (
-    <span className={`text-sm font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
+    <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
       {change > 0 ? `+${fmt(change)}` : fmt(change)}
     </span>
   )
@@ -166,10 +166,10 @@ export default function WeightMonitorPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
+    <div className="p-6">
+      <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-900">权重监控</h1>
-        <p className="text-gray-500 text-sm mt-1">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
+        <p className="text-gray-400 text-sm mt-0.5">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
       </div>
 
       {/* Detail modal */}
@@ -257,19 +257,17 @@ export default function WeightMonitorPage() {
                   <th className="table-th text-center">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-50">
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
                   </tr>
                 ) : (
                   rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
-                    <tr key={row.site_id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={row.site_id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="table-td">
-                        <div>
-                          <p className="font-medium text-gray-900">{row.domain}</p>
-                          <p className="text-xs text-gray-400">{row.name}</p>
-                        </div>
+                        <span className="font-medium text-gray-900">{row.domain}</span>
+                        {row.name && <span className="text-gray-400"> · {row.name}</span>}
                       </td>
                       <td className="table-td text-center">
                         <WeightCell value={row.pcWeight} change={row.pcWeightChange} />
@@ -295,7 +293,7 @@ export default function WeightMonitorPage() {
                       <td className="table-td text-center">
                         <button
                           onClick={() => setSelected(row)}
-                          className="text-xs text-blue-500 hover:text-blue-700 hover:underline"
+                          className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors"
                         >
                           详情
                         </button>

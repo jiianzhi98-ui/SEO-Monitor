@@ -155,10 +155,10 @@ export default function HotRadarPage() {
   const pagedList = activeList.slice(page * pageSize, (page + 1) * pageSize)
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
+    <div className="p-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-gray-900">热词雷达</h1>
-        <p className="text-gray-500 text-sm mt-1">近30天多竞品同时关注的词，捕捉趋势机会</p>
+        <p className="text-gray-400 text-sm mt-0.5">近30天多竞品同时关注的词，捕捉趋势机会</p>
       </div>
 
       {/* Tab bar with counts */}
@@ -232,12 +232,12 @@ export default function HotRadarPage() {
                     <th className="table-th text-right w-16"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-50">
                   {pagedList.length === 0 ? (
                     <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
                   ) : (
                     (pagedList as CrossEntry[]).map((w, i) => (
-                      <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
+                      <tr key={w.keyword} className="hover:bg-gray-50/50 transition-colors">
                         <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td">
@@ -253,7 +253,7 @@ export default function HotRadarPage() {
                           {w.volume != null ? fmtVolume(w.volume) : '—'}
                         </td>
                         <td className="table-td text-right">
-                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-green-200 transition-colors">
                             {copiedKw === w.keyword ? '✓' : '复制'}
                           </button>
                         </td>
@@ -276,12 +276,12 @@ export default function HotRadarPage() {
                     <th className="table-th text-right w-16"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-50">
                   {pagedList.length === 0 ? (
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
                     (pagedList as WordEntry[]).map((w, i) => (
-                      <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
+                      <tr key={w.keyword} className="hover:bg-gray-50/50 transition-colors">
                         <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center text-gray-600">{w.count}次</td>
@@ -291,7 +291,7 @@ export default function HotRadarPage() {
                         </td>
                         <td className="table-td"><SiteBadges sites={w.sites} /></td>
                         <td className="table-td text-right">
-                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-green-200 transition-colors">
                             {copiedKw === w.keyword ? '✓' : '复制'}
                           </button>
                         </td>
@@ -314,12 +314,12 @@ export default function HotRadarPage() {
                     <th className="table-th text-right w-16"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-50">
                   {pagedList.length === 0 ? (
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
                     (pagedList as RankEntry[]).map((w, i) => (
-                      <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
+                      <tr key={w.keyword} className="hover:bg-gray-50/50 transition-colors">
                         <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center">
@@ -329,7 +329,7 @@ export default function HotRadarPage() {
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
                         <td className="table-td"><SiteBadges sites={w.sites} /></td>
                         <td className="table-td text-right">
-                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-green-200 transition-colors">
                             {copiedKw === w.keyword ? '✓' : '复制'}
                           </button>
                         </td>
