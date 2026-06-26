@@ -116,6 +116,7 @@ interface SiteRecord {
   source_types: string | null
   enable_version_clean: boolean
   version_suffixes: string[]
+  has_rank_data: boolean
   created_at: string
 }
 
@@ -313,8 +314,6 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           sbCheck(await (supabase.from('rank_changes') as any).insert(chunk), 'rank_changes insert')
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', s.id)
       })
     }
     const kwWithVol = up.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
@@ -514,7 +513,7 @@ async function main() {
   }
   if (step === 'rank' || step === 'all') {
     const aid = await activityStart(supabase, { ...logBase, step: 'rank' })
-    await runRank(sites, today, aid)
+    await runRank(sites.filter(s => s.has_rank_data), today, aid)
   }
 
   console.log(`\n${'✓'.repeat(60)}`)

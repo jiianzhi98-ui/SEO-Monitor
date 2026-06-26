@@ -18,9 +18,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'keywords',
     title: '关键词抓取',
-    badge: 'step=keywords · GitHub Actions · 每日 00:00 MYT',
+    badge: 'step=keywords · GitHub Actions · 目标 00:00 MYT（实际因排队约 +5h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 16 * * * UTC)，5个 matrix job 并行，每组抓约1/5的站点' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 13 * * * UTC = 21:00 MYT)，5个 matrix job 并行，每组抓约1/5的站点；GitHub runner 排队约5小时，实际执行约 02:00 MYT' },
       { label: '抓取对象', text: '仅 list_url 已填写的站点（has_crawl_config），其余站点不计入关键词统计' },
       { label: '频率规则', text: 'daily=每天，every3days=每3天（按建站日期mod3），weekly=每周一；不在频率内的站记为 skip' },
       { label: '翻页策略', text: 'daily 最多3页，every3days 最多5页，weekly 最多10页；每页翻页随机等待10~15秒' },
@@ -33,9 +33,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'weight',
     title: '权重+收录',
-    badge: 'step=weight · GitHub Actions · 每日 07:00 MYT',
+    badge: 'step=weight · GitHub Actions · 目标 02:00 MYT（实际因排队约 +5h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 23 * * * UTC)，5个 matrix job 并行' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 15 * * * UTC = 23:00 MYT)，5个 matrix job 并行；实际执行约 04:00 MYT' },
       { label: '数据来源', text: '爱站 aizhan.com，抓取 PC/移动权重、收录数、来路IP区间' },
       { label: '限流保护', text: '失败后等30秒重试，最多3次（共3次尝试，每次换新UA）；站点间隔3秒' },
       { label: '写入表', text: 'weight_history（pc/mobile权重+IP区间，按 site_id+record_date upsert）/ index_snapshots（收录数，按 site_id+snapshot_date upsert）' },
@@ -45,10 +45,10 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'rank',
     title: '排名变动',
-    badge: 'step=rank · GitHub Actions · 每日 02:00 MYT',
+    badge: 'step=rank · GitHub Actions · 目标 03:00 MYT（实际因排队约 +5h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 18 * * * UTC)，5个 matrix job 并行' },
-      { label: '抓取对象', text: '仅 has_rank_data=true 的站点' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 16 * * * UTC = 00:00 MYT)，5个 matrix job 并行；实际执行约 05:00 MYT' },
+      { label: '抓取对象', text: '仅 is_enabled=true 且 has_rank_data=true 的站点；has_rank_data 由用户在网站管理手动开关，cron 不会自动修改该字段' },
       { label: '数据来源', text: '爱站移动端 baidurank.aizhan.com/mobile/…，抓涨入词与跌出词及搜索量' },
       { label: '并行策略', text: '排名段1-5同时并行，段内按页顺序，每页间隔300ms' },
       { label: '限流保护', text: '涨入完成后等2秒抓跌出；涨跌均为0时等5秒重试1次；连续3站为空触发熔断，暂停5分钟后补抓这3站；站点间45秒间隔' },
