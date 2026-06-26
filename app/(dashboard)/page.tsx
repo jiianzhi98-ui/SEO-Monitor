@@ -747,6 +747,7 @@ function RankupExportButton() {
     if (dates.length === 0) { setErr('日期范围无效'); setStatus('idle'); return }
 
     setStatus('crawling')
+    const t0 = Date.now()
     const allData: Record<string, { keyword: string; volume: number; title: string }[]> = {}
 
     for (let i = 0; i < dates.length; i++) {
@@ -780,7 +781,9 @@ function RankupExportButton() {
     setProgress('生成 Excel 文件...')
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
+    let totalKw = 0
     for (const [date, items] of Object.entries(allData)) {
+      totalKw += items.length
       const rows = items.map(r => ({ 关键词: r.keyword, 搜索量: r.volume, 标题: r.title }))
       const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ 关键词: '', 搜索量: 0, 标题: '无数据' }])
       XLSX.utils.book_append_sheet(wb, ws, date)
@@ -793,6 +796,11 @@ function RankupExportButton() {
     a.download = `涨词-${domain}-${startDate}至${endDate}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
+    fetch('/api/log-activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'rankup-export', domain, ok: totalKw, durationMs: Date.now() - t0, summary: `涨词导出 ${domain} ${startDate}至${endDate}，共 ${totalKw} 个词` }),
+    }).catch(() => {})
     setStatus('done')
     setProgress('导出完成')
   }
@@ -960,6 +968,7 @@ function RankdownExportButton() {
     if (dates.length === 0) { setErr('日期范围无效'); setStatus('idle'); return }
 
     setStatus('crawling')
+    const t0 = Date.now()
     const allData: Record<string, { keyword: string; volume: number; title: string }[]> = {}
 
     for (let i = 0; i < dates.length; i++) {
@@ -993,7 +1002,9 @@ function RankdownExportButton() {
     setProgress('生成 Excel 文件...')
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
+    let totalKw = 0
     for (const [date, items] of Object.entries(allData)) {
+      totalKw += items.length
       const rows = items.map(r => ({ 关键词: r.keyword, 搜索量: r.volume, 标题: r.title }))
       const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ 关键词: '', 搜索量: 0, 标题: '无数据' }])
       XLSX.utils.book_append_sheet(wb, ws, date)
@@ -1006,6 +1017,11 @@ function RankdownExportButton() {
     a.download = `跌词-${domain}-${startDate}至${endDate}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
+    fetch('/api/log-activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'rankdown-export', domain, ok: totalKw, durationMs: Date.now() - t0, summary: `跌词导出 ${domain} ${startDate}至${endDate}，共 ${totalKw} 个词` }),
+    }).catch(() => {})
     setStatus('done')
     setProgress('导出完成')
   }

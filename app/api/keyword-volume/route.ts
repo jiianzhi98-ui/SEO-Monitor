@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
+import { activityStart, activityEnd } from '@/lib/activity-log'
+
+async function log(supabase: ReturnType<typeof createServiceClient>, step: string, ok: number, summary: string, t0: number) {
+  const aid = await activityStart(supabase, { type: 'search', source: 'browser', step })
+  if (aid) await activityEnd(supabase, aid, { status: 'done', ok, summary, durationMs: Date.now() - t0 })
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -7,6 +13,7 @@ export async function GET(req: Request) {
   const exportParam = searchParams.get('export')
   const exportAll = exportParam === '1'
   const exportToday = exportParam === 'today'
+  const t0 = Date.now()
 
   const supabase = createServiceClient()
 
@@ -35,6 +42,7 @@ export async function GET(req: Request) {
       .map(kw => ({ keyword: kw, volume: volMap.get(kw) ?? 0 }))
       .sort((a, b) => b.volume - a.volume)
 
+    await log(supabase, 'kw-export-today', result.length, `今日新词导出 ${result.length} 个`, t0)
     return NextResponse.json({ keywords: result })
   }
 
@@ -54,6 +62,7 @@ export async function GET(req: Request) {
       if (data.length < batchSize) break
       offset += batchSize
     }
+    await log(supabase, 'kw-export-all', allRows.length, `全量导出 ${allRows.length} 个词`, t0)
     return NextResponse.json({ keywords: allRows })
   }
 
@@ -68,5 +77,7 @@ export async function GET(req: Request) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ keywords: data || [] })
+  const results = data || []
+  if (q) await log(supabase, 'kw-search', results.length, `搜索「${q}」→ ${results.length} 个词`, t0)
+  return NextResponse.json({ keywords: results })
 }
