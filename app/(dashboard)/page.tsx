@@ -1322,10 +1322,10 @@ function CompareChart({
             name={id}
             stroke={colorMap[id]}
             strokeWidth={2}
-            dot={(props: { cx: number; cy: number; value: number; index: number }) => {
+            dot={(props: { cx?: number; cy?: number; value?: number; index?: number }) => {
               const { cx, cy, value, index } = props
-              if (!value) return <g key={index} />
-              return <circle key={index} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} />
+              if (!value || cx == null || cy == null) return <g key={index ?? 0} />
+              return <circle key={index ?? 0} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} />
             }}
             activeDot={{ r: 4, fill: colorMap[id], stroke: 'white', strokeWidth: 2 }}
           />
