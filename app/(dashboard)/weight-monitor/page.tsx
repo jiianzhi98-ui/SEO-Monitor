@@ -293,7 +293,7 @@ export default function WeightMonitorPage() {
                       <td className="table-td text-center">
                         <button
                           onClick={() => setSelected(row)}
-                          className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors"
+                          className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors"
                         >
                           详情
                         </button>

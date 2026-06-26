@@ -520,7 +520,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
                       {!(callerRole === 'admin' && user.role === 'super') && (
                         <button
                           onClick={() => setEditingUser(user)}
-                          className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5 hover:border-gray-300 transition-colors"
+                          className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors"
                         >
                           编辑
                         </button>

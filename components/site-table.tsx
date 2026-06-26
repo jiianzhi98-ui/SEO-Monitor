@@ -128,7 +128,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
                 <div className="flex items-center justify-end gap-1.5">
                   <button
                     onClick={() => onEdit(site)}
-                    className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5 hover:border-gray-300 transition-colors"
+                    className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors"
                   >
                     编辑
                   </button>
