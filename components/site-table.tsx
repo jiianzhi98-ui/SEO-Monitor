@@ -73,8 +73,8 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
             <th className="table-th">关注</th>
             <th className="table-th">频率</th>
             <th className="table-th text-center">版本清洗</th>
+            <th className="table-th text-center">关键词数据</th>
             <th className="table-th text-center">排名数据</th>
-            <th className="table-th text-center">状态</th>
             <th className="table-th text-right">操作</th>
           </tr>
         </thead>
@@ -112,18 +112,6 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
               </td>
               <td className="table-td text-center">
                 <button
-                  onClick={() => onToggleRank(site)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${
-                    site.has_rank_data ? 'bg-purple-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    site.has_rank_data ? 'translate-x-5' : 'translate-x-0'
-                  }`} />
-                </button>
-              </td>
-              <td className="table-td text-center">
-                <button
                   onClick={() => onToggle(site)}
                   className={`relative w-10 h-5 rounded-full transition-colors ${
                     site.is_enabled ? 'bg-green-600' : 'bg-gray-300'
@@ -131,6 +119,18 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
                 >
                   <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
                     site.is_enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </td>
+              <td className="table-td text-center">
+                <button
+                  onClick={() => onToggleRank(site)}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    site.has_rank_data ? 'bg-purple-500' : 'bg-gray-300'
+                  }`}
+                >
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    site.has_rank_data ? 'translate-x-5' : 'translate-x-0'
                   }`} />
                 </button>
               </td>

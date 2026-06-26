@@ -488,7 +488,7 @@ async function main() {
   const today = getMalaysiaDate()
   const yesterday = getMalaysiaDate(-1)
 
-  let query = supabase.from('sites').select('*').eq('is_enabled', true)
+  let query = supabase.from('sites').select('*')
   if (siteFilter) query = query.eq('domain', siteFilter)
   const { data: sitesRaw, error } = await query
   if (error) throw error
@@ -505,7 +505,7 @@ async function main() {
 
   if (step === 'keywords' || step === 'all') {
     const aid = await activityStart(supabase, { ...logBase, step: 'keywords' })
-    await runKeywords(sites, today, yesterday, group === 0, aid)
+    await runKeywords(sites.filter(s => s.is_enabled), today, yesterday, group === 0, aid)
   }
   if (step === 'weight' || step === 'all') {
     const aid = await activityStart(supabase, { ...logBase, step: 'weight' })

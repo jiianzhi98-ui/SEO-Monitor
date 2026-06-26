@@ -21,7 +21,7 @@ export const CRAWL_RULES: RuleSection[] = [
     badge: 'step=keywords · GitHub Actions · 目标 00:00 MYT（实际因排队约 +5h）',
     items: [
       { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 13 * * * UTC = 21:00 MYT)，5个 matrix job 并行，每组抓约1/5的站点；GitHub runner 排队约5小时，实际执行约 02:00 MYT' },
-      { label: '抓取对象', text: '仅 list_url 已填写的站点（has_crawl_config），其余站点不计入关键词统计' },
+      { label: '抓取对象', text: '仅 is_enabled=true 且 list_url 已填写的站点；is_enabled 由用户在网站管理"关键词数据"开关控制，关闭后跳过关键词抓取但权重/排名照常运行' },
       { label: '频率规则', text: 'daily=每天，every3days=每3天（按建站日期mod3），weekly=每周一；不在频率内的站记为 skip' },
       { label: '翻页策略', text: 'daily 最多3页，every3days 最多5页，weekly 最多10页；每页翻页随机等待10~15秒' },
       { label: '去重', text: '与数据库同日期已有词对比去重，批次内也去重；新词写入 raw_keywords' },
