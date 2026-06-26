@@ -181,7 +181,7 @@ export default function IndexMonitorPage() {
                     const s = statusConfig[row.status]
                     const isPos = row.weeklyChange >= 0
                     return (
-                      <tr key={row.site_id} className="hover:bg-gray-50/50 transition-colors">
+                      <tr key={row.site_id} className="hover:bg-gray-100 transition-colors">
                         <td className="table-td">
                           <span className="font-medium text-gray-900">{row.domain}</span>
                           {row.name && <span className="text-gray-400"> · {row.name}</span>}

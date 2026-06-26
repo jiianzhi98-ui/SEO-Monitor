@@ -80,7 +80,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
         </thead>
         <tbody className="divide-y divide-gray-100">
           {paged.map((site) => (
-            <tr key={site.id} className="hover:bg-gray-50/50 transition-colors">
+            <tr key={site.id} className="hover:bg-gray-100 transition-colors">
               <td className="table-td">
                 <a
                   href={`https://${site.domain}`}

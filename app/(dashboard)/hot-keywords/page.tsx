@@ -237,7 +237,7 @@ export default function HotRadarPage() {
                     <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
                   ) : (
                     (pagedList as CrossEntry[]).map((w, i) => (
-                      <tr key={w.keyword} className="hover:bg-gray-50/50 transition-colors">
+                      <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
                         <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td">
@@ -281,7 +281,7 @@ export default function HotRadarPage() {
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
                     (pagedList as WordEntry[]).map((w, i) => (
-                      <tr key={w.keyword} className="hover:bg-gray-50/50 transition-colors">
+                      <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
                         <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center text-gray-600">{w.count}次</td>
@@ -319,7 +319,7 @@ export default function HotRadarPage() {
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
                     (pagedList as RankEntry[]).map((w, i) => (
-                      <tr key={w.keyword} className="hover:bg-gray-50/50 transition-colors">
+                      <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
                         <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center">

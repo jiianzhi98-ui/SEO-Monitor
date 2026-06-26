@@ -264,7 +264,7 @@ export default function WeightMonitorPage() {
                   </tr>
                 ) : (
                   rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
-                    <tr key={row.site_id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={row.site_id} className="hover:bg-gray-100 transition-colors">
                       <td className="table-td">
                         <span className="font-medium text-gray-900">{row.domain}</span>
                         {row.name && <span className="text-gray-400"> · {row.name}</span>}

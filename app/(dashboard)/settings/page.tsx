@@ -498,7 +498,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {users.map(user => (
-                <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
+                <tr key={user.id} className="hover:bg-gray-100 transition-colors">
                   <td className="table-td">
                     <span className="font-medium text-gray-900">{user.username ?? <span className="text-gray-400 italic">未设置</span>}</span>
                     <span className="text-gray-400"> · {user.email}</span>

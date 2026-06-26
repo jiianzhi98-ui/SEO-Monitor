@@ -442,7 +442,7 @@ export default function CrawlLogPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {pagedLogs.map(log => (
-                        <tr key={log.id} className="hover:bg-gray-50/50">
+                        <tr key={log.id} className="hover:bg-gray-100">
                           <td className="px-4 py-2.5 text-xs text-gray-500 tabular-nums whitespace-nowrap">
                             {formatDateTime(log.logged_at)}
                           </td>
