@@ -391,12 +391,12 @@ function NormalSettings() {
   }
 
   return (
-    <div className="p-8 max-w-lg">
-      <div className="mb-6">
+    <div className="p-6 max-w-lg">
+      <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-900">账户设置</h1>
-        <p className="text-gray-500 text-sm mt-1">修改登录密码</p>
+        <p className="text-gray-400 text-sm mt-0.5">修改登录密码</p>
       </div>
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="card p-6">
         <h2 className="text-base font-semibold text-gray-900 mb-5">修改密码</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -456,11 +456,11 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">账户设置</h1>
-          <p className="text-gray-500 text-sm mt-1">管理所有账号与访问权限</p>
+          <p className="text-gray-400 text-sm mt-0.5">管理所有账号与访问权限</p>
         </div>
         <button
           onClick={() => setShowChangePwd(true)}
@@ -470,7 +470,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-sm font-semibold text-gray-900">账号管理</h2>
           <button
@@ -496,32 +496,31 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
                 <th className="table-th text-right">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-50">
               {users.map(user => (
-                <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="table-td">
-                    <p className="text-sm text-gray-800 font-medium">{user.username ?? <span className="text-gray-400 italic text-xs">未设置</span>}</p>
-                    <p className="text-xs text-gray-400">{user.email}</p>
+                    <span className="font-medium text-gray-900">{user.username ?? <span className="text-gray-400 italic">未设置</span>}</span>
+                    <span className="text-gray-400"> · {user.email}</span>
                   </td>
                   <td className="table-td"><RoleBadge role={user.role} /></td>
-                  <td className="table-td text-gray-500 text-xs">
+                  <td className="table-td text-gray-500">
                     {new Date(user.created_at).toLocaleDateString('zh-CN')}
                   </td>
                   <td className="table-td text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-1.5">
                       {user.role === 'normal' && (
                         <button
                           onClick={() => setAccessUser(user)}
-                          className="text-xs text-purple-600 hover:text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors"
+                          className="text-xs text-gray-400 hover:text-purple-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-purple-200 transition-colors"
                         >
                           站点权限
                         </button>
                       )}
-                      {/* admin cannot edit super users */}
                       {!(callerRole === 'admin' && user.role === 'super') && (
                         <button
                           onClick={() => setEditingUser(user)}
-                          className="text-xs text-gray-600 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                          className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-1.5 py-0.5 hover:border-gray-300 transition-colors"
                         >
                           编辑
                         </button>
@@ -530,7 +529,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
                         <button
                           onClick={() => handleDelete(user)}
                           disabled={deletingId === user.id}
-                          className="text-xs text-gray-600 hover:text-red-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-40"
+                          className="text-xs text-red-400 hover:text-red-600 border border-red-100 rounded px-1.5 py-0.5 hover:border-red-200 transition-colors disabled:opacity-40"
                         >
                           {deletingId === user.id ? '删除中...' : '删除'}
                         </button>
