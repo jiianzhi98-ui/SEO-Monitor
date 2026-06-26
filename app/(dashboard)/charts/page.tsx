@@ -175,7 +175,7 @@ export default function ChartsPage() {
 
   const [haoyouUpcomingToday, setHaoyouUpcomingToday] = useState<HaoyouItem[]>([])
   const [haoyouUpcoming, setHaoyouUpcoming] = useState<HaoyouItem[]>([])
-  const [haoyouUpcomingBaoliao, setHaoyouUpcomingBaoliao] = useState<HaoyouItem[]>([])
+  const [haoyouBaoliao, setHaoyouBaoliao] = useState<HaoyouItem[]>([])
   const [haoyouUpdates, setHaoyouUpdates] = useState<HaoyouItem[]>([])
   const [haoyouHotItems, setHaoyouHotItems] = useState<HaoyouHotItem[]>([])
   const [haoyouLoading, setHaoyouLoading] = useState(true)
@@ -207,7 +207,7 @@ export default function ChartsPage() {
       .then((d) => {
         setHaoyouUpcomingToday(d.upcomingToday ?? [])
         setHaoyouUpcoming(d.upcoming ?? [])
-        setHaoyouUpcomingBaoliao(d.upcomingBaoliao ?? [])
+        setHaoyouBaoliao(d.baoliao ?? [])
         setHaoyouUpdates(d.updates ?? [])
         setHaoyouHotItems(d.hotItems ?? [])
         setHaoyouUpdatedAt(ts)
@@ -318,7 +318,7 @@ export default function ChartsPage() {
           {/* 即将上线 */}
           {(() => {
             const allUpcoming = [...haoyouUpcomingToday, ...haoyouUpcoming]
-            const hasBaoliao = haoyouUpcomingBaoliao.length > 0
+            const hasBaoliao = haoyouBaoliao.length > 0
             const preview = hasBaoliao ? PREVIEW - 1 : PREVIEW
             return (
               <Card
@@ -328,10 +328,10 @@ export default function ChartsPage() {
                   <>
                     {hasBaoliao && (
                       <button
-                        onClick={() => openModal('好游快爆 抢先爆料', haoyouUpcomingBaoliao.map((g, i) => <HaoyouGameItem key={i} g={g} />))}
+                        onClick={() => openModal('好游快爆 抢先爆料', haoyouBaoliao.map((g, i) => <HaoyouGameItem key={i} g={g} />))}
                         className="w-full h-8 flex items-center justify-between px-3 mb-0.5 bg-green-50 hover:bg-green-100 border border-green-100 rounded-lg transition-colors"
                       >
-                        <span className="text-xs font-semibold text-green-700">抢先爆料 · {haoyouUpcomingBaoliao.length} 条</span>
+                        <span className="text-xs font-semibold text-green-700">抢先爆料 · {haoyouBaoliao.length} 条</span>
                         <span className="text-xs text-green-500">查看 ›</span>
                       </button>
                     )}

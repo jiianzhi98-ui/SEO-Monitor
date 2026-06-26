@@ -158,7 +158,7 @@ export async function GET() {
   return NextResponse.json({
     upcomingToday: upcomingPanel.today,
     upcoming: upcomingPanel.upcoming,
-    upcomingBaoliao: upcomingPanel.baoliao,
+    baoliao: [...upcomingPanel.baoliao, ...updatesPanel.baoliao],
     updates: [...updatesPanel.today, ...updatesPanel.upcoming],
     hotItems,
   })
