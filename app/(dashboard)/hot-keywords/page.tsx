@@ -232,7 +232,7 @@ export default function HotRadarPage() {
                     <th className="table-th text-right w-16"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
                     <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
                   ) : (
@@ -276,7 +276,7 @@ export default function HotRadarPage() {
                     <th className="table-th text-right w-16"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
@@ -314,7 +314,7 @@ export default function HotRadarPage() {
                     <th className="table-th text-right w-16"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
                     <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (

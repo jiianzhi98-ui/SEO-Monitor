@@ -171,7 +171,7 @@ export default function IndexMonitorPage() {
                   <th className="table-th text-right">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无收录数据</td>

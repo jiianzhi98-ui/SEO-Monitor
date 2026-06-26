@@ -581,7 +581,7 @@ export default function CompetitorDailyPage() {
                   <th className="table-th text-right">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td>
@@ -766,7 +766,7 @@ export default function CompetitorDailyPage() {
                 ) : pageClean.length === 0 ? (
                   <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
                 ) : (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-gray-100">
                     {pageClean.map((entry, i) => {
                       const expanded = expandedBases.has(entry.base)
                       return (
@@ -881,7 +881,7 @@ export default function CompetitorDailyPage() {
                       <th className="px-5 py-2.5 text-right font-medium text-gray-500">搜索量</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-gray-100">
                     {rankPageData.map((entry, i) => {
                       const isUnstable = rankUnstableSet.has(entry.keyword)
                       return (
@@ -950,7 +950,7 @@ export default function CompetitorDailyPage() {
                         <th className="px-4 py-2.5 text-right font-medium text-gray-500">波动天</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-100">
                       {pageUnstable.map((entry, i) => (
                         <tr key={i} className="hover:bg-gray-50">
                           <td className="px-5 py-2 text-gray-900">{entry.keyword}</td>

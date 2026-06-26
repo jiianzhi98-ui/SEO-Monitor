@@ -440,7 +440,7 @@ export default function CrawlLogPage() {
                         <th className="text-right pr-4 py-2.5 text-xs font-medium text-gray-500"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-100">
                       {pagedLogs.map(log => (
                         <tr key={log.id} className="hover:bg-gray-50/50">
                           <td className="px-4 py-2.5 text-xs text-gray-500 tabular-nums whitespace-nowrap">
@@ -628,7 +628,7 @@ export default function CrawlLogPage() {
                       <th className="text-left py-2 text-xs font-medium text-gray-500">详情</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-gray-100">
                     {siteLogs.map(sl => (
                       <tr key={sl.id}>
                         <td className="py-1.5 text-xs text-gray-700">{sl.domain}</td>
