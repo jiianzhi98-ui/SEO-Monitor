@@ -25,9 +25,9 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['sites']['Insert']>
       }
       user_profiles: {
-        Row: { id: string; role: 'super' | 'admin' | 'normal'; created_at: string }
-        Insert: { id: string; role?: 'super' | 'admin' | 'normal' }
-        Update: { role?: 'super' | 'admin' | 'normal' }
+        Row: { id: string; role: 'super' | 'admin' | 'normal'; username: string | null; created_at: string }
+        Insert: { id: string; role?: 'super' | 'admin' | 'normal'; username?: string | null }
+        Update: { role?: 'super' | 'admin' | 'normal'; username?: string | null }
       }
       user_site_access: {
         Row: { user_id: string; site_id: string }

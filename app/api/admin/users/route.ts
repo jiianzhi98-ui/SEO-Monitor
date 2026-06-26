@@ -24,15 +24,17 @@ export async function GET() {
   const { data: { users }, error } = await service.auth.admin.listUsers({ page: 1, perPage: 1000 })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const { data: profiles } = await service.from('user_profiles').select('id, role')
-  const roleMap = new Map<string, UserRole>(
-    ((profiles ?? []) as { id: string; role: UserRole }[]).map((p) => [p.id, p.role])
+  const { data: profiles } = await service.from('user_profiles').select('id, role, username')
+  const profileMap = new Map<string, { role: UserRole; username: string | null }>(
+    ((profiles ?? []) as { id: string; role: UserRole; username: string | null }[])
+      .map((p) => [p.id, { role: p.role, username: p.username }])
   )
 
   const result = (users as { id: string; email: string; created_at: string }[]).map(u => ({
     id: u.id,
     email: u.email ?? '',
-    role: roleMap.get(u.id) ?? 'normal' as UserRole,
+    username: profileMap.get(u.id)?.username ?? null,
+    role: profileMap.get(u.id)?.role ?? 'normal' as UserRole,
     created_at: u.created_at,
   }))
 
@@ -50,13 +52,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { email, password, role } = await req.json() as {
+  const { username, email, password, role } = await req.json() as {
+    username: string
     email: string
     password: string
     role: UserRole
   }
 
-  if (!email || !password || !role) {
+  if (!username || !email || !password || !role) {
     return NextResponse.json({ error: '缺少必填字段' }, { status: 400 })
   }
 
@@ -74,9 +77,9 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!user) return NextResponse.json({ error: '创建失败' }, { status: 500 })
 
-  await service.from('user_profiles').insert({ id: user.id, role })
+  await service.from('user_profiles').insert({ id: user.id, role, username })
 
   return NextResponse.json({
-    user: { id: user.id, email: user.email ?? '', role, created_at: user.created_at }
+    user: { id: user.id, email: user.email ?? '', username, role, created_at: user.created_at }
   })
 }

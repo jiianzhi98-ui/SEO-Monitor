@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -14,11 +14,25 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const supabase = getBrowserClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    // Resolve username → email via server API
+    const resolveRes = await fetch('/api/auth/resolve-username', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username.trim() }),
+    })
+    if (!resolveRes.ok) {
+      const d = await resolveRes.json()
+      setError(d.error ?? '用户不存在')
+      setLoading(false)
+      return
+    }
+    const { email } = await resolveRes.json()
 
-    if (error) {
-      setError(error.message)
+    const supabase = getBrowserClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (authError) {
+      setError('密码错误')
       setLoading(false)
     } else {
       window.location.href = '/'
@@ -47,14 +61,15 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                邮箱地址
+                用户名
               </label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
-                placeholder="your@email.com"
+                placeholder="输入用户名"
+                autoComplete="username"
                 className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
               />
             </div>
@@ -69,6 +84,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
+                autoComplete="current-password"
                 className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
               />
             </div>

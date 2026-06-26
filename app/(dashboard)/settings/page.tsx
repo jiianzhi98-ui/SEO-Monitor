@@ -8,6 +8,7 @@ import type { UserRole } from '@/lib/user-context'
 interface UserRecord {
   id: string
   email: string
+  username: string | null
   role: UserRole
   created_at: string
 }
@@ -105,6 +106,7 @@ function AddUserModal({ callerRole, onClose, onCreated }: {
   onClose: () => void
   onCreated: (user: UserRecord) => void
 }) {
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>('normal')
@@ -116,11 +118,12 @@ function AddUserModal({ callerRole, onClose, onCreated }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!username.trim()) return setError('请填写用户名')
     setLoading(true)
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ username: username.trim(), email, password, role }),
     })
     const data = await res.json()
     setLoading(false)
@@ -145,7 +148,12 @@ function AddUserModal({ callerRole, onClose, onCreated }: {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">邮箱</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">用户名 <span className="text-red-500">*</span></label>
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} required placeholder="登录时使用的用户名"
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">邮箱（仅系统使用）</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="user@example.com"
               className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" />
           </div>
@@ -440,7 +448,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
   async function handleDelete(user: UserRecord) {
-    if (!confirm(`确定要删除账号 ${user.email}？此操作不可撤销。`)) return
+    if (!confirm(`确定要删除账号 ${user.username ?? user.email}？此操作不可撤销。`)) return
     setDeletingId(user.id)
     await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
     setDeletingId(null)
@@ -482,7 +490,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="table-th">邮箱</th>
+                <th className="table-th">用户名</th>
                 <th className="table-th">权限</th>
                 <th className="table-th">注册时间</th>
                 <th className="table-th text-right">操作</th>
@@ -491,7 +499,10 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
             <tbody className="divide-y divide-gray-100">
               {users.map(user => (
                 <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="table-td text-gray-800">{user.email}</td>
+                  <td className="table-td">
+                    <p className="text-sm text-gray-800 font-medium">{user.username ?? <span className="text-gray-400 italic text-xs">未设置</span>}</p>
+                    <p className="text-xs text-gray-400">{user.email}</p>
+                  </td>
                   <td className="table-td"><RoleBadge role={user.role} /></td>
                   <td className="table-td text-gray-500 text-xs">
                     {new Date(user.created_at).toLocaleDateString('zh-CN')}
