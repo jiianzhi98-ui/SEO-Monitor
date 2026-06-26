@@ -55,6 +55,15 @@ function drawCaptcha(canvas: HTMLCanvasElement): string {
 
 // ─── Login page ───────────────────────────────────────────────────────────────
 
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: HTMLElement, opts: Record<string, unknown>) => string
+      reset: (widgetId: string) => void
+    }
+  }
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -62,9 +71,12 @@ export default function LoginPage() {
   const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const captchaCodeRef = useRef<string>('')
+  const turnstileRef = useRef<HTMLDivElement>(null)
+  const turnstileWidgetId = useRef<string | null>(null)
 
   const refreshCaptcha = useCallback(() => {
     const canvas = canvasRef.current
@@ -74,6 +86,29 @@ export default function LoginPage() {
   }, [])
 
   useEffect(() => { refreshCaptcha() }, [refreshCaptcha])
+
+  useEffect(() => {
+    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+    if (!siteKey) return
+
+    const script = document.createElement('script')
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+    script.async = true
+    script.onload = () => {
+      if (turnstileRef.current && window.turnstile) {
+        turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: siteKey,
+          theme: 'light',
+          size: 'normal',
+          callback: (token: string) => setTurnstileToken(token),
+          'expired-callback': () => setTurnstileToken(null),
+          'error-callback': () => setTurnstileToken(null),
+        })
+      }
+    }
+    document.head.appendChild(script)
+    return () => { document.head.removeChild(script) }
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -85,7 +120,28 @@ export default function LoginPage() {
       return
     }
 
+    if (!turnstileToken) {
+      setError('请完成人机验证')
+      return
+    }
+
     setLoading(true)
+
+    const tsRes = await fetch('/api/auth/verify-turnstile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: turnstileToken }),
+    })
+    if (!tsRes.ok) {
+      const d = await tsRes.json()
+      setError(d.error ?? '人机验证失败，请重试')
+      setLoading(false)
+      setTurnstileToken(null)
+      if (turnstileWidgetId.current && window.turnstile) {
+        window.turnstile.reset(turnstileWidgetId.current)
+      }
+      return
+    }
 
     const resolveRes = await fetch('/api/auth/resolve-username', {
       method: 'POST',
@@ -210,6 +266,11 @@ export default function LoginPage() {
               </div>
               <p className="text-xs text-gray-400 mt-1">不区分大小写 · 点击图片可刷新</p>
             </div>
+
+            {/* Turnstile */}
+            {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+              <div ref={turnstileRef} />
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
