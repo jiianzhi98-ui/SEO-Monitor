@@ -605,7 +605,7 @@ export default function CompetitorDailyPage() {
                             <button
                               onClick={() => row.hasHtml && viewYesterdayKeywords(row)}
                               disabled={!row.hasHtml}
-                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasHtml ? 'text-blue-500 hover:text-blue-700 border-blue-100 hover:border-blue-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasHtml ? 'text-green-500 hover:text-green-700 border-green-100 hover:border-green-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               昨日新词
                             </button>
@@ -619,14 +619,14 @@ export default function CompetitorDailyPage() {
                             <button
                               onClick={() => row.hasRankData && openRankModal(row)}
                               disabled={!row.hasRankData}
-                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-blue-500 hover:text-blue-700 border-blue-100 hover:border-blue-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-purple-500 hover:text-purple-700 border-purple-100 hover:border-purple-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               排名变动
                             </button>
                             <button
                               onClick={() => row.hasRankData && openUnstableModal(row)}
                               disabled={!row.hasRankData}
-                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-blue-500 hover:text-blue-700 border-blue-100 hover:border-blue-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-orange-500 hover:text-orange-700 border-orange-100 hover:border-orange-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               不稳定词
                             </button>
