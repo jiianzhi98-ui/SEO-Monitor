@@ -38,11 +38,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STEP="${{ github.event.inputs.step }}"
-          elif [ "${{ github.event.schedule }}" = "0 16 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 13 * * *" ]; then
             STEP="keywords"
-          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 15 * * *" ]; then
             STEP="weight"
-          elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 16 * * *" ]; then
             STEP="rank"
           else
             STEP="all"
