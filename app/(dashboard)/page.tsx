@@ -382,12 +382,8 @@ export default function DashboardPage() {
           empty="各站新增正常"
         >
           {kwAlerts.map((a, i) => (
-            <div key={i} className={`flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 transition-colors ${
-              a.status === 'danger' ? 'hover:bg-red-50' :
-              a.status === 'warning' ? 'hover:bg-yellow-50' :
-              'hover:bg-blue-50'
-            }`}>
-              <p className="text-xs font-medium text-gray-800 truncate">{a.domain}</p>
+            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
+              <p className="text-xs text-gray-700 truncate">{a.domain}</p>
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
                 a.status === 'danger' ? 'bg-red-50 text-red-500' :
                 a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
