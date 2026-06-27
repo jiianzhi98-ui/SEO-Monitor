@@ -35,6 +35,16 @@ interface KwStatRow { site_id: string; stat_date: string; app_count: number; gam
 interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
 interface AlertItem { domain: string; status: 'danger' | 'warning' | 'high' }
 interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
+interface WeightModalExtra {
+  appKw: { keyword: string }[]
+  gameKw: { keyword: string }[]
+  appCount: number; gameCount: number; kwDate: string
+  rankupAll: { keyword: string; volume: number }[]
+  rankdownAll: { keyword: string; volume: number }[]
+  rankDate: string
+  unstableAll: { keyword: string; volume: number; upDays: number; downDays: number }[]
+  loading: boolean
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -108,7 +118,10 @@ export default function DashboardPage() {
     large: [], medium: [], small: [],
   })
   const [weightModalSite, setWeightModalSite] = useState<WeightChangeItem | null>(null)
-  const [weightModalTab, setWeightModalTab] = useState<'weight' | 'ip'>('weight')
+  const [weightModalTab, setWeightModalTab] = useState<'weight' | 'ip' | 'index' | 'keywords' | 'rank' | 'unstable'>('weight')
+  const [weightModalExtra, setWeightModalExtra] = useState<WeightModalExtra | null>(null)
+  const [weightModalKwTab, setWeightModalKwTab] = useState<'app' | 'game'>('app')
+  const [weightModalRankTab, setWeightModalRankTab] = useState<'up' | 'down'>('up')
   const [indexModalSite, setIndexModalSite] = useState<IndexAlertItem | null>(null)
 
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -288,6 +301,66 @@ export default function DashboardPage() {
       .map(([date, v]) => ({ date: date.slice(5), ...v }))
   }
 
+  async function fetchWeightModalExtra(siteId: string) {
+    setWeightModalExtra({ appKw: [], gameKw: [], appCount: 0, gameCount: 0, kwDate: '', rankupAll: [], rankdownAll: [], rankDate: '', unstableAll: [], loading: true })
+    const db = getBrowserClient()
+    const d30ago = getMY(-30)
+    const [{ data: appRaw }, { data: gameRaw }, { data: rdRaw }] = await Promise.all([
+      db.from('raw_keywords').select('keyword,content_date').eq('site_id', siteId)
+        .or('content_type.eq.app,content_type.is.null').not('keyword', 'like', '%电脑版%')
+        .order('content_date', { ascending: false }).limit(200),
+      db.from('raw_keywords').select('keyword,content_date').eq('site_id', siteId)
+        .eq('content_type', 'game').not('keyword', 'like', '%电脑版%')
+        .order('content_date', { ascending: false }).limit(200),
+      db.from('rank_changes').select('keyword,volume,type,stat_date')
+        .eq('site_id', siteId).gte('stat_date', d30ago)
+        .order('stat_date', { ascending: false }).limit(5000),
+    ])
+    type KwRaw = { keyword: string; content_date: string }
+    const latestAppDate = (appRaw || []).length > 0 ? (appRaw![0] as KwRaw).content_date : ''
+    const latestGameDate = (gameRaw || []).length > 0 ? (gameRaw![0] as KwRaw).content_date : ''
+    const latestKwDate = [latestAppDate, latestGameDate].filter(Boolean).sort().reverse()[0] || ''
+    const appAll = ((appRaw || []) as KwRaw[]).filter(k => k.content_date === latestKwDate).map(k => ({ keyword: k.keyword }))
+    const gameAll = ((gameRaw || []) as KwRaw[]).filter(k => k.content_date === latestKwDate).map(k => ({ keyword: k.keyword }))
+    type RD = { keyword: string; volume: number; type: string; stat_date: string }
+    const rdArr = (rdRaw || []) as RD[]
+    const latestRankDate = rdArr.length > 0 ? rdArr[0].stat_date : ''
+    let rankupAll: { keyword: string; volume: number }[] = []
+    let rankdownAll: { keyword: string; volume: number }[] = []
+    if (latestRankDate) {
+      const today = rdArr.filter(r => r.stat_date === latestRankDate)
+      rankupAll = today.filter(r => r.type === 'rankup').map(r => ({ keyword: r.keyword, volume: r.volume })).sort((a, b) => b.volume - a.volume)
+      rankdownAll = today.filter(r => r.type === 'rankdown').map(r => ({ keyword: r.keyword, volume: r.volume })).sort((a, b) => b.volume - a.volume)
+    }
+    const upMap = new Map<string, number>()
+    const downMap = new Map<string, number>()
+    const volMap = new Map<string, number[]>()
+    for (const r of rdArr) {
+      if (r.type === 'rankup') upMap.set(r.keyword, (upMap.get(r.keyword) ?? 0) + 1)
+      else downMap.set(r.keyword, (downMap.get(r.keyword) ?? 0) + 1)
+      if (r.volume > 0) {
+        if (!volMap.has(r.keyword)) volMap.set(r.keyword, [])
+        volMap.get(r.keyword)!.push(r.volume)
+      }
+    }
+    const unstableAll: { keyword: string; volume: number; upDays: number; downDays: number }[] = []
+    for (const [kw, upDays] of Array.from(upMap.entries())) {
+      const downDays = downMap.get(kw) ?? 0
+      if (downDays > 0 && upDays + downDays >= 3) {
+        const vols = volMap.get(kw) || []
+        const volume = vols.length > 0 ? Math.round(vols.reduce((a, b) => a + b, 0) / vols.length) : 0
+        unstableAll.push({ keyword: kw, volume, upDays, downDays })
+      }
+    }
+    unstableAll.sort((a, b) => b.volume - a.volume || (b.upDays + b.downDays) - (a.upDays + a.downDays))
+    setWeightModalExtra({
+      appKw: appAll.slice(0, 12), gameKw: gameAll.slice(0, 12),
+      appCount: appAll.length, gameCount: gameAll.length, kwDate: latestKwDate,
+      rankupAll: rankupAll.slice(0, 12), rankdownAll: rankdownAll.slice(0, 12),
+      rankDate: latestRankDate, unstableAll: unstableAll.slice(0, 12), loading: false,
+    })
+  }
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[400px]">
@@ -327,7 +400,7 @@ export default function DashboardPage() {
 
         <AlertCard title="权重变动" count={weightChanges.length} color="red" empty="暂无权重变动">
           {weightChanges.map((w, i) => (
-            <button key={i} onClick={() => { setWeightModalSite(w); setWeightModalTab('weight') }} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
+            <button key={i} onClick={() => { setWeightModalSite(w); setWeightModalTab('weight'); setWeightModalKwTab('app'); setWeightModalRankTab('up'); fetchWeightModalExtra(w.site_id) }} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
               <p className="text-xs font-medium text-gray-800 truncate">{w.domain}</p>
               <div className="flex gap-1.5 flex-shrink-0">
                 {w.pcChange !== 0 && (
@@ -533,25 +606,31 @@ export default function DashboardPage() {
       const indexChange = (latestSnap && prevSnap) ? latestSnap.index_count - prevSnap.index_count : 0
       const weightTrend = siteRecs.map(r => ({ date: r.record_date.slice(5), pc: r.pc_weight, mobile: r.mobile_weight }))
       const ipTrend = siteRecs.map(r => ({ date: r.record_date.slice(5), pcAvg: Math.round((r.pc_ip + r.pc_ip_max) / 2), mobileAvg: Math.round((r.mobile_ip + r.mobile_ip_max) / 2) }))
+      const indexTrend = siteSnaps.map(s => ({ date: s.snapshot_date.slice(5), count: s.index_count }))
       const fmt = (n: number) => n >= 10000 ? (n / 10000).toFixed(1).replace('.0', '') + 'w' : n.toLocaleString()
       const chg = (v: number) => v === 0 ? null : <span className={`text-xs font-medium ${v > 0 ? 'text-green-600' : 'text-red-500'}`}>{v > 0 ? '+' : ''}{v >= 1000 || v <= -1000 ? fmt(v) : v}</span>
       const tiles = [
-        { label: 'PC权重',   value: String(latest?.pc_weight ?? 0),                                                      chg: weightModalSite.pcChange },
-        { label: '移动权重', value: String(latest?.mobile_weight ?? 0),                                                   chg: weightModalSite.mobileChange },
-        { label: 'PC日均IP', value: latest ? `${fmt(latest.pc_ip)}~${fmt(latest.pc_ip_max)}` : '-',                      chg: pcAvgChange },
-        { label: '移动IP',   value: latest ? `${fmt(latest.mobile_ip)}~${fmt(latest.mobile_ip_max)}` : '-',              chg: mobileAvgChange },
-        { label: '收录量',   value: latestSnap ? fmt(latestSnap.index_count) : '-',                                       chg: indexChange },
+        { label: 'PC权重',   value: String(latest?.pc_weight ?? 0),                                                chg: weightModalSite.pcChange },
+        { label: '移动权重', value: String(latest?.mobile_weight ?? 0),                                            chg: weightModalSite.mobileChange },
+        { label: 'PC日均IP', value: latest ? `${fmt(latest.pc_ip)}~${fmt(latest.pc_ip_max)}` : '-',               chg: pcAvgChange },
+        { label: '移动IP',   value: latest ? `${fmt(latest.mobile_ip)}~${fmt(latest.mobile_ip_max)}` : '-',       chg: mobileAvgChange },
+        { label: '收录量',   value: latestSnap ? fmt(latestSnap.index_count) : '-',                                chg: indexChange },
       ]
+      const TAB_LABELS: Record<string, string> = { weight: '权重趋势', ip: 'IP趋势', index: '收录趋势', keywords: '最近新增', rank: '排名波动', unstable: '不稳定词' }
+      const noData = <div className="flex items-center justify-center h-44 text-gray-400 text-sm">暂无足够趋势数据</div>
+      const loadingEl = <div className="flex items-center justify-center h-44 text-gray-400 text-sm">加载中…</div>
+      const kwList = weightModalKwTab === 'app' ? (weightModalExtra?.appKw ?? []) : (weightModalExtra?.gameKw ?? [])
+      const rankList = weightModalRankTab === 'up' ? (weightModalExtra?.rankupAll ?? []) : (weightModalExtra?.rankdownAll ?? [])
       return (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setWeightModalSite(null)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-            {/* Header — no subtitle */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
               <h2 className="text-base font-bold text-gray-900">{weightModalSite.domain}</h2>
               <button onClick={() => setWeightModalSite(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
-            {/* 5 compact metric tiles: label + change on top row, value below */}
-            <div className="grid grid-cols-5 gap-2 px-6 py-4">
+            {/* 5 compact metric tiles */}
+            <div className="grid grid-cols-5 gap-2 px-6 py-4 flex-shrink-0">
               {tiles.map(m => (
                 <div key={m.label} className="bg-gray-50 rounded-lg p-2.5">
                   <div className="flex items-center justify-between gap-1 mb-1">
@@ -562,18 +641,18 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-            {/* Tabs */}
-            <div className="flex gap-1 px-6 border-b border-gray-100">
-              {(['weight', 'ip'] as const).map(t => (
+            {/* 6 Tabs */}
+            <div className="flex gap-0.5 px-6 border-b border-gray-100 flex-shrink-0">
+              {(['weight', 'ip', 'index', 'keywords', 'rank', 'unstable'] as const).map(t => (
                 <button key={t} onClick={() => setWeightModalTab(t)}
-                  className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${weightModalTab === t ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-                  {t === 'weight' ? '权重趋势' : 'IP趋势'}
+                  className={`px-2.5 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${weightModalTab === t ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                  {TAB_LABELS[t]}
                 </button>
               ))}
             </div>
-            {/* Chart */}
-            <div className="px-6 py-4">
-              {weightModalTab === 'weight' ? (
+            {/* Tab content */}
+            <div className="px-6 py-4 overflow-y-auto flex-1">
+              {weightModalTab === 'weight' && (
                 weightTrend.length >= 2 ? (
                   <>
                     <ResponsiveContainer width="100%" height={200}>
@@ -591,8 +670,9 @@ export default function DashboardPage() {
                       <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-orange-500 inline-block" />移动权重</span>
                     </div>
                   </>
-                ) : <div className="flex items-center justify-center h-40 text-gray-400 text-sm">暂无足够趋势数据</div>
-              ) : (
+                ) : noData
+              )}
+              {weightModalTab === 'ip' && (
                 ipTrend.length >= 2 ? (
                   <>
                     <ResponsiveContainer width="100%" height={200}>
@@ -610,7 +690,131 @@ export default function DashboardPage() {
                       <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-orange-500 inline-block" />移动均值</span>
                     </div>
                   </>
-                ) : <div className="flex items-center justify-center h-40 text-gray-400 text-sm">暂无足够趋势数据</div>
+                ) : noData
+              )}
+              {weightModalTab === 'index' && (
+                indexTrend.length >= 2 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={indexTrend}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                        <YAxis tick={{ fontSize: 11 }} width={52} tickFormatter={(v: number) => v >= 10000 ? (v / 10000).toFixed(1) + 'w' : v.toLocaleString()} />
+                        <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                        <Line type="monotone" dataKey="count" name="百度收录" stroke="#22c55e" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <div className="flex gap-4 mt-2 text-xs text-gray-400">
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-green-500 inline-block" />百度收录</span>
+                    </div>
+                  </>
+                ) : noData
+              )}
+              {weightModalTab === 'keywords' && (
+                weightModalExtra?.loading ? loadingEl : (
+                  <>
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <button onClick={() => setWeightModalKwTab('app')}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${weightModalKwTab === 'app' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                        应用{weightModalKwTab === 'app' && weightModalExtra ? ` (${weightModalExtra.appCount})` : ''}
+                      </button>
+                      <button onClick={() => setWeightModalKwTab('game')}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${weightModalKwTab === 'game' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                        游戏{weightModalKwTab === 'game' && weightModalExtra ? ` (${weightModalExtra.gameCount})` : ''}
+                      </button>
+                      {weightModalExtra?.kwDate && <span className="ml-auto text-xs text-gray-400">{weightModalExtra.kwDate}</span>}
+                    </div>
+                    {kwList.length === 0 ? (
+                      <div className="flex items-center justify-center h-32 text-gray-400 text-sm">暂无数据</div>
+                    ) : (
+                      <div className="flex gap-3">
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          {kwList.slice(0, 6).map((k, i) => (
+                            <div key={i} className="h-6 flex items-center text-xs text-gray-800 truncate">{k.keyword}</div>
+                          ))}
+                        </div>
+                        {kwList.length > 6 && (
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            {kwList.slice(6, 12).map((k, i) => (
+                              <div key={i + 6} className="h-6 flex items-center text-xs text-gray-800 truncate">{k.keyword}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )
+              )}
+              {weightModalTab === 'rank' && (
+                weightModalExtra?.loading ? loadingEl : (
+                  <>
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <button onClick={() => setWeightModalRankTab('up')}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${weightModalRankTab === 'up' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                        涨入{weightModalRankTab === 'up' && weightModalExtra ? ` (${weightModalExtra.rankupAll.length})` : ''}
+                      </button>
+                      <button onClick={() => setWeightModalRankTab('down')}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${weightModalRankTab === 'down' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                        跌出{weightModalRankTab === 'down' && weightModalExtra ? ` (${weightModalExtra.rankdownAll.length})` : ''}
+                      </button>
+                      {weightModalExtra?.rankDate && <span className="ml-auto text-xs text-gray-400">{weightModalExtra.rankDate}</span>}
+                    </div>
+                    {rankList.length === 0 ? (
+                      <div className="flex items-center justify-center h-32 text-gray-400 text-sm">暂无数据</div>
+                    ) : (
+                      <div className="flex gap-3">
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          {rankList.slice(0, 6).map((r, i) => (
+                            <div key={i} className="h-6 flex items-center gap-1.5 text-xs">
+                              <span className="text-gray-800 flex-1 truncate">{r.keyword}</span>
+                              {r.volume > 0 && <span className="text-gray-400 flex-shrink-0">{r.volume.toLocaleString()}</span>}
+                            </div>
+                          ))}
+                        </div>
+                        {rankList.length > 6 && (
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            {rankList.slice(6, 12).map((r, i) => (
+                              <div key={i + 6} className="h-6 flex items-center gap-1.5 text-xs">
+                                <span className="text-gray-800 flex-1 truncate">{r.keyword}</span>
+                                {r.volume > 0 && <span className="text-gray-400 flex-shrink-0">{r.volume.toLocaleString()}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )
+              )}
+              {weightModalTab === 'unstable' && (
+                weightModalExtra?.loading ? loadingEl : (
+                  (weightModalExtra?.unstableAll ?? []).length === 0 ? (
+                    <div className="flex items-center justify-center h-32 text-gray-400 text-sm">近30天无反复波动词</div>
+                  ) : (
+                    <div className="flex gap-3">
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        {(weightModalExtra?.unstableAll ?? []).slice(0, 6).map((u, i) => (
+                          <div key={i} className="h-6 flex items-center gap-1.5 text-xs">
+                            <span className="text-gray-800 flex-1 truncate">{u.keyword}</span>
+                            <span className="text-green-600 flex-shrink-0">↑{u.upDays}</span>
+                            <span className="text-red-500 flex-shrink-0">↓{u.downDays}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {(weightModalExtra?.unstableAll ?? []).length > 6 && (
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          {(weightModalExtra?.unstableAll ?? []).slice(6, 12).map((u, i) => (
+                            <div key={i + 6} className="h-6 flex items-center gap-1.5 text-xs">
+                              <span className="text-gray-800 flex-1 truncate">{u.keyword}</span>
+                              <span className="text-green-600 flex-shrink-0">↑{u.upDays}</span>
+                              <span className="text-red-500 flex-shrink-0">↓{u.downDays}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )
               )}
             </div>
           </div>
