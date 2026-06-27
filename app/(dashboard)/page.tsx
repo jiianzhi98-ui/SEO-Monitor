@@ -525,41 +525,40 @@ export default function DashboardPage() {
         .sort((a, b) => a.record_date.localeCompare(b.record_date))
       const latest = siteRecs.length > 0 ? siteRecs[siteRecs.length - 1] : null
       const prev = siteRecs.length > 1 ? siteRecs[siteRecs.length - 2] : null
-      const pcAvgCur = latest ? Math.round((latest.pc_ip + latest.pc_ip_max) / 2) : 0
-      const mobileAvgCur = latest ? Math.round((latest.mobile_ip + latest.mobile_ip_max) / 2) : 0
-      const pcAvgPrev = prev ? Math.round((prev.pc_ip + prev.pc_ip_max) / 2) : 0
-      const mobileAvgPrev = prev ? Math.round((prev.mobile_ip + prev.mobile_ip_max) / 2) : 0
-      const pcAvgChange = prev ? pcAvgCur - pcAvgPrev : 0
-      const mobileAvgChange = prev ? mobileAvgCur - mobileAvgPrev : 0
+      const pcAvgChange = prev ? Math.round((latest!.pc_ip + latest!.pc_ip_max) / 2) - Math.round((prev.pc_ip + prev.pc_ip_max) / 2) : 0
+      const mobileAvgChange = prev ? Math.round((latest!.mobile_ip + latest!.mobile_ip_max) / 2) - Math.round((prev.mobile_ip + prev.mobile_ip_max) / 2) : 0
+      const siteSnaps = indexSnaps.filter(s => s.site_id === weightModalSite.site_id).sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+      const latestSnap = siteSnaps.length > 0 ? siteSnaps[siteSnaps.length - 1] : null
+      const prevSnap = siteSnaps.length > 1 ? siteSnaps[siteSnaps.length - 2] : null
+      const indexChange = (latestSnap && prevSnap) ? latestSnap.index_count - prevSnap.index_count : 0
       const weightTrend = siteRecs.map(r => ({ date: r.record_date.slice(5), pc: r.pc_weight, mobile: r.mobile_weight }))
       const ipTrend = siteRecs.map(r => ({ date: r.record_date.slice(5), pcAvg: Math.round((r.pc_ip + r.pc_ip_max) / 2), mobileAvg: Math.round((r.mobile_ip + r.mobile_ip_max) / 2) }))
       const fmt = (n: number) => n >= 10000 ? (n / 10000).toFixed(1).replace('.0', '') + 'w' : n.toLocaleString()
-      const chgTag = (v: number) => v === 0 ? null : <span className={`text-sm font-semibold ${v > 0 ? 'text-green-600' : 'text-red-500'}`}>{v > 0 ? '+' : ''}{v}</span>
+      const chg = (v: number) => v === 0 ? null : <span className={`text-xs font-medium ${v > 0 ? 'text-green-600' : 'text-red-500'}`}>{v > 0 ? '+' : ''}{v >= 1000 || v <= -1000 ? fmt(v) : v}</span>
+      const tiles = [
+        { label: 'PC权重',   value: String(latest?.pc_weight ?? 0),                                                      chg: weightModalSite.pcChange },
+        { label: '移动权重', value: String(latest?.mobile_weight ?? 0),                                                   chg: weightModalSite.mobileChange },
+        { label: 'PC日均IP', value: latest ? `${fmt(latest.pc_ip)}~${fmt(latest.pc_ip_max)}` : '-',                      chg: pcAvgChange },
+        { label: '移动IP',   value: latest ? `${fmt(latest.mobile_ip)}~${fmt(latest.mobile_ip_max)}` : '-',              chg: mobileAvgChange },
+        { label: '收录量',   value: latestSnap ? fmt(latestSnap.index_count) : '-',                                       chg: indexChange },
+      ]
       return (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setWeightModalSite(null)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-            {/* Header */}
+            {/* Header — no subtitle */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div>
-                <h2 className="text-base font-bold text-gray-900">{weightModalSite.domain}</h2>
-                <p className="text-xs text-gray-400 mt-0.5">近30天权重及来路IP数据</p>
-              </div>
+              <h2 className="text-base font-bold text-gray-900">{weightModalSite.domain}</h2>
               <button onClick={() => setWeightModalSite(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
-            {/* Metric tiles */}
-            <div className="grid grid-cols-4 gap-3 px-6 py-4">
-              {[
-                { label: 'PC权重', value: String(latest?.pc_weight ?? 0), chg: weightModalSite.pcChange },
-                { label: '移动权重', value: String(latest?.mobile_weight ?? 0), chg: weightModalSite.mobileChange },
-                { label: 'PC日均IP', value: latest ? `${fmt(latest.pc_ip)}~${fmt(latest.pc_ip_max)}` : '-', chg: pcAvgChange },
-                { label: '移动日均IP', value: latest ? `${fmt(latest.mobile_ip)}~${fmt(latest.mobile_ip_max)}` : '-', chg: mobileAvgChange },
-              ].map(m => (
-                <div key={m.label} className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-400 mb-1">{m.label}</p>
-                  <div className="flex items-baseline gap-1.5 flex-wrap">
-                    <span className="text-lg font-bold text-gray-900 tabular-nums">{m.value}</span>
-                    {chgTag(m.chg)}
+            {/* 5 compact metric tiles: label + change on top row, value below */}
+            <div className="grid grid-cols-5 gap-2 px-6 py-4">
+              {tiles.map(m => (
+                <div key={m.label} className="bg-gray-50 rounded-lg p-2.5">
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-xs text-gray-400 truncate">{m.label}</span>
+                    {chg(m.chg)}
                   </div>
+                  <p className="text-sm font-bold text-gray-900 tabular-nums leading-tight">{m.value}</p>
                 </div>
               ))}
             </div>
