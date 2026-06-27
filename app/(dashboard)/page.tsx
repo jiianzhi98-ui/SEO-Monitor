@@ -31,7 +31,7 @@ interface WeightRec {
   mobile_ip: number
   mobile_ip_max: number
 }
-interface DailyStat { site_id: string; stat_date: string; new_count: number }
+interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
 interface AlertItem { domain: string; status: 'danger' | 'warning' | 'high' }
 interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
@@ -117,7 +117,6 @@ export default function DashboardPage() {
     setError(null)
     try {
       const db = getBrowserClient()
-      const today = getMY()
       const yesterday = getMY(-1)
       const d7 = getMY(-7)
       const d30 = getMY(-30)
@@ -127,7 +126,7 @@ export default function DashboardPage() {
         { data: sitesRaw },
         { data: snapsRaw },
         { data: wrecsRaw },
-        { data: statsRaw },
+        { data: kwStatsRaw },
       ] = await Promise.all([
         db.from('sites').select('id, domain, name, category').eq('is_enabled', true),
         db.from('index_snapshots')
@@ -138,7 +137,11 @@ export default function DashboardPage() {
           .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max')
           .gte('record_date', d365)
           .order('record_date'),
-        db.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (db.from('competitor_kw_stats') as any)
+          .select('site_id, stat_date, app_count, game_count')
+          .gte('stat_date', d7)
+          .lte('stat_date', yesterday),
       ])
 
       const rawList = (sitesRaw || []) as Site[]
@@ -186,15 +189,22 @@ export default function DashboardPage() {
       })
       setIndexAlerts(iAlerts)
 
-      // Keyword anomaly alerts (yesterday < 30% of 7-day avg)
-      const stats = (statsRaw || []) as DailyStat[]
+      // Keyword anomaly alerts — same source and logic as 竞品日收
+      const kwStats = (kwStatsRaw || []) as KwStatRow[]
       const kAlerts: AlertItem[] = []
       for (const s of siteList) {
-        const ss = stats.filter(r => r.site_id === s.id)
+        const ss = kwStats.filter(r => r.site_id === s.id)
         if (ss.length === 0) continue
-        const yStat = ss.find(r => r.stat_date.slice(0, 10) === yesterday)
-        const yVal = yStat?.new_count ?? 0
-        const avg = ss.reduce((a, r) => a + r.new_count, 0) / ss.length
+        const yStat = ss.find(r => (r.stat_date ?? '').slice(0, 10) === yesterday)
+        const yVal = (yStat?.app_count ?? 0) + (yStat?.game_count ?? 0)
+        const dayMap = new Map<string, number>()
+        for (const r of ss) {
+          const d = (r.stat_date ?? '').slice(0, 10)
+          if (d) dayMap.set(d, (r.app_count ?? 0) + (r.game_count ?? 0))
+        }
+        const avg = dayMap.size > 0
+          ? Array.from(dayMap.values()).reduce((a, b) => a + b, 0) / dayMap.size
+          : 0
         if (avg > 0) {
           const ratio = yVal / avg
           if (ratio < 0.3) kAlerts.push({ domain: s.domain, status: 'danger' })
