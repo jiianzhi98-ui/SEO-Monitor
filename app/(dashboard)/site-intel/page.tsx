@@ -116,6 +116,9 @@ export default function SiteIntelPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<SiteIntelData | null>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [highlightIdx, setHighlightIdx] = useState(-1)
 
   const [kwTab, setKwTab] = useState<'app' | 'game'>('app')
   const [rankTab, setRankTab] = useState<'up' | 'down'>('up')
@@ -128,11 +131,21 @@ export default function SiteIntelPage() {
   const [unstableModal, setUnstableModal] = useState(false)
   const [unstableModalPage, setUnstableModalPage] = useState(0)
 
-  async function handleSearch(e?: React.FormEvent) {
+  async function fetchSuggestions(raw: string) {
+    const q = raw.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
+    if (!q) { setSuggestions([]); return }
+    const supabase = getBrowserClient()
+    const { data: rows } = await supabase.from('sites').select('domain').ilike('domain', `%${q}%`).limit(8)
+    setSuggestions((rows || []).map((r: { domain: string }) => r.domain))
+  }
+
+  async function handleSearch(e?: React.FormEvent, domainOverride?: string) {
     e?.preventDefault()
-    const d = input.trim().toLowerCase()
+    const d = (domainOverride ?? input).trim().toLowerCase()
       .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
     if (!d) return
+    setShowSuggestions(false)
+    setSuggestions([])
 
     setLoading(true)
     setData(null)
@@ -322,13 +335,54 @@ export default function SiteIntelPage() {
 
       {/* Search bar */}
       <form onSubmit={handleSearch} className="flex gap-3 mb-6">
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="输入域名，如 example.com"
-          className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-        />
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={input}
+            onChange={e => {
+              setInput(e.target.value)
+              setHighlightIdx(-1)
+              fetchSuggestions(e.target.value)
+              setShowSuggestions(true)
+            }}
+            onKeyDown={e => {
+              if (!showSuggestions || suggestions.length === 0) return
+              if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, suggestions.length - 1)) }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, -1)) }
+              else if (e.key === 'Enter' && highlightIdx >= 0) {
+                e.preventDefault()
+                const chosen = suggestions[highlightIdx]
+                setInput(chosen)
+                setSuggestions([])
+                setShowSuggestions(false)
+                setHighlightIdx(-1)
+                handleSearch(undefined, chosen)
+              } else if (e.key === 'Escape') { setShowSuggestions(false) }
+            }}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true) }}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="输入域名关键字，如 game、apk…"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+              {suggestions.map((s, i) => (
+                <li
+                  key={s}
+                  onMouseDown={() => {
+                    setInput(s)
+                    setSuggestions([])
+                    setShowSuggestions(false)
+                    handleSearch(undefined, s)
+                  }}
+                  className={`px-4 py-2 text-sm cursor-pointer ${i === highlightIdx ? 'bg-green-50 text-green-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {s}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <button
           type="submit"
           disabled={loading}
