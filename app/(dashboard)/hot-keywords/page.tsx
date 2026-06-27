@@ -72,10 +72,6 @@ const DIM_LABELS: Record<string, { label: string; cls: string }> = {
 
 function fmtVolume(v: number): string {
   if (v <= 0) return '—'
-  if (v >= 10000) {
-    const w = v / 10000
-    return (w % 1 === 0 ? w.toFixed(0) : w.toFixed(1)) + 'w'
-  }
   return v.toLocaleString()
 }
 
@@ -318,7 +314,7 @@ export default function HotRadarPage() {
                   <tr>
                     <th className="table-th">关键词</th>
                     <th className="table-th text-center w-20">新增次数</th>
-                    <th className="table-th text-center w-16">站点数</th>
+                    <th className="table-th text-center w-16 whitespace-nowrap">站点数</th>
                     <th className="table-th">出现站点</th>
                     <th className="table-th w-8"></th>
                   </tr>
