@@ -641,7 +641,7 @@ export default function CompetitorDailyPage() {
                             <button
                               onClick={() => row.hasRankData && openUnstableModal(row)}
                               disabled={!row.hasRankData}
-                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-orange-500 hover:text-orange-700 border-orange-100 hover:border-orange-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-rose-500 hover:text-rose-700 border-rose-100 hover:border-rose-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               不稳定词
                             </button>
