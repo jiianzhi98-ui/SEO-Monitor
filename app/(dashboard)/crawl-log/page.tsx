@@ -187,7 +187,9 @@ export default function CrawlLogPage() {
     setExpandedStep(step)
     if (expandedSites[step]) return
     const supabase = getBrowserClient()
-    const ids = todayLogs[step].map(l => l.id)
+    const stepLogs = todayLogs[step] || []
+    const latestTime = stepLogs.length > 0 ? new Date(stepLogs[0].logged_at).getTime() : 0
+    const ids = stepLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000).map(l => l.id)
     if (ids.length === 0) { setExpandedSites(p => ({ ...p, [step]: [] })); return }
     const { data } = await supabase
       .from('activity_site_log')
@@ -226,12 +228,16 @@ export default function CrawlLogPage() {
 
   function getTodaySummary(step: string) {
     const stepLogs = todayLogs[step] || []
-    const ok = stepLogs.reduce((s, l) => s + l.ok_count, 0)
-    const empty = stepLogs.reduce((s, l) => s + l.empty_count, 0)
-    const fail = stepLogs.reduce((s, l) => s + l.fail_count, 0)
+    if (stepLogs.length === 0) return { ok: 0, empty: 0, fail: 0, total: 0, latestRun: undefined, runs: 0 }
+    // stepLogs is DESC by logged_at; only sum entries belonging to the latest run
+    // (entries within 3 hours of the most recent = same GitHub Actions job run)
+    const latestTime = new Date(stepLogs[0].logged_at).getTime()
+    const latestBatch = stepLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000)
+    const ok = latestBatch.reduce((s, l) => s + l.ok_count, 0)
+    const empty = latestBatch.reduce((s, l) => s + l.empty_count, 0)
+    const fail = latestBatch.reduce((s, l) => s + l.fail_count, 0)
     const total = ok + empty + fail
-    const latestRun = stepLogs[0]
-    return { ok, empty, fail, total, latestRun, runs: stepLogs.length }
+    return { ok, empty, fail, total, latestRun: stepLogs[0], runs: latestBatch.length }
   }
 
   const rulesSection = CRAWL_RULES.find(r => r.key === rulesStep)
