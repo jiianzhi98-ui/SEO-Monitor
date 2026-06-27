@@ -46,17 +46,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Daily stats table (permanent)
-CREATE TABLE IF NOT EXISTS daily_stats (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-  stat_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  new_count INTEGER NOT NULL DEFAULT 0,
-  UNIQUE(site_id, stat_date)
-);
-
-CREATE INDEX IF NOT EXISTS idx_daily_stats_site_id ON daily_stats(site_id);
-CREATE INDEX IF NOT EXISTS idx_daily_stats_stat_date ON daily_stats(stat_date);
-
 -- Index snapshots table (permanent)
 CREATE TABLE IF NOT EXISTS index_snapshots (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

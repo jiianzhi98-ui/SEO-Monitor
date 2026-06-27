@@ -45,16 +45,6 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['raw_keywords']['Row'], 'id' | 'discovered_at'>
         Update: Partial<Database['public']['Tables']['raw_keywords']['Insert']>
       }
-      daily_stats: {
-        Row: {
-          id: string
-          site_id: string
-          stat_date: string
-          new_count: number
-        }
-        Insert: Omit<Database['public']['Tables']['daily_stats']['Row'], 'id'>
-        Update: Partial<Database['public']['Tables']['daily_stats']['Insert']>
-      }
       index_snapshots: {
         Row: {
           id: string

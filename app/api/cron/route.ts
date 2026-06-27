@@ -211,13 +211,7 @@ export async function GET(request: Request) {
             }
           }
 
-          // Always write daily_stats for sites with crawl config (even if 0 new)
           if (hasCrawlConfig) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('daily_stats') as any).upsert(
-              { site_id: site.id, stat_date: yesterday, new_count: newCount },
-              { onConflict: 'site_id,stat_date' }
-            )
             // Write per-type counts to competitor_kw_stats, keyed by content_date (website's own date)
             const [appRes, gameRes] = await Promise.all([
               supabase.from('raw_keywords')
@@ -267,7 +261,6 @@ export async function GET(request: Request) {
       // Cleanup old data (only on keywords step to avoid running 3x per day)
       await supabase.rpc('delete_old_raw_keywords').maybeSingle()
       await supabase.from('rank_changes').delete().lt('stat_date', getMalaysiaDate(-30))
-      await supabase.from('daily_stats').delete().lt('stat_date', getMalaysiaDate(-30))
       await supabase.from('competitor_kw_stats').delete().lt('stat_date', getMalaysiaDate(-10))
       await supabase.from('activity_log').delete().lt('logged_at', new Date(Date.now() - 7 * 86400000).toISOString())
     }
