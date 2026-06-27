@@ -35,7 +35,7 @@ interface WeightRec {
 }
 interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
-interface AlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'high' }
+interface AlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'high'; date: string }
 interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
 interface WeightModalExtra {
   appKw: { keyword: string }[]
@@ -208,14 +208,18 @@ export default function DashboardPage() {
       for (const s of siteList) {
         const ss = kwStats.filter(r => r.site_id === s.id)
         if (ss.length === 0) continue
-        const status = computeKwStatus(ss, yesterday)
-        if (status !== 'normal') kAlerts.push({ site_id: s.id, domain: s.domain, status })
+        for (let i = 1; i <= 7; i++) {
+          const checkDate = getMY(-i)
+          const status = computeKwStatus(ss, checkDate)
+          if (status !== 'normal') kAlerts.push({ site_id: s.id, domain: s.domain, status, date: checkDate })
+        }
       }
       kAlerts.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date)
         const order = { danger: 0, warning: 1, high: 2 }
         return order[a.status] - order[b.status]
       })
-      setKwAlerts(kAlerts)
+      setKwAlerts(kAlerts.slice(0, 50))
 
       const firstCat = (['large', 'medium', 'small'] as Category[]).find(
         c => siteList.some(s => s.category === c)
@@ -440,18 +444,25 @@ export default function DashboardPage() {
           color="yellow"
           empty="各站新增正常"
         >
-          {kwAlerts.map((a, i) => (
-            <button key={i} onClick={() => setKwModalSite(a)} className="w-full flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 hover:bg-yellow-50 transition-colors text-left">
-              <p className="text-xs text-gray-700 truncate">{a.domain}</p>
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
-                a.status === 'danger' ? 'bg-red-50 text-red-500' :
-                a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
-                'bg-blue-50 text-blue-600'
-              }`}>
-                {a.status === 'danger' ? '异常' : a.status === 'warning' ? '偏低' : '偏高'}
-              </span>
-            </button>
-          ))}
+          {kwAlerts.map((a, i) => {
+            const isRecent = a.date === getMY(-1)
+            return (
+              <button key={i} onClick={() => setKwModalSite(a)} className="w-full flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 hover:bg-yellow-50 transition-colors text-left">
+                <p className="text-xs truncate">
+                  <span className={isRecent ? 'text-yellow-500 font-medium' : 'text-gray-400'}>{a.date.slice(5)}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className="font-medium text-gray-800">{a.domain}</span>
+                </p>
+                <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
+                  a.status === 'danger' ? 'bg-red-50 text-red-500' :
+                  a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
+                  'bg-blue-50 text-blue-600'
+                }`}>
+                  {a.status === 'danger' ? '异常' : a.status === 'warning' ? '偏低' : '偏高'}
+                </span>
+              </button>
+            )
+          })}
         </AlertCard>
 
         <KeywordSearchCard />
@@ -809,18 +820,18 @@ export default function DashboardPage() {
 
     {/* ── 新增异常详情 Modal ─────────────────────────────────────────────── */}
     {kwModalSite && (() => {
-      const yesterday = getMY(-1)
+      const targetDate = kwModalSite.date
       const ss = kwStatsAll.filter(r => r.site_id === kwModalSite.site_id)
       const trend = ss
         .map(r => ({ date: (r.stat_date ?? '').slice(5), count: (r.app_count ?? 0) + (r.game_count ?? 0) }))
         .filter(p => p.date)
         .sort((a, b) => a.date.localeCompare(b.date))
-      const ytStat = ss.find(r => (r.stat_date ?? '').slice(0, 10) === yesterday)
-      const yesterdayVal = (ytStat?.app_count ?? 0) + (ytStat?.game_count ?? 0)
+      const targetStat = ss.find(r => (r.stat_date ?? '').slice(0, 10) === targetDate)
+      const targetVal = (targetStat?.app_count ?? 0) + (targetStat?.game_count ?? 0)
       const weekdayVals: number[] = [], weekendVals: number[] = []
       for (const r of ss) {
         const d = (r.stat_date ?? '').slice(0, 10)
-        if (!d || d === yesterday) continue
+        if (!d || d === targetDate) continue
         const dow = new Date(d).getDay()
         const v = (r.app_count ?? 0) + (r.game_count ?? 0)
         if (dow === 0 || dow === 6) weekendVals.push(v)
@@ -855,7 +866,7 @@ export default function DashboardPage() {
             <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
               <span>工作日均值参考：<span className="font-semibold text-gray-800">{avg(weekdayVals).toLocaleString()}</span></span>
               <span>周末均值参考：<span className="font-semibold text-gray-800">{avg(weekendVals).toLocaleString()}</span></span>
-              <span>昨日新增：<span className="font-semibold text-gray-800">{yesterdayVal.toLocaleString()}</span></span>
+              <span>{targetDate.slice(5)} 新增：<span className="font-semibold text-gray-800">{targetVal.toLocaleString()}</span></span>
             </div>
           </div>
         </div>
@@ -1616,7 +1627,7 @@ function AlertCard({
     <div className={`rounded-xl border ${c.border} bg-white p-4`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          {hasAlerts && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.pulse} animate-pulse`} />}
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.pulse}`} />
           <span className="text-sm font-medium text-gray-600">{title}</span>
         </div>
         {action ?? (
