@@ -227,10 +227,8 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
           }))
           for (const chunk of chunkArray(rows, 500)) {
             await withRetry(async () =>
-              sbCheck(
-                await supabase.from('raw_keywords').upsert(chunk, { onConflict: 'site_id,content_date,keyword', ignoreDuplicates: true }),
-                'raw_keywords upsert'
-              )
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              sbCheck(await (supabase.from('raw_keywords') as any).insert(chunk), 'raw_keywords insert')
             )
           }
         }

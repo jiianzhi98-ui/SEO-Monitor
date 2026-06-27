@@ -206,7 +206,7 @@ export async function GET(request: Request) {
               }))
               for (const chunk of chunkArray(rows, 500)) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await (supabase.from('raw_keywords') as any).upsert(chunk, { onConflict: 'site_id,content_date,keyword', ignoreDuplicates: true })
+                await (supabase.from('raw_keywords') as any).insert(chunk)
               }
             }
           }
