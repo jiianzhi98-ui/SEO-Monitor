@@ -5,7 +5,7 @@ import { getBrowserClient } from '@/lib/supabase'
 import { useUser } from '@/lib/user-context'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 import { computeKwStatus, computeKwBaseline } from '@/lib/kw-status'
-import { LineChart, Line, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 interface CompetitorRow {
   site_id: string
@@ -20,16 +20,6 @@ interface CompetitorRow {
   hasRankData: boolean
 }
 
-function KwSparkline({ data }: { data: { date: string; count: number }[] }) {
-  if (data.length < 2) return <span className="text-gray-300 text-xs">暂无</span>
-  return (
-    <ResponsiveContainer width={100} height={32}>
-      <LineChart data={data}>
-        <Line type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={1.5} dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
-  )
-}
 
 interface SiteRow {
   id: string
@@ -158,6 +148,9 @@ export default function CompetitorDailyPage() {
   const [unstableData, setUnstableData] = useState<UnstableEntry[]>([])
   const [unstableLoading, setUnstableLoading] = useState(false)
   const [unstablePage, setUnstablePage] = useState(0)
+
+  // 趋势 modal
+  const [trendSite, setTrendSite] = useState<CompetitorRow | null>(null)
 
   // 重新抓取
   const [rankCrawling, setRankCrawling] = useState(false)
@@ -584,7 +577,6 @@ export default function CompetitorDailyPage() {
                   <th className="table-th text-right">昨日新增</th>
                   <th className="table-th text-right">均值参考</th>
                   <th className="table-th text-center">状态</th>
-                  <th className="table-th">趋势</th>
                   <th className="table-th text-right">操作</th>
                 </tr>
               </thead>
@@ -607,11 +599,14 @@ export default function CompetitorDailyPage() {
                         <td className="table-td text-center">
                           <span className={s.className}>{s.label}</span>
                         </td>
-                        <td className="table-td">
-                          <KwSparkline data={row.trend} />
-                        </td>
                         <td className="table-td text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setTrendSite(row)}
+                              className="text-xs border rounded px-1.5 py-0.5 transition-colors text-teal-500 hover:text-teal-700 border-teal-100 hover:border-teal-200"
+                            >
+                              趋势
+                            </button>
                             <button
                               onClick={() => row.hasHtml && viewYesterdayKeywords(row)}
                               disabled={!row.hasHtml}
@@ -915,6 +910,40 @@ export default function CompetitorDailyPage() {
               onPageChange={handleRankPageChange}
               onPageSizeChange={handleRankPageSizeChange}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 趋势 Modal */}
+      {trendSite && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setTrendSite(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">{trendSite.domain} · 新增趋势</h3>
+                <p className="text-xs text-gray-400 mt-0.5">近14天每日新增关键词数量</p>
+              </div>
+              <button onClick={() => setTrendSite(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+            </div>
+            <div className="mt-4">
+              {trendSite.trend.length < 2 ? (
+                <p className="text-sm text-gray-400 text-center py-8">暂无趋势数据</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={trendSite.trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={45} />
+                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                    <Line type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+              <span>昨日新增：<span className="font-semibold text-gray-800">{trendSite.yesterday.toLocaleString()}</span></span>
+              <span>均值参考：<span className="font-semibold text-gray-800">{trendSite.baseline.toLocaleString()}</span></span>
+            </div>
           </div>
         </div>
       )}
