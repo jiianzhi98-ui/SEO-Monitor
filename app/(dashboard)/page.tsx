@@ -34,9 +34,9 @@ interface WeightRec {
   mobile_ip_max: number
 }
 interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
-interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
+interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number; date: string }
 interface AlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'high'; date: string }
-interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
+interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising'; date: string }
 interface WeightModalExtra {
   appKw: { keyword: string }[]
   gameKw: { keyword: string }[]
@@ -171,36 +171,47 @@ export default function DashboardPage() {
       setIndexSnaps((snapsRaw || []) as IndexSnap[])
       setWeightRecs((wrecsRaw || []) as WeightRec[])
 
-      // Weight change alerts (latest record vs previous record, matches 权重监控)
+      // Weight change alerts: check every record in the last 7 days vs its predecessor
       const wChanges: WeightChangeItem[] = []
+      const d7ago = getMY(-7)
       for (const s of siteList) {
         const siteRecs = ((wrecsRaw || []) as WeightRec[])
           .filter(r => r.site_id === s.id)
           .sort((a, b) => a.record_date.localeCompare(b.record_date))
         if (siteRecs.length < 2) continue
-        const latest = siteRecs[siteRecs.length - 1]
-        const prev = siteRecs[siteRecs.length - 2]
-        const pc = latest.pc_weight - prev.pc_weight
-        const mo = latest.mobile_weight - prev.mobile_weight
-        if (pc !== 0 || mo !== 0) wChanges.push({ site_id: s.id, domain: s.domain, pcChange: pc, mobileChange: mo })
+        for (let idx = 1; idx < siteRecs.length; idx++) {
+          const rec = siteRecs[idx]
+          if (rec.record_date <= d7ago) continue
+          const prev = siteRecs[idx - 1]
+          const pc = rec.pc_weight - prev.pc_weight
+          const mo = rec.mobile_weight - prev.mobile_weight
+          if (pc !== 0 || mo !== 0)
+            wChanges.push({ site_id: s.id, domain: s.domain, pcChange: pc, mobileChange: mo, date: rec.record_date })
+        }
       }
-      setWeightChanges(wChanges)
+      wChanges.sort((a, b) => b.date.localeCompare(a.date))
+      setWeightChanges(wChanges.slice(0, 50))
 
-      // Index alerts: compare today vs historical min/max of the past 30 days
+      // Index alerts: check each snapshot in the last 7 days against its historical water level
       const iAlerts: IndexAlertItem[] = []
       for (const s of siteList) {
         const siteSnaps = ((snapsRaw || []) as IndexSnap[])
           .filter(r => r.site_id === s.id && r.snapshot_date >= d30)
           .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
-        const status = computeIndexStatus(siteSnaps)
-        if (status !== 'normal')
-          iAlerts.push({ site_id: s.id, domain: s.domain, status })
+        const recentSnaps = siteSnaps.filter(r => r.snapshot_date > d7ago)
+        for (const snap of recentSnaps) {
+          const snapsUpTo = siteSnaps.filter(r => r.snapshot_date <= snap.snapshot_date)
+          const status = computeIndexStatus(snapsUpTo)
+          if (status !== 'normal')
+            iAlerts.push({ site_id: s.id, domain: s.domain, status, date: snap.snapshot_date })
+        }
       }
       iAlerts.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date)
         const order = { danger: 0, warning: 1, rising: 2 }
         return order[a.status] - order[b.status]
       })
-      setIndexAlerts(iAlerts)
+      setIndexAlerts(iAlerts.slice(0, 50))
 
       const kwStats = (kwStatsRaw || []) as KwStatRow[]
       setKwStatsAll(kwStats)
@@ -388,23 +399,30 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
 
         <AlertCard title="权重变动" count={weightChanges.length} color="red" empty="暂无权重变动">
-          {weightChanges.map((w, i) => (
-            <button key={i} onClick={() => { setWeightModalSite(w); setWeightModalTab('weight'); setWeightModalKwTab('app'); setWeightModalRankTab('up'); fetchWeightModalExtra(w.site_id) }} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
-              <p className="text-xs font-medium text-gray-800 truncate">{w.domain}</p>
-              <div className="flex gap-1.5 flex-shrink-0">
-                {w.pcChange !== 0 && (
-                  <span className={`text-xs font-semibold ${w.pcChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    PC {w.pcChange > 0 ? '+' : ''}{w.pcChange}
-                  </span>
-                )}
-                {w.mobileChange !== 0 && (
-                  <span className={`text-xs font-semibold ${w.mobileChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    移 {w.mobileChange > 0 ? '+' : ''}{w.mobileChange}
-                  </span>
-                )}
-              </div>
-            </button>
-          ))}
+          {weightChanges.map((w, i) => {
+            const isRecent = w.date >= getMY(-1)
+            return (
+              <button key={i} onClick={() => { setWeightModalSite(w); setWeightModalTab('weight'); setWeightModalKwTab('app'); setWeightModalRankTab('up'); fetchWeightModalExtra(w.site_id) }} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
+                <p className="text-xs truncate">
+                  <span className={isRecent ? 'text-red-500 font-medium' : 'text-gray-400'}>{w.date.slice(5)}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className="font-medium text-gray-800">{w.domain}</span>
+                </p>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  {w.pcChange !== 0 && (
+                    <span className={`text-xs font-semibold ${w.pcChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      PC {w.pcChange > 0 ? '+' : ''}{w.pcChange}
+                    </span>
+                  )}
+                  {w.mobileChange !== 0 && (
+                    <span className={`text-xs font-semibold ${w.mobileChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      移 {w.mobileChange > 0 ? '+' : ''}{w.mobileChange}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
         </AlertCard>
 
         <AlertCard
@@ -420,13 +438,19 @@ export default function DashboardPage() {
             </div>
           }
         >
-          {indexAlerts.map((a, i) => (
+          {indexAlerts.map((a, i) => {
+            const isRecent = a.date >= getMY(-1)
+            return (
             <button key={i} onClick={() => setIndexModalSite(a)} className={`w-full flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 transition-colors text-left ${
               a.status === 'danger' ? 'hover:bg-red-50' :
               a.status === 'warning' ? 'hover:bg-yellow-50' :
               'hover:bg-blue-50'
             }`}>
-              <p className="text-xs font-medium text-gray-800 truncate">{a.domain}</p>
+              <p className="text-xs truncate">
+                <span className={isRecent ? 'text-orange-500 font-medium' : 'text-gray-400'}>{a.date.slice(5)}</span>
+                <span className="text-gray-400"> · </span>
+                <span className="font-medium text-gray-800">{a.domain}</span>
+              </p>
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
                 a.status === 'danger' ? 'bg-red-50 text-red-500' :
                 a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
@@ -435,7 +459,8 @@ export default function DashboardPage() {
                 {a.status === 'danger' ? '危险' : a.status === 'warning' ? '下跌' : '涨入'}
               </span>
             </button>
-          ))}
+            )
+          })}
         </AlertCard>
 
         <AlertCard
