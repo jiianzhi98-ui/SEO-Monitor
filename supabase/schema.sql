@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS raw_keywords (
   source_url TEXT,
   discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   content_type TEXT NOT NULL DEFAULT 'app',
-  content_date TEXT
+  content_date DATE
 );
 
 CREATE INDEX IF NOT EXISTS idx_raw_keywords_site_id ON raw_keywords(site_id);
