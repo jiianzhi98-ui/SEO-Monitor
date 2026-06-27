@@ -235,17 +235,18 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
       }
 
       if (hasCrawlConfig) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('daily_stats') as any).upsert(
-          { site_id: site.id, stat_date: yesterday, new_count: newCount },
-          { onConflict: 'site_id,stat_date' }
-        )
         const [appRes, gameRes] = await Promise.all([
           supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
             .eq('site_id', site.id).eq('content_type', 'app').eq('content_date', yesterday).not('keyword', 'like', '%电脑版%'),
           supabase.from('raw_keywords').select('id', { count: 'exact', head: true })
             .eq('site_id', site.id).eq('content_type', 'game').eq('content_date', yesterday).not('keyword', 'like', '%电脑版%'),
         ])
+        const totalCount = (appRes.count ?? 0) + (gameRes.count ?? 0)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('daily_stats') as any).upsert(
+          { site_id: site.id, stat_date: yesterday, new_count: totalCount },
+          { onConflict: 'site_id,stat_date' }
+        )
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from('competitor_kw_stats') as any).upsert(
           { site_id: site.id, stat_date: yesterday, app_count: appRes.count ?? 0, game_count: gameRes.count ?? 0, updated_at: new Date().toISOString() },
