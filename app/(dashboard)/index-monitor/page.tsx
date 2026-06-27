@@ -93,7 +93,7 @@ export default function IndexMonitorPage() {
         const trend = siteSnaps.map((s) => ({ date: s.snapshot_date.slice(5), count: s.index_count }))
 
         const latest = siteSnaps.length > 0 ? siteSnaps[siteSnaps.length - 1].index_count : 0
-        const snap7 = siteSnaps.find((s) => s.snapshot_date <= d7ago)
+        const snap7 = [...siteSnaps].reverse().find((s) => s.snapshot_date <= d7ago)
         const weekAgo = snap7 ? snap7.index_count : 0
         const weeklyChange = weekAgo > 0 ? latest - weekAgo : 0
 

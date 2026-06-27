@@ -26,13 +26,15 @@ interface WeightRec {
   record_date: string
   pc_weight: number
   mobile_weight: number
+  pc_ip: number
+  pc_ip_max: number
   mobile_ip: number
   mobile_ip_max: number
 }
 interface DailyStat { site_id: string; stat_date: string; new_count: number }
-interface WeightChangeItem { domain: string; pcChange: number; mobileChange: number }
+interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
 interface AlertItem { domain: string; status: 'danger' | 'warning' | 'high' }
-interface IndexAlertItem { domain: string; status: 'danger' | 'warning' | 'rising' }
+interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -105,6 +107,8 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Record<Category, string[]>>({
     large: [], medium: [], small: [],
   })
+  const [weightModalSite, setWeightModalSite] = useState<WeightChangeItem | null>(null)
+  const [indexModalSite, setIndexModalSite] = useState<IndexAlertItem | null>(null)
 
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -116,6 +120,7 @@ export default function DashboardPage() {
       const today = getMY()
       const yesterday = getMY(-1)
       const d7 = getMY(-7)
+      const d30 = getMY(-30)
       const d365 = getMY(-365)
 
       const [
@@ -123,10 +128,6 @@ export default function DashboardPage() {
         { data: snapsRaw },
         { data: wrecsRaw },
         { data: statsRaw },
-        { data: snapTRaw },
-        { data: snapYRaw },
-        { data: wtTRaw },
-        { data: wtWRaw },
       ] = await Promise.all([
         db.from('sites').select('id, domain, name, category').eq('is_enabled', true),
         db.from('index_snapshots')
@@ -134,14 +135,10 @@ export default function DashboardPage() {
           .gte('snapshot_date', d365)
           .order('snapshot_date'),
         db.from('weight_history')
-          .select('site_id, record_date, pc_weight, mobile_weight, mobile_ip, mobile_ip_max')
+          .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max')
           .gte('record_date', d365)
           .order('record_date'),
         db.from('daily_stats').select('site_id, stat_date, new_count').gte('stat_date', d7),
-        db.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', today),
-        db.from('index_snapshots').select('site_id, index_count').eq('snapshot_date', yesterday),
-        db.from('weight_history').select('site_id, pc_weight, mobile_weight').eq('record_date', today),
-        db.from('weight_history').select('site_id, pc_weight, mobile_weight').eq('record_date', getMY(-7)),
       ])
 
       const rawList = (sitesRaw || []) as Site[]
@@ -152,36 +149,35 @@ export default function DashboardPage() {
       setIndexSnaps((snapsRaw || []) as IndexSnap[])
       setWeightRecs((wrecsRaw || []) as WeightRec[])
 
-      // Weight change alerts (today vs 7 days ago)
-      type WRow = { site_id: string; pc_weight: number; mobile_weight: number }
-      const wtTMap = new Map((wtTRaw || []).map((w: WRow) => [w.site_id, w]))
-      const wtWMap = new Map((wtWRaw || []).map((w: WRow) => [w.site_id, w]))
+      // Weight change alerts (latest record vs previous record, matches 权重监控)
       const wChanges: WeightChangeItem[] = []
       for (const s of siteList) {
-        const t = wtTMap.get(s.id)
-        const w = wtWMap.get(s.id)
-        if (t && w) {
-          const pc = t.pc_weight - w.pc_weight
-          const mo = t.mobile_weight - w.mobile_weight
-          if (pc !== 0 || mo !== 0) wChanges.push({ domain: s.domain, pcChange: pc, mobileChange: mo })
-        }
+        const siteRecs = ((wrecsRaw || []) as WeightRec[])
+          .filter(r => r.site_id === s.id)
+          .sort((a, b) => a.record_date.localeCompare(b.record_date))
+        if (siteRecs.length < 2) continue
+        const latest = siteRecs[siteRecs.length - 1]
+        const prev = siteRecs[siteRecs.length - 2]
+        const pc = latest.pc_weight - prev.pc_weight
+        const mo = latest.mobile_weight - prev.mobile_weight
+        if (pc !== 0 || mo !== 0) wChanges.push({ site_id: s.id, domain: s.domain, pcChange: pc, mobileChange: mo })
       }
       setWeightChanges(wChanges)
 
-      // Index alerts: weekly comparison (danger/warning/rising) using full year snaps
+      // Index alerts: weekly comparison, 30-day window, 7-record minimum (matches 收录监控)
       const iAlerts: IndexAlertItem[] = []
       for (const s of siteList) {
         const siteSnaps = ((snapsRaw || []) as IndexSnap[])
-          .filter(r => r.site_id === s.id)
+          .filter(r => r.site_id === s.id && r.snapshot_date >= d30)
           .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
-        if (siteSnaps.length < 3) continue
+        if (siteSnaps.length < 7) continue
         const latest = siteSnaps[siteSnaps.length - 1].index_count
         const snap7 = [...siteSnaps].reverse().find(r => r.snapshot_date <= d7)
         if (!snap7 || snap7.index_count === 0) continue
         const rate = (latest - snap7.index_count) / snap7.index_count
-        if (rate < -0.2) iAlerts.push({ domain: s.domain, status: 'danger' })
-        else if (rate < -0.1) iAlerts.push({ domain: s.domain, status: 'warning' })
-        else if (rate > 0.1) iAlerts.push({ domain: s.domain, status: 'rising' })
+        if (rate < -0.2) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
+        else if (rate < -0.1) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
+        else if (rate > 0.1) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'rising' })
       }
       // Sort: danger first, then warning, then rising
       iAlerts.sort((a, b) => {
@@ -308,6 +304,7 @@ export default function DashboardPage() {
   const activeSelected = selected[activeCategory]
 
   return (
+    <>
     <div className="p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">首页快报</h1>
@@ -319,7 +316,7 @@ export default function DashboardPage() {
 
         <AlertCard title="权重变动" count={weightChanges.length} color="yellow" empty="暂无权重变动">
           {weightChanges.map((w, i) => (
-            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
+            <button key={i} onClick={() => setWeightModalSite(w)} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-yellow-50 rounded px-1 -mx-1 transition-colors text-left">
               <p className="text-xs font-medium text-gray-800 truncate">{w.domain}</p>
               <div className="flex gap-1.5 flex-shrink-0">
                 {w.pcChange !== 0 && (
@@ -333,7 +330,7 @@ export default function DashboardPage() {
                   </span>
                 )}
               </div>
-            </div>
+            </button>
           ))}
         </AlertCard>
 
@@ -371,7 +368,7 @@ export default function DashboardPage() {
           }
         >
           {indexAlerts.map((a, i) => (
-            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
+            <button key={i} onClick={() => setIndexModalSite(a)} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-gray-50 rounded px-1 -mx-1 transition-colors text-left">
               <p className="text-xs text-gray-700 truncate">{a.domain}</p>
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
                 a.status === 'danger' ? 'bg-red-50 text-red-500' :
@@ -380,7 +377,7 @@ export default function DashboardPage() {
               }`}>
                 {a.status === 'danger' ? '危险' : a.status === 'warning' ? '警告' : '涨入'}
               </span>
-            </div>
+            </button>
           ))}
         </AlertCard>
 
@@ -505,6 +502,158 @@ export default function DashboardPage() {
       </div>
 
     </div>
+
+    {/* ── 权重变动详情 Modal ─────────────────────────────────────────────── */}
+    {weightModalSite && (() => {
+      const siteRecs = weightRecs
+        .filter(r => r.site_id === weightModalSite.site_id)
+        .sort((a, b) => a.record_date.localeCompare(b.record_date))
+      const latest = siteRecs.length > 0 ? siteRecs[siteRecs.length - 1] : null
+      const prev = siteRecs.length > 1 ? siteRecs[siteRecs.length - 2] : null
+      const trend = siteRecs.map(r => ({
+        date: r.record_date.slice(5),
+        pcAvg: Math.round((r.pc_ip + r.pc_ip_max) / 2),
+        mobileAvg: Math.round((r.mobile_ip + r.mobile_ip_max) / 2),
+      }))
+      const pcAvgCur = latest ? Math.round((latest.pc_ip + latest.pc_ip_max) / 2) : 0
+      const mobileAvgCur = latest ? Math.round((latest.mobile_ip + latest.mobile_ip_max) / 2) : 0
+      const pcAvgPrev = prev ? Math.round((prev.pc_ip + prev.pc_ip_max) / 2) : 0
+      const mobileAvgPrev = prev ? Math.round((prev.mobile_ip + prev.mobile_ip_max) / 2) : 0
+      const pcAvgChange = prev ? pcAvgCur - pcAvgPrev : 0
+      const mobileAvgChange = prev ? mobileAvgCur - mobileAvgPrev : 0
+      return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setWeightModalSite(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">{weightModalSite.domain} · 权重变动</h2>
+                <p className="text-sm text-gray-400">近365天PC/移动端权重及来路IP趋势</p>
+              </div>
+              <button onClick={() => setWeightModalSite(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="flex gap-6 mb-4 flex-wrap">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">PC权重</p>
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-2xl font-bold text-gray-900">{latest?.pc_weight ?? 0}</p>
+                  {weightModalSite.pcChange !== 0 && (
+                    <span className={`text-sm font-semibold ${weightModalSite.pcChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      {weightModalSite.pcChange > 0 ? '+' : ''}{weightModalSite.pcChange}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">移动权重</p>
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-2xl font-bold text-gray-900">{latest?.mobile_weight ?? 0}</p>
+                  {weightModalSite.mobileChange !== 0 && (
+                    <span className={`text-sm font-semibold ${weightModalSite.mobileChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      {weightModalSite.mobileChange > 0 ? '+' : ''}{weightModalSite.mobileChange}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">PC均值变化</p>
+                <p className={`text-xl font-bold ${pcAvgChange > 0 ? 'text-green-600' : pcAvgChange < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                  {pcAvgChange === 0 ? '-' : (pcAvgChange > 0 ? '+' : '') + pcAvgChange.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">移动均值变化</p>
+                <p className={`text-xl font-bold ${mobileAvgChange > 0 ? 'text-green-600' : mobileAvgChange < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                  {mobileAvgChange === 0 ? '-' : (mobileAvgChange > 0 ? '+' : '') + mobileAvgChange.toLocaleString()}
+                </p>
+              </div>
+            </div>
+            {trend.length >= 2 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={trend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v: string) => v.slice(0, 5)} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v: number) => v >= 10000 ? (v / 10000).toFixed(1) + 'w' : v.toLocaleString()} />
+                  <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                  <Line type="monotone" dataKey="pcAvg" name="PC均值" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="mobileAvg" name="移动均值" stroke="#f97316" strokeWidth={2} dot={{ r: 2 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-40 text-gray-400 text-sm">暂无足够趋势数据</div>
+            )}
+            <div className="flex gap-4 mt-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-blue-500 inline-block" />PC均值</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-orange-500 inline-block" />移动均值</span>
+            </div>
+          </div>
+        </div>
+      )
+    })()}
+
+    {/* ── 收录异常详情 Modal ─────────────────────────────────────────────── */}
+    {indexModalSite && (() => {
+      const siteSnaps = indexSnaps
+        .filter(r => r.site_id === indexModalSite.site_id)
+        .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+      const trend = siteSnaps.map(s => ({ date: s.snapshot_date.slice(5), count: s.index_count }))
+      const latest = siteSnaps.length > 0 ? siteSnaps[siteSnaps.length - 1].index_count : 0
+      const snap7 = [...siteSnaps].reverse().find(r => r.snapshot_date <= getMY(-7))
+      const weeklyChange = snap7 ? latest - snap7.index_count : 0
+      return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setIndexModalSite(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">{indexModalSite.domain} · 收录趋势</h3>
+                <p className="text-xs text-gray-400 mt-0.5">近365天百度收录变化</p>
+              </div>
+              <button onClick={() => setIndexModalSite(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="flex gap-6 mb-4 items-end">
+                <div>
+                  <span className="text-xs text-gray-400">当前收录</span>
+                  <p className="text-2xl font-bold text-gray-900">{latest.toLocaleString()}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-400">周变化</span>
+                  <p className={`text-2xl font-bold ${weeklyChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {weeklyChange !== 0 ? (weeklyChange >= 0 ? '+' : '') + weeklyChange.toLocaleString() : '-'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-400">状态</span>
+                  <p className={`text-sm font-semibold mt-0.5 ${
+                    indexModalSite.status === 'danger' ? 'text-red-500' :
+                    indexModalSite.status === 'warning' ? 'text-yellow-600' : 'text-blue-600'
+                  }`}>
+                    {indexModalSite.status === 'danger' ? '危险' : indexModalSite.status === 'warning' ? '警告' : '涨入'}
+                  </p>
+                </div>
+              </div>
+              {trend.length >= 2 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 11 }} width={60} tickFormatter={(v: number) => v >= 10000 ? (v / 10000).toFixed(1) + 'w' : String(v)} />
+                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                    <Line type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-40 text-gray-400 text-sm">暂无足够趋势数据</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    })()}
+    </>
   )
 }
 
