@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { getBrowserClient } from '@/lib/supabase'
 
 interface WordEntry {
   keyword: string
@@ -26,6 +27,8 @@ interface RadarData {
   newWords: WordEntry[]
   rankWords: RankEntry[]
 }
+
+interface WeightInfo { pc: number; mobile: number; pcChg: number; mobileChg: number }
 
 type Tab = 'cross' | 'new' | 'rank'
 type PageSize = 50 | 100 | 500
@@ -76,18 +79,43 @@ function fmtVolume(v: number): string {
   return v.toLocaleString()
 }
 
-function SiteBadges({ sites }: { sites: string[] }) {
+function SiteBadge({ domain, weight }: { domain: string; weight?: WeightInfo }) {
+  return (
+    <span className="inline-flex flex-col text-xs bg-gray-100 rounded px-1.5 py-1 min-w-0">
+      <span className="text-gray-700 truncate max-w-[130px]">{domain}</span>
+      {weight && (
+        <span className="text-[10px] flex items-center gap-1 mt-px">
+          <span className="text-gray-400">PC</span>
+          <span className="text-gray-600 font-medium">{weight.pc}</span>
+          {weight.pcChg !== 0 && (
+            <span className={weight.pcChg > 0 ? 'text-green-500' : 'text-red-500'}>
+              {weight.pcChg > 0 ? '↑' : '↓'}
+            </span>
+          )}
+          <span className="text-gray-300">·</span>
+          <span className="text-gray-400">M</span>
+          <span className="text-gray-600 font-medium">{weight.mobile}</span>
+          {weight.mobileChg !== 0 && (
+            <span className={weight.mobileChg > 0 ? 'text-green-500' : 'text-red-500'}>
+              {weight.mobileChg > 0 ? '↑' : '↓'}
+            </span>
+          )}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function SiteBadges({ sites, weightMap }: { sites: string[]; weightMap: Map<string, WeightInfo> }) {
   const show = sites.slice(0, 3)
   const extra = sites.length - 3
   return (
     <div className="flex flex-wrap gap-1">
       {show.map((d) => (
-        <span key={d} className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
-          {d}
-        </span>
+        <SiteBadge key={d} domain={d} weight={weightMap.get(d)} />
       ))}
       {extra > 0 && (
-        <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded">+{extra}</span>
+        <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded self-start">+{extra}</span>
       )}
     </div>
   )
@@ -99,9 +127,40 @@ export default function HotRadarPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('cross')
   const [minSites, setMinSites] = useState(3)
-  const [copiedKw, setCopiedKw] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState<PageSize>(50)
+  const [weightMap, setWeightMap] = useState<Map<string, WeightInfo>>(new Map())
+
+  async function fetchWeights() {
+    const db = getBrowserClient()
+    const d14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
+    const [{ data: siteRows }, { data: whRows }] = await Promise.all([
+      db.from('sites').select('id, domain').eq('is_enabled', true),
+      db.from('weight_history').select('site_id, record_date, pc_weight, mobile_weight')
+        .gte('record_date', d14).order('record_date'),
+    ])
+    const idToDomain = new Map(
+      ((siteRows || []) as { id: string; domain: string }[]).map(s => [s.id, s.domain])
+    )
+    const byId = new Map<string, { pc: number; mobile: number }[]>()
+    for (const r of ((whRows || []) as { site_id: string; pc_weight: number; mobile_weight: number }[])) {
+      if (!byId.has(r.site_id)) byId.set(r.site_id, [])
+      byId.get(r.site_id)!.push({ pc: r.pc_weight, mobile: r.mobile_weight })
+    }
+    const map = new Map<string, WeightInfo>()
+    for (const [sid, recs] of Array.from(byId.entries())) {
+      const domain = idToDomain.get(sid)
+      if (!domain) continue
+      const latest = recs[recs.length - 1]
+      const prev = recs.length >= 2 ? recs[recs.length - 2] : null
+      map.set(domain, {
+        pc: latest.pc, mobile: latest.mobile,
+        pcChg: prev ? latest.pc - prev.pc : 0,
+        mobileChg: prev ? latest.mobile - prev.mobile : 0,
+      })
+    }
+    setWeightMap(map)
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -110,7 +169,8 @@ export default function HotRadarPage() {
       .then((d) => setData(d))
       .catch((e) => setError(e.message || '加载失败'))
       .finally(() => setLoading(false))
-  }, [])
+    fetchWeights()
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     if (!data) return null
@@ -133,12 +193,6 @@ export default function HotRadarPage() {
 
     return { newWords: nw, rankWords: rw.sort((a, b) => b.volume - a.volume || b.siteCount - a.siteCount), crossWords: cw }
   }, [data, minSites])
-
-  async function copyKw(kw: string) {
-    await navigator.clipboard.writeText(kw)
-    setCopiedKw(kw)
-    setTimeout(() => setCopiedKw(null), 1500)
-  }
 
   const counts = filtered
     ? { cross: filtered.crossWords.length, new: filtered.newWords.length, rank: filtered.rankWords.length }
@@ -225,20 +279,18 @@ export default function HotRadarPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="table-th w-8">#</th>
                     <th className="table-th">关键词</th>
-                    <th className="table-th">命中维度</th>
-                    <th className="table-th text-right">搜索量</th>
-                    <th className="table-th text-right w-16"></th>
+                    <th className="table-th w-24">命中维度</th>
+                    <th className="table-th text-right w-20">搜索量</th>
+                    <th className="table-th w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
-                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
+                    <tr><td colSpan={4} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
                   ) : (
-                    (pagedList as CrossEntry[]).map((w, i) => (
+                    (pagedList as CrossEntry[]).map((w) => (
                       <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
-                        <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td">
                           <div className="flex gap-1.5">
@@ -252,11 +304,7 @@ export default function HotRadarPage() {
                         <td className="table-td text-right text-gray-600 text-sm">
                           {w.volume != null ? fmtVolume(w.volume) : '—'}
                         </td>
-                        <td className="table-td text-right">
-                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-green-200 transition-colors">
-                            {copiedKw === w.keyword ? '✓' : '复制'}
-                          </button>
-                        </td>
+                        <td className="table-td"></td>
                       </tr>
                     ))
                   )}
@@ -268,33 +316,27 @@ export default function HotRadarPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="table-th w-8">#</th>
                     <th className="table-th">关键词</th>
-                    <th className="table-th text-center">新增次数</th>
-                    <th className="table-th text-center">站点数</th>
+                    <th className="table-th text-center w-20">新增次数</th>
+                    <th className="table-th text-center w-16">站点数</th>
                     <th className="table-th">出现站点</th>
-                    <th className="table-th text-right w-16"></th>
+                    <th className="table-th w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
-                    <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
+                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
-                    (pagedList as WordEntry[]).map((w, i) => (
+                    (pagedList as WordEntry[]).map((w) => (
                       <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
-                        <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center text-gray-600">{w.count}次</td>
                         <td className="table-td text-center">
                           <span className="font-semibold text-gray-900">{w.siteCount}</span>
                           <span className="text-gray-400 text-xs">站</span>
                         </td>
-                        <td className="table-td"><SiteBadges sites={w.sites} /></td>
-                        <td className="table-td text-right">
-                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-green-200 transition-colors">
-                            {copiedKw === w.keyword ? '✓' : '复制'}
-                          </button>
-                        </td>
+                        <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
+                        <td className="table-td"></td>
                       </tr>
                     ))
                   )}
@@ -306,33 +348,27 @@ export default function HotRadarPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="table-th w-8">#</th>
                     <th className="table-th">关键词</th>
-                    <th className="table-th text-center">涨排站点数</th>
-                    <th className="table-th text-right">搜索量</th>
+                    <th className="table-th text-center w-20">涨排站点</th>
+                    <th className="table-th text-right w-20">搜索量</th>
                     <th className="table-th">出现站点</th>
-                    <th className="table-th text-right w-16"></th>
+                    <th className="table-th w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
-                    <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
+                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
                   ) : (
-                    (pagedList as RankEntry[]).map((w, i) => (
+                    (pagedList as RankEntry[]).map((w) => (
                       <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
-                        <td className="table-td text-gray-400 text-xs">{page * pageSize + i + 1}</td>
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td text-center">
                           <span className="font-semibold text-gray-900">{w.siteCount}</span>
                           <span className="text-gray-400 text-xs">站</span>
                         </td>
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
-                        <td className="table-td"><SiteBadges sites={w.sites} /></td>
-                        <td className="table-td text-right">
-                          <button onClick={() => copyKw(w.keyword)} className="text-xs text-gray-400 hover:text-green-600 border border-gray-200 rounded px-1.5 py-0.5 hover:border-green-200 transition-colors">
-                            {copiedKw === w.keyword ? '✓' : '复制'}
-                          </button>
-                        </td>
+                        <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
+                        <td className="table-td"></td>
                       </tr>
                     ))
                   )}
