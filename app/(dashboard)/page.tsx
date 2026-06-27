@@ -824,26 +824,26 @@ export default function DashboardPage() {
 
     {/* ── 收录异常详情 Modal ─────────────────────────────────────────────── */}
     {indexModalSite && (() => {
+      const d30 = getMY(-30)
       const siteSnaps = indexSnaps
+        .filter(r => r.site_id === indexModalSite.site_id && r.snapshot_date >= d30)
+        .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+      const allSnaps = indexSnaps
         .filter(r => r.site_id === indexModalSite.site_id)
         .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
       const trend = siteSnaps.map(s => ({ date: s.snapshot_date.slice(5), count: s.index_count }))
-      const latest = siteSnaps.length > 0 ? siteSnaps[siteSnaps.length - 1].index_count : 0
-      const snap7 = [...siteSnaps].reverse().find(r => r.snapshot_date <= getMY(-7))
+      const latest = allSnaps.length > 0 ? allSnaps[allSnaps.length - 1].index_count : 0
+      const snap7 = [...allSnaps].reverse().find(r => r.snapshot_date <= getMY(-7))
       const weeklyChange = snap7 ? latest - snap7.index_count : 0
       return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setIndexModalSite(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div>
                 <h3 className="font-semibold text-gray-900">{indexModalSite.domain} · 收录趋势</h3>
-                <p className="text-xs text-gray-400 mt-0.5">近365天百度收录变化</p>
+                <p className="text-xs text-gray-400 mt-0.5">近30天百度收录变化</p>
               </div>
-              <button onClick={() => setIndexModalSite(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <button onClick={() => setIndexModalSite(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
             <div className="p-6">
               <div className="flex gap-6 mb-4 items-end">
@@ -855,15 +855,6 @@ export default function DashboardPage() {
                   <span className="text-xs text-gray-400">周变化</span>
                   <p className={`text-2xl font-bold ${weeklyChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {weeklyChange !== 0 ? (weeklyChange >= 0 ? '+' : '') + weeklyChange.toLocaleString() : '-'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-400">状态</span>
-                  <p className={`text-sm font-semibold mt-0.5 ${
-                    indexModalSite.status === 'danger' ? 'text-red-500' :
-                    indexModalSite.status === 'warning' ? 'text-yellow-600' : 'text-blue-600'
-                  }`}>
-                    {indexModalSite.status === 'danger' ? '危险' : indexModalSite.status === 'warning' ? '警告' : '涨入'}
                   </p>
                 </div>
               </div>
