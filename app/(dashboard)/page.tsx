@@ -34,7 +34,7 @@ interface WeightRec {
 interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
 interface AlertItem { domain: string; status: 'danger' | 'warning' | 'high' }
-interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
+interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' }
 interface WeightModalExtra {
   appKw: { keyword: string }[]
   gameKw: { keyword: string }[]
@@ -194,15 +194,12 @@ export default function DashboardPage() {
         const baseAvg = baseline.reduce((sum, r) => sum + r.index_count, 0) / baseline.length
         if (baseAvg === 0) continue
         const rate = (latest - baseAvg) / baseAvg
-        if (rate < -0.3) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
-        else if (rate < -0.15) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
-        else if (rate > 0.1) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'rising' })
+        const absDrop = baseAvg - latest
+        // Only alert on genuine drops; 上涨不属于"异常"
+        if (rate < -0.4 && absDrop > 500) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
+        else if (rate < -0.25 && absDrop > 100) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
       }
-      // Sort: danger first, then warning, then rising
-      iAlerts.sort((a, b) => {
-        const order = { danger: 0, warning: 1, rising: 2 }
-        return order[a.status] - order[b.status]
-      })
+      iAlerts.sort((a, b) => (a.status === 'danger' ? -1 : 1) - (b.status === 'danger' ? -1 : 1))
       setIndexAlerts(iAlerts)
 
       // Keyword anomaly alerts — same source and logic as 竞品日收
