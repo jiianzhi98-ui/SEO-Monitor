@@ -35,7 +35,7 @@ interface WeightRec {
 }
 interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
-interface AlertItem { domain: string; status: 'danger' | 'warning' | 'high' }
+interface AlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'high' }
 interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
 interface WeightModalExtra {
   appKw: { keyword: string }[]
@@ -111,6 +111,8 @@ export default function DashboardPage() {
   const [weightChanges, setWeightChanges] = useState<WeightChangeItem[]>([])
   const [indexAlerts, setIndexAlerts] = useState<IndexAlertItem[]>([])
   const [kwAlerts, setKwAlerts] = useState<AlertItem[]>([])
+  const [kwStatsAll, setKwStatsAll] = useState<KwStatRow[]>([])
+  const [kwModalSite, setKwModalSite] = useState<AlertItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -201,12 +203,13 @@ export default function DashboardPage() {
       setIndexAlerts(iAlerts)
 
       const kwStats = (kwStatsRaw || []) as KwStatRow[]
+      setKwStatsAll(kwStats)
       const kAlerts: AlertItem[] = []
       for (const s of siteList) {
         const ss = kwStats.filter(r => r.site_id === s.id)
         if (ss.length === 0) continue
         const status = computeKwStatus(ss, yesterday)
-        if (status !== 'normal') kAlerts.push({ domain: s.domain, status })
+        if (status !== 'normal') kAlerts.push({ site_id: s.id, domain: s.domain, status })
       }
       kAlerts.sort((a, b) => {
         const order = { danger: 0, warning: 1, high: 2 }
@@ -438,7 +441,7 @@ export default function DashboardPage() {
           empty="各站新增正常"
         >
           {kwAlerts.map((a, i) => (
-            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
+            <button key={i} onClick={() => setKwModalSite(a)} className="w-full flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 hover:bg-yellow-50 transition-colors text-left">
               <p className="text-xs text-gray-700 truncate">{a.domain}</p>
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
                 a.status === 'danger' ? 'bg-red-50 text-red-500' :
@@ -447,7 +450,7 @@ export default function DashboardPage() {
               }`}>
                 {a.status === 'danger' ? '异常' : a.status === 'warning' ? '偏低' : '偏高'}
               </span>
-            </div>
+            </button>
           ))}
         </AlertCard>
 
@@ -798,6 +801,63 @@ export default function DashboardPage() {
                   )
                 )
               )}
+            </div>
+          </div>
+        </div>
+      )
+    })()}
+
+    {/* ── 新增异常详情 Modal ─────────────────────────────────────────────── */}
+    {kwModalSite && (() => {
+      const yesterday = getMY(-1)
+      const ss = kwStatsAll.filter(r => r.site_id === kwModalSite.site_id)
+      const trend = ss
+        .map(r => ({ date: (r.stat_date ?? '').slice(5), count: (r.app_count ?? 0) + (r.game_count ?? 0) }))
+        .filter(p => p.date)
+        .sort((a, b) => a.date.localeCompare(b.date))
+      const ytStat = ss.find(r => (r.stat_date ?? '').slice(0, 10) === yesterday)
+      const yesterdayVal = (ytStat?.app_count ?? 0) + (ytStat?.game_count ?? 0)
+      const weekdayVals: number[] = [], weekendVals: number[] = []
+      for (const r of ss) {
+        const d = (r.stat_date ?? '').slice(0, 10)
+        if (!d || d === yesterday) continue
+        const dow = new Date(d).getDay()
+        const v = (r.app_count ?? 0) + (r.game_count ?? 0)
+        if (dow === 0 || dow === 6) weekendVals.push(v)
+        else weekdayVals.push(v)
+      }
+      const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
+      return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setKwModalSite(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">{kwModalSite.domain} · 新增趋势</h3>
+                <p className="text-xs text-gray-400 mt-0.5">近30天每日新增关键词数量</p>
+              </div>
+              <button onClick={() => setKwModalSite(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+            </div>
+            <div className="mt-4">
+              {trend.length < 2 ? (
+                <p className="text-sm text-gray-400 text-center py-8">暂无趋势数据</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={45} />
+                    <Tooltip formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString() : String(v)} />
+                    <Line type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+              <span>工作日均值参考：<span className="font-semibold text-gray-800">{avg(weekdayVals).toLocaleString()}</span></span>
+              <span>周末均值参考：<span className="font-semibold text-gray-800">{avg(weekendVals).toLocaleString()}</span></span>
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              昨日新增：<span className="font-semibold text-gray-800">{yesterdayVal.toLocaleString()}</span>
             </div>
           </div>
         </div>
