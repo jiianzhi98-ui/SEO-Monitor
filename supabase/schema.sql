@@ -30,12 +30,15 @@ CREATE TABLE IF NOT EXISTS raw_keywords (
   site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
   source_url TEXT,
   discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  content_type TEXT NOT NULL DEFAULT 'app'
+  content_type TEXT NOT NULL DEFAULT 'app',
+  content_date TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_raw_keywords_site_id ON raw_keywords(site_id);
 CREATE INDEX IF NOT EXISTS idx_raw_keywords_discovered_at ON raw_keywords(discovered_at);
 CREATE INDEX IF NOT EXISTS idx_raw_keywords_keyword ON raw_keywords(keyword);
+CREATE INDEX IF NOT EXISTS idx_raw_keywords_content_date ON raw_keywords(content_date);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_keywords_site_date_kw ON raw_keywords(site_id, content_date, keyword) WHERE content_date IS NOT NULL;
 
 -- Function to auto-delete raw_keywords older than 30 days
 CREATE OR REPLACE FUNCTION delete_old_raw_keywords()

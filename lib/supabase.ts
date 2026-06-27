@@ -41,6 +41,8 @@ export type Database = {
           site_id: string
           source_url: string | null
           discovered_at: string
+          content_type: string
+          content_date: string | null
         }
         Insert: Omit<Database['public']['Tables']['raw_keywords']['Row'], 'id' | 'discovered_at'>
         Update: Partial<Database['public']['Tables']['raw_keywords']['Insert']>
