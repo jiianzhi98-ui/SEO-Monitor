@@ -77,10 +77,10 @@ function fmtVolume(v: number): string {
 
 function SiteBadge({ domain, weight }: { domain: string; weight?: WeightInfo }) {
   return (
-    <span className="inline-flex flex-col text-xs bg-gray-100 rounded px-1.5 py-0.5 min-w-0 leading-tight">
+    <span className="inline-flex flex-col text-xs bg-gray-100 rounded px-1.5 py-1 min-w-0">
       <span className="text-gray-700 truncate max-w-[130px]">{domain}</span>
       {weight && (
-        <span className="text-[10px] flex items-center gap-1">
+        <span className="text-[10px] flex items-center gap-1 mt-px">
           <span className="text-gray-400">PC</span>
           <span className="text-gray-600 font-medium">{weight.pc}</span>
           {weight.pcChg !== 0 && (
@@ -270,7 +270,7 @@ export default function HotRadarPage() {
           </div>
         ) : (
           <>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto [&_td]:py-1.5 [&_th]:py-1.5">
             {activeTab === 'cross' && (
               <table className="w-full">
                 <thead className="bg-gray-50">
