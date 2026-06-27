@@ -181,19 +181,21 @@ export default function DashboardPage() {
       }
       setWeightChanges(wChanges)
 
-      // Index alerts: weekly comparison, 30-day window, 7-record minimum (matches 收录监控)
+      // Index alerts: rolling 7-day average baseline, 30-day window, 5-record minimum
       const iAlerts: IndexAlertItem[] = []
       for (const s of siteList) {
         const siteSnaps = ((snapsRaw || []) as IndexSnap[])
           .filter(r => r.site_id === s.id && r.snapshot_date >= d30)
           .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
-        if (siteSnaps.length < 7) continue
+        if (siteSnaps.length < 5) continue
         const latest = siteSnaps[siteSnaps.length - 1].index_count
-        const snap7 = [...siteSnaps].reverse().find(r => r.snapshot_date <= d7)
-        if (!snap7 || snap7.index_count === 0) continue
-        const rate = (latest - snap7.index_count) / snap7.index_count
-        if (rate < -0.2) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
-        else if (rate < -0.1) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
+        // Use average of the 7 prior points as baseline (more stable than a single day)
+        const baseline = siteSnaps.slice(-8, -1)
+        const baseAvg = baseline.reduce((sum, r) => sum + r.index_count, 0) / baseline.length
+        if (baseAvg === 0) continue
+        const rate = (latest - baseAvg) / baseAvg
+        if (rate < -0.3) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
+        else if (rate < -0.15) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
         else if (rate > 0.1) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'rising' })
       }
       // Sort: danger first, then warning, then rising
@@ -216,11 +218,13 @@ export default function DashboardPage() {
           const d = (r.stat_date ?? '').slice(0, 10)
           if (d) dayMap.set(d, (r.app_count ?? 0) + (r.game_count ?? 0))
         }
-        const avg = dayMap.size > 0
-          ? Array.from(dayMap.values()).reduce((a, b) => a + b, 0) / dayMap.size
-          : 0
-        if (avg > 0) {
-          const ratio = yVal / avg
+        const vals = Array.from(dayMap.values()).sort((a, b) => a - b)
+        const mid = Math.floor(vals.length / 2)
+        const median = vals.length === 0 ? 0
+          : vals.length % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2
+          : vals[mid]
+        if (median > 0) {
+          const ratio = yVal / median
           if (ratio < 0.3) kAlerts.push({ domain: s.domain, status: 'danger' })
           else if (ratio < 0.6) kAlerts.push({ domain: s.domain, status: 'warning' })
           else if (ratio > 1.5) kAlerts.push({ domain: s.domain, status: 'high' })
