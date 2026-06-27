@@ -65,10 +65,13 @@ function MetricCard({ label, value, change }: { label: string; value: string; ch
   )
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({ title, headerRight, children }: { title: string; headerRight?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">{title}</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+        {headerRight}
+      </div>
       {children}
     </div>
   )
@@ -291,8 +294,8 @@ export default function SiteIntelPage() {
         const gameAll = ((gameRaw || []) as KwRaw[]).filter(k => k.content_date === latestKwDate).map(k => ({ keyword: k.keyword }))
         result.appKwAll = appAll
         result.gameKwAll = gameAll
-        result.appKw = appAll.slice(0, 10)
-        result.gameKw = gameAll.slice(0, 10)
+        result.appKw = appAll.slice(0, 12)
+        result.gameKw = gameAll.slice(0, 12)
 
         if (latestKwDate) {
           const [appCnt, gameCnt] = await Promise.all([
@@ -321,7 +324,7 @@ export default function SiteIntelPage() {
   const kwAllList = kwTab === 'app' ? (data?.appKwAll ?? []) : (data?.gameKwAll ?? [])
   const kwModalTitle = `最近新增 · ${kwTab === 'app' ? '应用' : '游戏'}关键词${data?.kwDate ? ` (${data.kwDate})` : ''}`
 
-  const rankList = rankTab === 'up' ? (data?.rankupAll ?? []).slice(0, 10) : (data?.rankdownAll ?? []).slice(0, 10)
+  const rankList = rankTab === 'up' ? (data?.rankupAll ?? []).slice(0, 12) : (data?.rankdownAll ?? []).slice(0, 12)
   const rankCount = rankTab === 'up' ? (data?.rankupAll?.length ?? 0) : (data?.rankdownAll?.length ?? 0)
   const rankModalList = rankModalTab === 'up' ? (data?.rankupAll ?? []) : (data?.rankdownAll ?? [])
   const rankModalTitle = `排名波动 · ${rankModalTab === 'up' ? '涨入' : '跌出'}${data?.rankDate ? ` (${data.rankDate})` : ''}`
@@ -504,47 +507,48 @@ export default function SiteIntelPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="最近新增关键词">
+            <SectionCard
+              title={`最近新增关键词${data.kwDate ? ` · ${data.kwDate}` : ''}`}
+              headerRight={
+                <div className="flex gap-1">
+                  <button onClick={() => setKwTab('app')}
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${kwTab === 'app' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    应用{kwTab === 'app' ? ` (${data.appCount})` : ''}
+                  </button>
+                  <button onClick={() => setKwTab('game')}
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${kwTab === 'game' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    游戏{kwTab === 'game' ? ` (${data.gameCount})` : ''}
+                  </button>
+                </div>
+              }
+            >
               {!data.isTracked ? (
                 <EmptyState text="未追踪站点，无关键词数据" />
+              ) : kwList.length === 0 ? (
+                <EmptyState text="暂无数据" />
               ) : (
                 <>
-                  <div className="flex items-center gap-2 mb-3">
-                    <button
-                      onClick={() => setKwTab('app')}
-                      className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${kwTab === 'app' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                    >
-                      应用{kwTab === 'app' ? ` (${data.appCount})` : ''}
-                    </button>
-                    <button
-                      onClick={() => setKwTab('game')}
-                      className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${kwTab === 'game' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                    >
-                      游戏{kwTab === 'game' ? ` (${data.gameCount})` : ''}
-                    </button>
-                    {data.kwDate && <span className="ml-auto text-xs text-gray-400">{data.kwDate}</span>}
-                  </div>
-                  {kwList.length === 0 ? (
-                    <EmptyState text="暂无数据" />
-                  ) : (
-                    <>
-                      <div className="space-y-1.5">
-                        {kwList.map((k, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs">
-                            <span className="text-gray-300 w-5 text-right flex-shrink-0">{i + 1}</span>
-                            <span className="text-gray-800 truncate">{k.keyword}</span>
-                          </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      {kwList.slice(0, 6).map((k, i) => (
+                        <div key={i} className="h-6 flex items-center text-xs text-gray-800 truncate">{k.keyword}</div>
+                      ))}
+                    </div>
+                    {kwList.length > 6 && (
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        {kwList.slice(6, 12).map((k, i) => (
+                          <div key={i + 6} className="h-6 flex items-center text-xs text-gray-800 truncate">{k.keyword}</div>
                         ))}
                       </div>
-                      {kwCount > 10 && (
-                        <button
-                          onClick={() => { setKwModal(true); setKwModalPage(0) }}
-                          className="mt-3 text-xs text-green-600 hover:underline w-full text-center"
-                        >
-                          查看更多（共 {kwCount} 条）
-                        </button>
-                      )}
-                    </>
+                    )}
+                  </div>
+                  {kwCount > 12 && (
+                    <button
+                      onClick={() => { setKwModal(true); setKwModalPage(0) }}
+                      className="mt-3 text-xs text-green-600 hover:underline w-full text-center"
+                    >
+                      查看更多（共 {kwCount} 条）
+                    </button>
                   )}
                 </>
               )}
@@ -553,47 +557,54 @@ export default function SiteIntelPage() {
 
           {/* Row 3: Rank changes + Unstable */}
           <div className="grid grid-cols-2 gap-5">
-            <SectionCard title={`排名波动${data.rankDate ? ` · ${data.rankDate}` : ''}`}>
+            <SectionCard
+              title={`排名波动${data.rankDate ? ` · ${data.rankDate}` : ''}`}
+              headerRight={
+                <div className="flex gap-1">
+                  <button onClick={() => setRankTab('up')}
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${rankTab === 'up' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    涨入{rankTab === 'up' ? ` (${data.rankupAll.length})` : ''}
+                  </button>
+                  <button onClick={() => setRankTab('down')}
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${rankTab === 'down' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    跌出{rankTab === 'down' ? ` (${data.rankdownAll.length})` : ''}
+                  </button>
+                </div>
+              }
+            >
               {!data.isTracked ? (
                 <EmptyState text="未追踪站点，无排名数据" />
+              ) : rankList.length === 0 ? (
+                <EmptyState text="暂无数据" />
               ) : (
                 <>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={() => setRankTab('up')}
-                      className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${rankTab === 'up' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                    >
-                      涨入{rankTab === 'up' ? ` (${data.rankupAll.length})` : ''}
-                    </button>
-                    <button
-                      onClick={() => setRankTab('down')}
-                      className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${rankTab === 'down' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                    >
-                      跌出{rankTab === 'down' ? ` (${data.rankdownAll.length})` : ''}
-                    </button>
-                  </div>
-                  {rankList.length === 0 ? (
-                    <EmptyState text="暂无数据" />
-                  ) : (
-                    <>
-                      <div className="space-y-1.5">
-                        {rankList.map((r, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs">
-                            <span className="text-gray-300 w-5 text-right flex-shrink-0">{i + 1}</span>
+                  <div className="flex gap-3">
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      {rankList.slice(0, 6).map((r, i) => (
+                        <div key={i} className="h-6 flex items-center gap-1.5 text-xs">
+                          <span className="text-gray-800 flex-1 truncate">{r.keyword}</span>
+                          {r.volume > 0 && <span className="text-gray-400 flex-shrink-0">{r.volume.toLocaleString()}</span>}
+                        </div>
+                      ))}
+                    </div>
+                    {rankList.length > 6 && (
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        {rankList.slice(6, 12).map((r, i) => (
+                          <div key={i + 6} className="h-6 flex items-center gap-1.5 text-xs">
                             <span className="text-gray-800 flex-1 truncate">{r.keyword}</span>
                             {r.volume > 0 && <span className="text-gray-400 flex-shrink-0">{r.volume.toLocaleString()}</span>}
                           </div>
                         ))}
                       </div>
-                      {rankCount > 10 && (
-                        <button
-                          onClick={() => { setRankModal(true); setRankModalTab(rankTab); setRankModalPage(0) }}
-                          className="mt-3 text-xs text-green-600 hover:underline w-full text-center"
-                        >
-                          查看更多（共 {rankCount} 条）
-                        </button>
-                      )}
-                    </>
+                    )}
+                  </div>
+                  {rankCount > 12 && (
+                    <button
+                      onClick={() => { setRankModal(true); setRankModalTab(rankTab); setRankModalPage(0) }}
+                      className="mt-3 text-xs text-green-600 hover:underline w-full text-center"
+                    >
+                      查看更多（共 {rankCount} 条）
+                    </button>
                   )}
                 </>
               )}
@@ -606,18 +617,29 @@ export default function SiteIntelPage() {
                 <EmptyState text="近30天无反复波动词" />
               ) : (
                 <>
-                  <div className="space-y-1.5">
-                    {data.unstableAll.slice(0, 10).map((u, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-300 w-5 text-right flex-shrink-0">{i + 1}</span>
-                        <span className="text-gray-800 flex-1 truncate">{u.keyword}</span>
-                        <span className="text-green-600 flex-shrink-0">↑{u.upDays}</span>
-                        <span className="text-red-500 flex-shrink-0">↓{u.downDays}</span>
-                        {u.volume > 0 && <span className="text-gray-400 flex-shrink-0">{u.volume.toLocaleString()}</span>}
+                  <div className="flex gap-3">
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      {data.unstableAll.slice(0, 6).map((u, i) => (
+                        <div key={i} className="h-6 flex items-center gap-1.5 text-xs">
+                          <span className="text-gray-800 flex-1 truncate">{u.keyword}</span>
+                          <span className="text-green-600 flex-shrink-0">↑{u.upDays}</span>
+                          <span className="text-red-500 flex-shrink-0">↓{u.downDays}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {data.unstableAll.length > 6 && (
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        {data.unstableAll.slice(6, 12).map((u, i) => (
+                          <div key={i + 6} className="h-6 flex items-center gap-1.5 text-xs">
+                            <span className="text-gray-800 flex-1 truncate">{u.keyword}</span>
+                            <span className="text-green-600 flex-shrink-0">↑{u.upDays}</span>
+                            <span className="text-red-500 flex-shrink-0">↓{u.downDays}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                  {data.unstableAll.length > 10 && (
+                  {data.unstableAll.length > 12 && (
                     <button
                       onClick={() => { setUnstableModal(true); setUnstableModalPage(0) }}
                       className="mt-3 text-xs text-green-600 hover:underline w-full text-center"
@@ -644,9 +666,8 @@ export default function SiteIntelPage() {
             </button>
           </div>
           {kwAllList.slice(kwModalPage * MODAL_PS, (kwModalPage + 1) * MODAL_PS).map((k, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs py-1.5 border-b border-gray-50 last:border-0">
-              <span className="text-gray-300 w-6 text-right flex-shrink-0">{kwModalPage * MODAL_PS + i + 1}</span>
-              <span className="text-gray-800">{k.keyword}</span>
+            <div key={i} className="text-xs py-1.5 border-b border-gray-50 last:border-0 text-gray-800">
+              {k.keyword}
             </div>
           ))}
           <PaginationBar page={kwModalPage} total={kwAllList.length} pageSize={MODAL_PS} onChange={setKwModalPage} />
@@ -666,7 +687,6 @@ export default function SiteIntelPage() {
           </div>
           {rankModalList.slice(rankModalPage * MODAL_PS, (rankModalPage + 1) * MODAL_PS).map((r, i) => (
             <div key={i} className="flex items-center gap-2 text-xs py-1.5 border-b border-gray-50 last:border-0">
-              <span className="text-gray-300 w-6 text-right flex-shrink-0">{rankModalPage * MODAL_PS + i + 1}</span>
               <span className="text-gray-800 flex-1">{r.keyword}</span>
               {r.volume > 0 && <span className="text-gray-400">{r.volume.toLocaleString()}</span>}
             </div>
@@ -680,7 +700,6 @@ export default function SiteIntelPage() {
         <MoreModal title={`不稳定词 · 近30天（共 ${data.unstableAll.length} 条）`} onClose={() => setUnstableModal(false)}>
           {data.unstableAll.slice(unstableModalPage * MODAL_PS, (unstableModalPage + 1) * MODAL_PS).map((u, i) => (
             <div key={i} className="flex items-center gap-2 text-xs py-1.5 border-b border-gray-50 last:border-0">
-              <span className="text-gray-300 w-6 text-right flex-shrink-0">{unstableModalPage * MODAL_PS + i + 1}</span>
               <span className="text-gray-800 flex-1">{u.keyword}</span>
               <span className="text-green-600">↑{u.upDays}</span>
               <span className="text-red-500">↓{u.downDays}</span>
