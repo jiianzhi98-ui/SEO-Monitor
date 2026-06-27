@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { useUser } from '@/lib/user-context'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
-import { computeKwStatus, computeKwBaseline } from '@/lib/kw-status'
+import { computeKwStatus } from '@/lib/kw-status'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 interface CompetitorRow {
@@ -13,7 +13,8 @@ interface CompetitorRow {
   name: string
   focus_level: number
   yesterday: number
-  baseline: number
+  weekdayBaseline: number
+  weekendBaseline: number
   trend: { date: string; count: number }[]
   status: 'normal' | 'warning' | 'danger' | 'high'
   hasHtml: boolean
@@ -195,11 +196,22 @@ export default function CompetitorDailyPage() {
           .map(s => ({ date: (s.stat_date ?? '').slice(5), count: (s.app_count ?? 0) + (s.game_count ?? 0) }))
           .filter(p => p.date)
           .sort((a, b) => a.date.localeCompare(b.date))
-          .slice(-14)
 
-        const baseline = computeKwBaseline(siteStats, yesterday)
+        const weekdayVals: number[] = [], weekendVals: number[] = []
+        for (const s of siteStats) {
+          const d = (s.stat_date ?? '').slice(0, 10)
+          if (!d || d === yesterday) continue
+          const dow = new Date(d).getDay()
+          const v = (s.app_count ?? 0) + (s.game_count ?? 0)
+          if (dow === 0 || dow === 6) weekendVals.push(v)
+          else weekdayVals.push(v)
+        }
+        const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
+        const weekdayBaseline = avg(weekdayVals)
+        const weekendBaseline = avg(weekendVals)
+
         const status = computeKwStatus(siteStats, yesterday)
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, baseline, trend, status, hasHtml: !!site.list_url, hasRankData: site.has_rank_data ?? true }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, weekdayBaseline, weekendBaseline, trend, status, hasHtml: !!site.list_url, hasRankData: site.has_rank_data ?? true }
       })
 
       const statusPriority = (r: CompetitorRow) => {
@@ -575,7 +587,6 @@ export default function CompetitorDailyPage() {
                 <tr>
                   <th className="table-th">域名</th>
                   <th className="table-th text-right">昨日新增</th>
-                  <th className="table-th text-right">均值参考</th>
                   <th className="table-th text-center">状态</th>
                   <th className="table-th text-right">操作</th>
                 </tr>
@@ -595,7 +606,6 @@ export default function CompetitorDailyPage() {
                           {row.name && <span className="text-gray-400"> · {row.name}</span>}
                         </td>
                         <td className="table-td text-right font-semibold text-green-600">{row.yesterday.toLocaleString()}</td>
-                        <td className="table-td text-right text-gray-600">{row.baseline.toLocaleString()}</td>
                         <td className="table-td text-center">
                           <span className={s.className}>{s.label}</span>
                         </td>
@@ -603,9 +613,9 @@ export default function CompetitorDailyPage() {
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => setTrendSite(row)}
-                              className="text-xs border rounded px-1.5 py-0.5 transition-colors text-teal-500 hover:text-teal-700 border-teal-100 hover:border-teal-200"
+                              className="text-xs border rounded px-1.5 py-0.5 transition-colors text-blue-500 hover:text-blue-700 border-blue-100 hover:border-blue-200"
                             >
-                              趋势
+                              查看
                             </button>
                             <button
                               onClick={() => row.hasHtml && viewYesterdayKeywords(row)}
@@ -617,7 +627,7 @@ export default function CompetitorDailyPage() {
                             <button
                               onClick={() => row.hasHtml && viewCleanedKeywords(row)}
                               disabled={!row.hasHtml}
-                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasHtml ? 'text-blue-500 hover:text-blue-700 border-blue-100 hover:border-blue-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasHtml ? 'text-gray-500 hover:text-gray-700 border-gray-200 hover:border-gray-300' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               更新词库
                             </button>
@@ -941,8 +951,8 @@ export default function CompetitorDailyPage() {
               )}
             </div>
             <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-              <span>昨日新增：<span className="font-semibold text-gray-800">{trendSite.yesterday.toLocaleString()}</span></span>
-              <span>均值参考：<span className="font-semibold text-gray-800">{trendSite.baseline.toLocaleString()}</span></span>
+              <span>工作日均值参考：<span className="font-semibold text-gray-800">{trendSite.weekdayBaseline.toLocaleString()}</span></span>
+              <span>周末均值参考：<span className="font-semibold text-gray-800">{trendSite.weekendBaseline.toLocaleString()}</span></span>
             </div>
           </div>
         </div>
