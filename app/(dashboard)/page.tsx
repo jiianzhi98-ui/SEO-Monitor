@@ -34,7 +34,7 @@ interface WeightRec {
 interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 interface WeightChangeItem { site_id: string; domain: string; pcChange: number; mobileChange: number }
 interface AlertItem { domain: string; status: 'danger' | 'warning' | 'high' }
-interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' }
+interface IndexAlertItem { site_id: string; domain: string; status: 'danger' | 'warning' | 'rising' }
 interface WeightModalExtra {
   appKw: { keyword: string }[]
   gameKw: { keyword: string }[]
@@ -181,7 +181,8 @@ export default function DashboardPage() {
       }
       setWeightChanges(wChanges)
 
-      // Index alerts: rolling 7-day average baseline, 30-day window, 5-record minimum
+      // Index alerts: compare today vs historical min/max of the past 30 days
+      // Within the historical range = normal fluctuation; outside = anomaly
       const iAlerts: IndexAlertItem[] = []
       for (const s of siteList) {
         const siteSnaps = ((snapsRaw || []) as IndexSnap[])
@@ -189,17 +190,25 @@ export default function DashboardPage() {
           .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
         if (siteSnaps.length < 5) continue
         const latest = siteSnaps[siteSnaps.length - 1].index_count
-        // Use average of the 7 prior points as baseline (more stable than a single day)
-        const baseline = siteSnaps.slice(-8, -1)
-        const baseAvg = baseline.reduce((sum, r) => sum + r.index_count, 0) / baseline.length
-        if (baseAvg === 0) continue
-        const rate = (latest - baseAvg) / baseAvg
-        const absDrop = baseAvg - latest
-        // Only alert on genuine drops; 上涨不属于"异常"
-        if (rate < -0.4 && absDrop > 500) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
-        else if (rate < -0.25 && absDrop > 100) iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
+        const historical = siteSnaps.slice(0, -1)
+        const histMin = Math.min(...historical.map(r => r.index_count))
+        const histMax = Math.max(...historical.map(r => r.index_count))
+        if (histMin === 0) continue
+        const absDrop = histMin - latest
+        // Danger: dropped >30% below historical low AND absolute drop > 200
+        if (latest < histMin * 0.7 && absDrop > 200)
+          iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
+        // Warning: dropped >15% below historical low AND absolute drop > 50
+        else if (latest < histMin * 0.85 && absDrop > 50)
+          iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
+        // Rising: new 30-day high (>10% above historical max)
+        else if (latest > histMax * 1.1)
+          iAlerts.push({ site_id: s.id, domain: s.domain, status: 'rising' })
       }
-      iAlerts.sort((a, b) => (a.status === 'danger' ? -1 : 1) - (b.status === 'danger' ? -1 : 1))
+      iAlerts.sort((a, b) => {
+        const order = { danger: 0, warning: 1, rising: 2 }
+        return order[a.status] - order[b.status]
+      })
       setIndexAlerts(iAlerts)
 
       // Keyword anomaly alerts — same source and logic as 竞品日收
