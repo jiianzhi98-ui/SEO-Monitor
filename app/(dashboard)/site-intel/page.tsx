@@ -55,7 +55,7 @@ function ChangeTag({ change }: { change: number }) {
 
 function MetricCard({ label, value, change }: { label: string; value: string; change: number }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex-1 min-w-0">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 min-w-0">
       <p className="text-xs text-gray-400 mb-1.5">{label}</p>
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="text-2xl font-bold text-gray-900 tabular-nums">{value}</span>
@@ -417,7 +417,7 @@ export default function SiteIntelPage() {
           </div>
 
           {/* Metric cards */}
-          <div className="flex gap-3 flex-wrap">
+          <div className="grid grid-cols-3 xl:grid-cols-5 gap-3">
             <MetricCard label="PC权重" value={String(data.pcWeight)} change={data.pcWeightChange} />
             <MetricCard label="移动权重" value={String(data.mobileWeight)} change={data.mobileWeightChange} />
             <MetricCard
