@@ -324,9 +324,9 @@ export default function DashboardPage() {
       {/* ── Alert Cards ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
 
-        <AlertCard title="权重变动" count={weightChanges.length} color="yellow" empty="暂无权重变动">
+        <AlertCard title="权重变动" count={weightChanges.length} color="red" empty="暂无权重变动">
           {weightChanges.map((w, i) => (
-            <button key={i} onClick={() => setWeightModalSite(w)} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-yellow-50 rounded px-1 -mx-1 transition-colors text-left">
+            <button key={i} onClick={() => setWeightModalSite(w)} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
               <p className="text-xs font-medium text-gray-800 truncate">{w.domain}</p>
               <div className="flex gap-1.5 flex-shrink-0">
                 {w.pcChange !== 0 && (
@@ -345,29 +345,9 @@ export default function DashboardPage() {
         </AlertCard>
 
         <AlertCard
-          title="新增异常"
-          count={kwAlerts.length}
-          color={kwAlerts.some(a => a.status === 'danger') ? 'red' : kwAlerts.some(a => a.status === 'warning') ? 'orange' : kwAlerts.some(a => a.status === 'high') ? 'teal' : 'gray'}
-          empty="各站新增正常"
-        >
-          {kwAlerts.map((a, i) => (
-            <div key={i} className="flex items-center justify-between gap-2 py-0.5">
-              <p className="text-xs text-gray-700 truncate">{a.domain}</p>
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
-                a.status === 'danger' ? 'bg-red-50 text-red-500' :
-                a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
-                'bg-blue-50 text-blue-600'
-              }`}>
-                {a.status === 'danger' ? '异常' : a.status === 'warning' ? '偏低' : '偏高'}
-              </span>
-            </div>
-          ))}
-        </AlertCard>
-
-        <AlertCard
           title="收录异常"
           count={indexAlerts.length}
-          color={indexAlerts.some(a => a.status === 'danger') ? 'red' : indexAlerts.some(a => a.status === 'warning') ? 'orange' : indexAlerts.some(a => a.status === 'rising') ? 'teal' : 'gray'}
+          color="orange"
           empty="各站收录正常"
           action={
             <div className="flex items-center gap-1.5">
@@ -392,6 +372,30 @@ export default function DashboardPage() {
                 {a.status === 'danger' ? '危险' : a.status === 'warning' ? '警告' : '涨入'}
               </span>
             </button>
+          ))}
+        </AlertCard>
+
+        <AlertCard
+          title="新增异常"
+          count={kwAlerts.length}
+          color="yellow"
+          empty="各站新增正常"
+        >
+          {kwAlerts.map((a, i) => (
+            <div key={i} className={`flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 transition-colors ${
+              a.status === 'danger' ? 'hover:bg-red-50' :
+              a.status === 'warning' ? 'hover:bg-yellow-50' :
+              'hover:bg-blue-50'
+            }`}>
+              <p className="text-xs font-medium text-gray-800 truncate">{a.domain}</p>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
+                a.status === 'danger' ? 'bg-red-50 text-red-500' :
+                a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
+                'bg-blue-50 text-blue-600'
+              }`}>
+                {a.status === 'danger' ? '异常' : a.status === 'warning' ? '偏低' : '偏高'}
+              </span>
+            </div>
           ))}
         </AlertCard>
 
@@ -1341,12 +1345,12 @@ function RankdownExportButton() {
 // ─── AlertCard ────────────────────────────────────────────────────────────────
 
 const PALETTE = {
-  yellow: { border: 'border-yellow-100', count: 'text-yellow-500', pulse: 'bg-yellow-400' },
-  orange: { border: 'border-orange-100', count: 'text-orange-500', pulse: 'bg-orange-400' },
-  red:    { border: 'border-red-100',    count: 'text-red-500',    pulse: 'bg-red-400'    },
-  teal:   { border: 'border-teal-100',   count: 'text-teal-500',   pulse: 'bg-teal-400'   },
-  green:  { border: 'border-green-100',  count: 'text-green-500',  pulse: 'bg-green-400'  },
-  gray:   { border: 'border-gray-100',   count: 'text-gray-300',   pulse: 'bg-gray-300'   },
+  yellow: { border: 'border-yellow-300', count: 'text-yellow-500', pulse: 'bg-yellow-400' },
+  orange: { border: 'border-orange-300', count: 'text-orange-500', pulse: 'bg-orange-400' },
+  red:    { border: 'border-red-300',    count: 'text-red-500',    pulse: 'bg-red-400'    },
+  teal:   { border: 'border-teal-300',   count: 'text-teal-500',   pulse: 'bg-teal-400'   },
+  green:  { border: 'border-green-300',  count: 'text-green-500',  pulse: 'bg-green-400'  },
+  gray:   { border: 'border-gray-200',   count: 'text-gray-300',   pulse: 'bg-gray-300'   },
 }
 
 function AlertCard({
