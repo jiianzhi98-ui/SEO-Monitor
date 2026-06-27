@@ -205,7 +205,8 @@ export async function GET(request: Request) {
                 content_type: e.content_type || 'app',
               }))
               for (const chunk of chunkArray(rows, 500)) {
-                await supabase.from('raw_keywords').upsert(chunk, { onConflict: 'site_id,content_date,keyword', ignoreDuplicates: true })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (supabase.from('raw_keywords') as any).upsert(chunk, { onConflict: 'site_id,content_date,keyword', ignoreDuplicates: true })
               }
             }
           }
