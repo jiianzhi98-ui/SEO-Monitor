@@ -135,7 +135,7 @@ export default function DashboardPage() {
     try {
       const db = getBrowserClient()
       const yesterday = getMY(-1)
-      const d7 = getMY(-7)
+      const d28 = getMY(-30)
       const d30 = getMY(-30)
       const d365 = getMY(-365)
 
@@ -157,7 +157,7 @@ export default function DashboardPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (db.from('competitor_kw_stats') as any)
           .select('site_id, stat_date, app_count, game_count')
-          .gte('stat_date', d7)
+          .gte('stat_date', d28)
           .lte('stat_date', yesterday),
       ])
 

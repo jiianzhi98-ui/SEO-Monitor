@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { useUser } from '@/lib/user-context'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
-import { computeKwStatus } from '@/lib/kw-status'
+import { computeKwStatus, computeKwBaseline } from '@/lib/kw-status'
+import { LineChart, Line, ResponsiveContainer } from 'recharts'
 
 interface CompetitorRow {
   site_id: string
@@ -12,10 +13,22 @@ interface CompetitorRow {
   name: string
   focus_level: number
   yesterday: number
-  avg7d: number
+  baseline: number
+  trend: { date: string; count: number }[]
   status: 'normal' | 'warning' | 'danger' | 'high'
   hasHtml: boolean
   hasRankData: boolean
+}
+
+function KwSparkline({ data }: { data: { date: string; count: number }[] }) {
+  if (data.length < 2) return <span className="text-gray-300 text-xs">暂无</span>
+  return (
+    <ResponsiveContainer width={100} height={32}>
+      <LineChart data={data}>
+        <Line type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  )
 }
 
 interface SiteRow {
@@ -162,7 +175,7 @@ export default function CompetitorDailyPage() {
     try {
       const supabase = getBrowserClient()
       const yesterday = getMalaysiaDate(-1)
-      const d7ago = getMalaysiaDate(-7)
+      const d30ago = getMalaysiaDate(-30)
 
       interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 
@@ -171,7 +184,7 @@ export default function CompetitorDailyPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('competitor_kw_stats') as any)
           .select('site_id, stat_date, app_count, game_count')
-          .gte('stat_date', d7ago)
+          .gte('stat_date', d30ago)
           .lte('stat_date', yesterday),
       ])
       const allSites = (sitesRaw || []) as SiteRow[]
@@ -185,17 +198,15 @@ export default function CompetitorDailyPage() {
         const ytStat = siteStats.find(s => (s.stat_date ?? '').slice(0, 10) === yesterday)
         const yesterdayVal = (ytStat?.app_count ?? 0) + (ytStat?.game_count ?? 0)
 
-        const dayMap = new Map<string, number>()
-        for (const s of siteStats) {
-          const d = (s.stat_date ?? '').slice(0, 10)
-          if (d) dayMap.set(d, (s.app_count ?? 0) + (s.game_count ?? 0))
-        }
-        const avg7d = dayMap.size > 0
-          ? Math.round(Array.from(dayMap.values()).reduce((a, b) => a + b, 0) / dayMap.size)
-          : 0
+        const trend = siteStats
+          .map(s => ({ date: (s.stat_date ?? '').slice(5), count: (s.app_count ?? 0) + (s.game_count ?? 0) }))
+          .filter(p => p.date)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(-14)
 
+        const baseline = computeKwBaseline(siteStats, yesterday)
         const status = computeKwStatus(siteStats, yesterday)
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url, hasRankData: site.has_rank_data ?? true }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, baseline, trend, status, hasHtml: !!site.list_url, hasRankData: site.has_rank_data ?? true }
       })
 
       const statusPriority = (r: CompetitorRow) => {
@@ -571,8 +582,9 @@ export default function CompetitorDailyPage() {
                 <tr>
                   <th className="table-th">域名</th>
                   <th className="table-th text-right">昨日新增</th>
-                  <th className="table-th text-right">7日均值</th>
+                  <th className="table-th text-right">均值参考</th>
                   <th className="table-th text-center">状态</th>
+                  <th className="table-th">趋势</th>
                   <th className="table-th text-right">操作</th>
                 </tr>
               </thead>
@@ -591,9 +603,12 @@ export default function CompetitorDailyPage() {
                           {row.name && <span className="text-gray-400"> · {row.name}</span>}
                         </td>
                         <td className="table-td text-right font-semibold text-green-600">{row.yesterday.toLocaleString()}</td>
-                        <td className="table-td text-right text-gray-600">{row.avg7d.toLocaleString()}</td>
+                        <td className="table-td text-right text-gray-600">{row.baseline.toLocaleString()}</td>
                         <td className="table-td text-center">
                           <span className={s.className}>{s.label}</span>
+                        </td>
+                        <td className="table-td">
+                          <KwSparkline data={row.trend} />
                         </td>
                         <td className="table-td text-right">
                           <div className="flex items-center justify-end gap-1.5">
