@@ -855,9 +855,7 @@ export default function DashboardPage() {
             <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
               <span>工作日均值参考：<span className="font-semibold text-gray-800">{avg(weekdayVals).toLocaleString()}</span></span>
               <span>周末均值参考：<span className="font-semibold text-gray-800">{avg(weekendVals).toLocaleString()}</span></span>
-            </div>
-            <div className="mt-1 text-xs text-gray-500">
-              昨日新增：<span className="font-semibold text-gray-800">{yesterdayVal.toLocaleString()}</span>
+              <span>昨日新增：<span className="font-semibold text-gray-800">{yesterdayVal.toLocaleString()}</span></span>
             </div>
           </div>
         </div>

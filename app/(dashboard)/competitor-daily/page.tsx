@@ -931,7 +931,7 @@ export default function CompetitorDailyPage() {
             <div className="flex items-center justify-between mb-1">
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">{trendSite.domain} · 新增趋势</h3>
-                <p className="text-xs text-gray-400 mt-0.5">近14天每日新增关键词数量</p>
+                <p className="text-xs text-gray-400 mt-0.5">近30天每日新增关键词数量</p>
               </div>
               <button onClick={() => setTrendSite(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
             </div>
@@ -953,6 +953,7 @@ export default function CompetitorDailyPage() {
             <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
               <span>工作日均值参考：<span className="font-semibold text-gray-800">{trendSite.weekdayBaseline.toLocaleString()}</span></span>
               <span>周末均值参考：<span className="font-semibold text-gray-800">{trendSite.weekendBaseline.toLocaleString()}</span></span>
+              <span>昨日新增：<span className="font-semibold text-gray-800">{trendSite.yesterday.toLocaleString()}</span></span>
             </div>
           </div>
         </div>
