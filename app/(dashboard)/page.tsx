@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { type ReactNode } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { useUser } from '@/lib/user-context'
+import { computeIndexStatus } from '@/lib/index-status'
+import { computeKwStatus } from '@/lib/kw-status'
 import {
   LineChart,
   Line,
@@ -77,6 +79,7 @@ function getMY(offsetDays = 0): string {
     .toISOString()
     .slice(0, 10)
 }
+
 
 function getDateCutoff(range: TimeRange): string {
   if (range === '3m') return getMY(-90)
@@ -182,28 +185,14 @@ export default function DashboardPage() {
       setWeightChanges(wChanges)
 
       // Index alerts: compare today vs historical min/max of the past 30 days
-      // Within the historical range = normal fluctuation; outside = anomaly
       const iAlerts: IndexAlertItem[] = []
       for (const s of siteList) {
         const siteSnaps = ((snapsRaw || []) as IndexSnap[])
           .filter(r => r.site_id === s.id && r.snapshot_date >= d30)
           .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
-        if (siteSnaps.length < 5) continue
-        const latest = siteSnaps[siteSnaps.length - 1].index_count
-        const historical = siteSnaps.slice(0, -1)
-        const histMin = Math.min(...historical.map(r => r.index_count))
-        const histMax = Math.max(...historical.map(r => r.index_count))
-        if (histMin === 0) continue
-        const absDrop = histMin - latest
-        // Danger: dropped >30% below historical low AND absolute drop > 200
-        if (latest < histMin * 0.7 && absDrop > 200)
-          iAlerts.push({ site_id: s.id, domain: s.domain, status: 'danger' })
-        // Warning: dropped >15% below historical low AND absolute drop > 50
-        else if (latest < histMin * 0.85 && absDrop > 50)
-          iAlerts.push({ site_id: s.id, domain: s.domain, status: 'warning' })
-        // Rising: new 30-day high (>10% above historical max)
-        else if (latest > histMax * 1.1)
-          iAlerts.push({ site_id: s.id, domain: s.domain, status: 'rising' })
+        const status = computeIndexStatus(siteSnaps)
+        if (status !== 'normal')
+          iAlerts.push({ site_id: s.id, domain: s.domain, status })
       }
       iAlerts.sort((a, b) => {
         const order = { danger: 0, warning: 1, rising: 2 }
@@ -211,30 +200,13 @@ export default function DashboardPage() {
       })
       setIndexAlerts(iAlerts)
 
-      // Keyword anomaly alerts — same source and logic as 竞品日收
       const kwStats = (kwStatsRaw || []) as KwStatRow[]
       const kAlerts: AlertItem[] = []
       for (const s of siteList) {
         const ss = kwStats.filter(r => r.site_id === s.id)
         if (ss.length === 0) continue
-        const yStat = ss.find(r => (r.stat_date ?? '').slice(0, 10) === yesterday)
-        const yVal = (yStat?.app_count ?? 0) + (yStat?.game_count ?? 0)
-        const dayMap = new Map<string, number>()
-        for (const r of ss) {
-          const d = (r.stat_date ?? '').slice(0, 10)
-          if (d) dayMap.set(d, (r.app_count ?? 0) + (r.game_count ?? 0))
-        }
-        const vals = Array.from(dayMap.values()).sort((a, b) => a - b)
-        const mid = Math.floor(vals.length / 2)
-        const median = vals.length === 0 ? 0
-          : vals.length % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2
-          : vals[mid]
-        if (median > 0) {
-          const ratio = yVal / median
-          if (ratio < 0.3) kAlerts.push({ domain: s.domain, status: 'danger' })
-          else if (ratio < 0.6) kAlerts.push({ domain: s.domain, status: 'warning' })
-          else if (ratio > 1.5) kAlerts.push({ domain: s.domain, status: 'high' })
-        }
+        const status = computeKwStatus(ss, yesterday)
+        if (status !== 'normal') kAlerts.push({ domain: s.domain, status })
       }
       kAlerts.sort((a, b) => {
         const order = { danger: 0, warning: 1, high: 2 }
@@ -453,7 +425,7 @@ export default function DashboardPage() {
                 a.status === 'warning' ? 'bg-yellow-50 text-yellow-600' :
                 'bg-blue-50 text-blue-600'
               }`}>
-                {a.status === 'danger' ? '危险' : a.status === 'warning' ? '警告' : '涨入'}
+                {a.status === 'danger' ? '危险' : a.status === 'warning' ? '下跌' : '涨入'}
               </span>
             </button>
           ))}

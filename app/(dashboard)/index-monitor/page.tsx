@@ -7,6 +7,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
+import { computeIndexStatus } from '@/lib/index-status'
 
 interface SiteRow { id: string; domain: string; name: string; focus_level: number }
 interface SnapRow { site_id: string; snapshot_date: string; index_count: number }
@@ -24,7 +25,7 @@ interface IndexRow {
 
 const statusConfig = {
   normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
-  warning: { label: '警告', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
+  warning: { label: '下跌', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
   danger:  { label: '危险', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
   rising:  { label: '涨入', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-medium' },
 }
@@ -97,13 +98,7 @@ export default function IndexMonitorPage() {
         const weekAgo = snap7 ? snap7.index_count : 0
         const weeklyChange = weekAgo > 0 ? latest - weekAgo : 0
 
-        let status: 'normal' | 'warning' | 'danger' | 'rising' = 'normal'
-        if (siteSnaps.length >= 7 && weekAgo > 0) {
-          const rate = weeklyChange / weekAgo
-          if (rate < -0.2) status = 'danger'
-          else if (rate < -0.1) status = 'warning'
-          else if (rate > 0.1) status = 'rising'
-        }
+        const status = computeIndexStatus(siteSnaps)
 
         return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, latest, weeklyChange, trend, status }
       })

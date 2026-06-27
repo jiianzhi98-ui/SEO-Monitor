@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { useUser } from '@/lib/user-context'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
+import { computeKwStatus } from '@/lib/kw-status'
 
 interface CompetitorRow {
   site_id: string
@@ -193,13 +194,7 @@ export default function CompetitorDailyPage() {
           ? Math.round(Array.from(dayMap.values()).reduce((a, b) => a + b, 0) / dayMap.size)
           : 0
 
-        let status: 'normal' | 'warning' | 'danger' | 'high' = 'normal'
-        if (avg7d > 0) {
-          const ratio = yesterdayVal / avg7d
-          if (ratio < 0.3) status = 'danger'
-          else if (ratio < 0.6) status = 'warning'
-          else if (ratio > 1.5) status = 'high'
-        }
+        const status = computeKwStatus(siteStats, yesterday)
         return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, avg7d, status, hasHtml: !!site.list_url, hasRankData: site.has_rank_data ?? true }
       })
 
