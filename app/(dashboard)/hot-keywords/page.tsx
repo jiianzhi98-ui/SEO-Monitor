@@ -128,6 +128,7 @@ export default function HotRadarPage() {
   const [pageSize, setPageSize] = useState<PageSize>(50)
   const [weightMap, setWeightMap] = useState<Map<string, WeightInfo>>(new Map())
   const [siteIdMap, setSiteIdMap] = useState<Map<string, string>>(new Map())
+  const [copied, setCopied] = useState(false)
   const [detailKw, setDetailKw] = useState<string | null>(null)
   const [detailRows, setDetailRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
@@ -286,6 +287,8 @@ export default function HotRadarPage() {
   function copyKeywords() {
     const text = activeList.map(w => w.keyword).join('\n')
     navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   // Group detail rows by date for modal display
@@ -394,13 +397,18 @@ export default function HotRadarPage() {
                 </>
               )}
             </div>
-            <button
-              onClick={copyKeywords}
-              className="text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors"
-            >
-              复制关键词
-            </button>
-            <div className="flex items-center gap-1.5 ml-auto">
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                onClick={copyKeywords}
+                className={`text-xs px-2.5 py-1 rounded font-medium transition-all duration-200 ${
+                  copied
+                    ? 'bg-green-100 text-green-700 border border-green-300'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}
+              >
+                {copied ? '已复制 ✓' : '复制关键词'}
+              </button>
+              <span className="text-gray-200">|</span>
               <span className="text-xs text-gray-400">每页</span>
               <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value) as PageSize); setPage(0) }} className="text-xs border border-gray-200 rounded px-1 py-0.5 text-gray-700 focus:outline-none">
                 {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} 条</option>)}
