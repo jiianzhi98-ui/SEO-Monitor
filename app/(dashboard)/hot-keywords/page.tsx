@@ -23,14 +23,23 @@ interface CrossEntry {
   volume: number | null
 }
 
+interface StreakEntry {
+  keyword: string
+  streak: number
+  siteCount: number
+  sites: string[]
+  volume: number
+}
+
 interface RadarData {
   newWords: WordEntry[]
   rankWords: RankEntry[]
+  streakWords: StreakEntry[]
 }
 
 interface WeightInfo { pc: number; mobile: number; pcChg: number; mobileChg: number }
 
-type Tab = 'cross' | 'new' | 'rank'
+type Tab = 'cross' | 'new' | 'rank' | 'streak'
 type PageSize = 50 | 100 | 500
 const PAGE_SIZES: PageSize[] = [50, 100, 500]
 
@@ -63,6 +72,7 @@ const TAB_CONFIG: { key: Tab; label: string }[] = [
   { key: 'cross', label: '交叉词' },
   { key: 'new', label: '共新增词' },
   { key: 'rank', label: '竞品涨排名' },
+  { key: 'streak', label: '连续上涨词' },
 ]
 
 const DIM_LABELS: Record<string, { label: string; cls: string }> = {
@@ -187,12 +197,13 @@ export default function HotRadarPage() {
       .filter((w) => w.dims.length >= 2)
       .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0) || b.dims.length - a.dims.length)
 
-    return { newWords: nw, rankWords: rw.sort((a, b) => b.volume - a.volume || b.siteCount - a.siteCount), crossWords: cw }
+    const sw = (data.streakWords || []).filter((w) => w.siteCount >= minSites)
+    return { newWords: nw, rankWords: rw.sort((a, b) => b.volume - a.volume || b.siteCount - a.siteCount), crossWords: cw, streakWords: sw }
   }, [data, minSites])
 
   const counts = filtered
-    ? { cross: filtered.crossWords.length, new: filtered.newWords.length, rank: filtered.rankWords.length }
-    : { cross: 0, new: 0, rank: 0 }
+    ? { cross: filtered.crossWords.length, new: filtered.newWords.length, rank: filtered.rankWords.length, streak: filtered.streakWords.length }
+    : { cross: 0, new: 0, rank: 0, streak: 0 }
 
   function handleTabChange(tab: Tab) { setActiveTab(tab); setPage(0) }
   function handleMinSitesChange(v: number) { setMinSites(v); setPage(0) }
@@ -200,7 +211,8 @@ export default function HotRadarPage() {
   const activeList = filtered
     ? activeTab === 'cross' ? filtered.crossWords
       : activeTab === 'new' ? filtered.newWords
-      : filtered.rankWords
+      : activeTab === 'rank' ? filtered.rankWords
+      : filtered.streakWords
     : []
   const pagedList = activeList.slice(page * pageSize, (page + 1) * pageSize)
 
@@ -365,6 +377,41 @@ export default function HotRadarPage() {
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
                         <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
                         <td className="table-td"></td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'streak' && (
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="table-th">关键词</th>
+                    <th className="table-th text-center w-20">连续天数</th>
+                    <th className="table-th text-center w-16 whitespace-nowrap">站点数</th>
+                    <th className="table-th text-right w-20">搜索量</th>
+                    <th className="table-th">出现站点</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pagedList.length === 0 ? (
+                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
+                  ) : (
+                    (pagedList as StreakEntry[]).map((w) => (
+                      <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
+                        <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                        <td className="table-td text-center">
+                          <span className="font-semibold text-orange-500">{w.streak}</span>
+                          <span className="text-gray-400 text-xs">天</span>
+                        </td>
+                        <td className="table-td text-center">
+                          <span className="font-semibold text-gray-900">{w.siteCount}</span>
+                          <span className="text-gray-400 text-xs">站</span>
+                        </td>
+                        <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
+                        <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
                       </tr>
                     ))
                   )}

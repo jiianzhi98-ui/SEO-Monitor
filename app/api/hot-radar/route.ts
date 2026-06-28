@@ -9,16 +9,24 @@ function getMY(offsetDays = 0) {
 
 interface NewWordRow { keyword: string; site_count: number; total_count: number; sites: string[] }
 interface RankWordRow { keyword: string; site_count: number; max_volume: number; sites: string[] }
+interface RankChangeRow { keyword: string; site_id: string; stat_date: string; volume: number }
 
 export async function GET() {
   const supabase = createServiceClient()
   const since = getMY(-30)
+  const since14 = getMY(-14)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any
-  const [{ data: newWordsRaw }, { data: rankWordsRaw }] = await Promise.all([
+  const [{ data: newWordsRaw }, { data: rankWordsRaw }, { data: siteRows }, { data: rankChangesRaw }] = await Promise.all([
     db.rpc('get_hot_new_words', { p_since: since }),
     db.rpc('get_hot_rank_words', { p_since: since }),
+    supabase.from('sites').select('id, domain').eq('is_enabled', true),
+    supabase.from('rank_changes')
+      .select('keyword, site_id, stat_date, volume')
+      .eq('type', 'rankup')
+      .gte('stat_date', since14)
+      .order('stat_date'),
   ])
 
   const newWords = ((newWordsRaw || []) as NewWordRow[]).map((r) => ({
@@ -35,5 +43,52 @@ export async function GET() {
     sites: r.sites || [],
   }))
 
-  return NextResponse.json({ newWords, rankWords })
+  // ── Streak computation ────────────────────────────────────────────────────
+  const idToDomain = new Map(
+    ((siteRows || []) as { id: string; domain: string }[]).map(s => [s.id, s.domain])
+  )
+
+  // Group by (site_id|keyword) → unique dates + max volume
+  const grouped = new Map<string, { dates: Set<string>; volume: number; domain: string }>()
+  for (const r of (rankChangesRaw || []) as RankChangeRow[]) {
+    const domain = idToDomain.get(r.site_id)
+    if (!domain) continue
+    const key = `${r.site_id}|${r.keyword}`
+    if (!grouped.has(key)) grouped.set(key, { dates: new Set(), volume: 0, domain })
+    const entry = grouped.get(key)!
+    entry.dates.add((r.stat_date ?? '').slice(0, 10))
+    if ((r.volume || 0) > entry.volume) entry.volume = r.volume || 0
+  }
+
+  // Compute current streak (from latest date backwards) for each (site, keyword)
+  const kwStreaks = new Map<string, { streak: number; sites: string[]; volume: number }>()
+  const groupedEntries = Array.from(grouped.entries())
+  for (const [key, { dates, volume, domain }] of groupedEntries) {
+    const pipeIdx = key.indexOf('|')
+    const keyword = key.slice(pipeIdx + 1)
+    const sorted = Array.from(dates).sort() as string[]
+
+    let streak = 1
+    for (let i = sorted.length - 1; i > 0; i--) {
+      const diff = (new Date(sorted[i]).getTime() - new Date(sorted[i - 1]).getTime()) / 86400000
+      if (diff === 1) streak++
+      else break
+    }
+    if (streak < 2) continue
+
+    if (!kwStreaks.has(keyword)) kwStreaks.set(keyword, { streak: 0, sites: [], volume: 0 })
+    const entry = kwStreaks.get(keyword)!
+    if (streak > entry.streak) entry.streak = streak
+    entry.sites.push(domain)
+    if (volume > entry.volume) entry.volume = volume
+  }
+
+  const kwStreakEntries = Array.from(kwStreaks.entries())
+  const streakWords = kwStreakEntries
+    .map(([keyword, { streak, sites, volume }]) => ({
+      keyword, streak, siteCount: sites.length, sites, volume,
+    }))
+    .sort((a, b) => b.streak - a.streak || b.siteCount - a.siteCount || b.volume - a.volume)
+
+  return NextResponse.json({ newWords, rankWords, streakWords })
 }
