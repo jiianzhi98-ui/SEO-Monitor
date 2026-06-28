@@ -458,7 +458,7 @@ export default function HotRadarPage() {
                           <span className="text-gray-400 text-xs"> 天</span>
                         </td>
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
-                        <td className="table-td text-xs text-gray-500">{w.domain}</td>
+                        <td className="table-td"><SiteBadge domain={w.domain} weight={weightMap.get(w.domain)} /></td>
                       </tr>
                     ))
                   )}
