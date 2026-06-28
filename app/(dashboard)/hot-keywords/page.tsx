@@ -21,6 +21,7 @@ interface CrossEntry {
   keyword: string
   dims: string[]
   volume: number | null
+  sites: string[]
 }
 
 interface StreakEntry {
@@ -37,32 +38,25 @@ interface RadarData {
 }
 
 interface WeightInfo { pc: number; mobile: number; pcChg: number; mobileChg: number }
+interface DetailRow { date: string; domain: string }
 
 type Tab = 'cross' | 'new' | 'rank' | 'streak'
 type PageSize = 50 | 100 | 500
 const PAGE_SIZES: PageSize[] = [50, 100, 500]
 
-function PaginationBar({ page, total, pageSize, onPageChange, onPageSizeChange }: {
+function PaginationBar({ page, total, pageSize, onPageChange }: {
   page: number; total: number; pageSize: PageSize
-  onPageChange: (p: number) => void; onPageSizeChange: (s: PageSize) => void
+  onPageChange: (p: number) => void
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  if (totalPages <= 1) return null
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50/50 text-xs">
-      <div className="flex items-center gap-1.5 text-gray-500">
-        每页
-        <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)} className="border border-gray-200 rounded px-1 py-0.5 text-xs">
-          {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} 条</option>)}
-        </select>
-        <span className="ml-1 text-gray-400">共 {total} 条</span>
-      </div>
-      <div className="flex items-center gap-1">
-        <button disabled={page === 0} onClick={() => onPageChange(0)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">«</button>
-        <button disabled={page === 0} onClick={() => onPageChange(page - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">‹</button>
-        <span className="px-2 text-gray-600">{page + 1} / {totalPages}</span>
-        <button disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">›</button>
-        <button disabled={page >= totalPages - 1} onClick={() => onPageChange(totalPages - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">»</button>
-      </div>
+    <div className="flex items-center justify-center gap-1 px-4 py-2.5 border-t border-gray-100 text-xs">
+      <button disabled={page === 0} onClick={() => onPageChange(0)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">«</button>
+      <button disabled={page === 0} onClick={() => onPageChange(page - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">‹</button>
+      <span className="px-2 text-gray-500">{page + 1} / {totalPages}</span>
+      <button disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">›</button>
+      <button disabled={page >= totalPages - 1} onClick={() => onPageChange(totalPages - 1)} className="px-1.5 py-1 rounded border border-gray-200 disabled:opacity-30 hover:bg-gray-100">»</button>
     </div>
   )
 }
@@ -86,7 +80,7 @@ function fmtVolume(v: number): string {
 
 function SiteBadge({ domain, weight }: { domain: string; weight?: WeightInfo }) {
   return (
-    <span className="inline-flex flex-col text-xs bg-gray-100 rounded px-1.5 py-1 min-w-0">
+    <span className="inline-flex flex-col text-xs bg-gray-100 rounded px-1.5 py-1 min-w-0 flex-shrink-0">
       <span className="text-gray-700 truncate max-w-[130px]">{domain}</span>
       {weight && (
         <span className="text-[10px] flex items-center gap-1 mt-px">
@@ -126,12 +120,18 @@ export default function HotRadarPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('cross')
-  const [minSites, setMinSites] = useState(3)
-  const [streakSite, setStreakSite] = useState('')
-  const [minStreak, setMinStreak] = useState(2)
+  const [minSites, setMinSites] = useState(2)
+  const [minStreakDays, setMinStreakDays] = useState(2)
+  const [filterSite, setFilterSite] = useState('')
+  const [filterKeyword, setFilterKeyword] = useState('')
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState<PageSize>(50)
   const [weightMap, setWeightMap] = useState<Map<string, WeightInfo>>(new Map())
+  const [allDomains, setAllDomains] = useState<string[]>([])
+  const [siteIdMap, setSiteIdMap] = useState<Map<string, string>>(new Map())
+  const [detailKw, setDetailKw] = useState<string | null>(null)
+  const [detailRows, setDetailRows] = useState<DetailRow[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
 
   async function fetchWeights() {
     const db = getBrowserClient()
@@ -141,9 +141,11 @@ export default function HotRadarPage() {
       db.from('weight_history').select('site_id, record_date, pc_weight, mobile_weight')
         .gte('record_date', d14).order('record_date'),
     ])
-    const idToDomain = new Map(
-      ((siteRows || []) as { id: string; domain: string }[]).map(s => [s.id, s.domain])
-    )
+    const sites = (siteRows || []) as { id: string; domain: string }[]
+    const idToDomain = new Map(sites.map(s => [s.id, s.domain]))
+    setSiteIdMap(idToDomain)
+    setAllDomains(sites.map(s => s.domain).sort())
+
     const byId = new Map<string, { pc: number; mobile: number }[]>()
     for (const r of ((whRows || []) as { site_id: string; pc_weight: number; mobile_weight: number }[])) {
       if (!byId.has(r.site_id)) byId.set(r.site_id, [])
@@ -164,6 +166,53 @@ export default function HotRadarPage() {
     setWeightMap(map)
   }
 
+  async function openDetail(keyword: string) {
+    setDetailKw(keyword)
+    setDetailLoading(true)
+    setDetailRows([])
+    const db = getBrowserClient()
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    try {
+      const rows: DetailRow[] = []
+      if (activeTab === 'new' || activeTab === 'cross') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: raw } = await (db.from('raw_keywords') as any)
+          .select('site_id, content_date')
+          .eq('keyword', keyword)
+          .gte('content_date', since)
+          .order('content_date', { ascending: false })
+        for (const r of (raw || [])) {
+          const domain = siteIdMap.get(r.site_id)
+          if (domain) rows.push({ date: (r.content_date as string).slice(0, 10), domain })
+        }
+      }
+      if (activeTab === 'rank' || activeTab === 'streak' || activeTab === 'cross') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: raw } = await (db.from('rank_changes') as any)
+          .select('site_id, stat_date')
+          .eq('keyword', keyword)
+          .eq('type', 'rankup')
+          .gte('stat_date', since)
+          .order('stat_date', { ascending: false })
+        for (const r of (raw || [])) {
+          const domain = siteIdMap.get(r.site_id)
+          if (domain) rows.push({ date: (r.stat_date as string).slice(0, 10), domain })
+        }
+      }
+      const seen = new Set<string>()
+      const unique = rows.filter(r => {
+        const k = `${r.date}|${r.domain}`
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+      unique.sort((a, b) => b.date.localeCompare(a.date) || a.domain.localeCompare(b.domain))
+      setDetailRows(unique)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
   useEffect(() => {
     setLoading(true)
     fetch('/api/hot-radar')
@@ -179,48 +228,76 @@ export default function HotRadarPage() {
     const nw = data.newWords.filter((w) => w.siteCount >= minSites)
     const rw = data.rankWords.filter((w) => w.siteCount >= minSites)
 
-    const nwSet = new Set(nw.map((w) => w.keyword))
-    const rwMap = new Map(rw.map((w) => [w.keyword, w]))
+    const nwMap = new Map(nw.map(w => [w.keyword, w]))
+    const rwMap = new Map(rw.map(w => [w.keyword, w]))
+    const allKws = new Set([...Array.from(nwMap.keys()), ...Array.from(rwMap.keys())])
 
-    const allKws = new Set(Array.from(nwSet).concat(Array.from(rwMap.keys())))
     const cw: CrossEntry[] = Array.from(allKws)
       .map((keyword) => {
         const dims: string[] = []
-        if (nwSet.has(keyword)) dims.push('new')
-        if (rwMap.has(keyword)) dims.push('rank')
-        return { keyword, dims, volume: rwMap.get(keyword)?.volume ?? null }
+        const sites = new Set<string>()
+        if (nwMap.has(keyword)) { dims.push('new'); nwMap.get(keyword)!.sites.forEach(s => sites.add(s)) }
+        if (rwMap.has(keyword)) { dims.push('rank'); rwMap.get(keyword)!.sites.forEach(s => sites.add(s)) }
+        return { keyword, dims, volume: rwMap.get(keyword)?.volume ?? null, sites: Array.from(sites) }
       })
       .filter((w) => w.dims.length >= 2)
       .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0) || b.dims.length - a.dims.length)
 
-    return { newWords: nw, rankWords: rw.sort((a, b) => b.volume - a.volume || b.siteCount - a.siteCount), crossWords: cw, streakWords: data.streakWords || [] }
+    return {
+      newWords: nw,
+      rankWords: rw.sort((a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
+      crossWords: cw,
+      streakWords: data.streakWords || [],
+    }
   }, [data, minSites])
-
-  const streakDomains = useMemo(() => {
-    if (!data) return []
-    return Array.from(new Set(data.streakWords.map(w => w.domain))).sort()
-  }, [data])
 
   const filteredStreakWords = useMemo(() => {
     if (!filtered) return []
-    return filtered.streakWords
-      .filter(w => (streakSite === '' || w.domain === streakSite) && w.streak >= minStreak)
-  }, [filtered, streakSite, minStreak])
+    return filtered.streakWords.filter(w => w.streak >= minStreakDays)
+  }, [filtered, minStreakDays])
 
-  const counts = filtered
-    ? { cross: filtered.crossWords.length, new: filtered.newWords.length, rank: filtered.rankWords.length, streak: filteredStreakWords.length }
-    : { cross: 0, new: 0, rank: 0, streak: 0 }
+  const baseList = !filtered ? [] :
+    activeTab === 'cross' ? filtered.crossWords :
+    activeTab === 'new' ? filtered.newWords :
+    activeTab === 'rank' ? filtered.rankWords :
+    filteredStreakWords
+
+  const activeList = useMemo(() => {
+    type AnyEntry = CrossEntry | WordEntry | RankEntry | StreakEntry
+    let list = baseList as AnyEntry[]
+    if (filterSite) {
+      list = list.filter(w => {
+        if ('domain' in w && !('sites' in w)) return (w as StreakEntry).domain === filterSite
+        if ('sites' in w) return ((w as { sites: string[] }).sites).includes(filterSite)
+        return true
+      })
+    }
+    if (filterKeyword.trim()) {
+      const kw = filterKeyword.trim().toLowerCase()
+      list = list.filter(w => w.keyword.toLowerCase().includes(kw))
+    }
+    return list
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseList, filterSite, filterKeyword])
+
+  const pagedList = activeList.slice(page * pageSize, (page + 1) * pageSize)
 
   function handleTabChange(tab: Tab) { setActiveTab(tab); setPage(0) }
-  function handleMinSitesChange(v: number) { setMinSites(v); setPage(0) }
 
-  const activeList = filtered
-    ? activeTab === 'cross' ? filtered.crossWords
-      : activeTab === 'new' ? filtered.newWords
-      : activeTab === 'rank' ? filtered.rankWords
-      : filteredStreakWords
-    : []
-  const pagedList = activeList.slice(page * pageSize, (page + 1) * pageSize)
+  function copyKeywords() {
+    const text = activeList.map(w => w.keyword).join('\n')
+    navigator.clipboard.writeText(text)
+  }
+
+  // Group detail rows by date for modal display
+  const detailByDate = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const r of detailRows) {
+      if (!map.has(r.date)) map.set(r.date, [])
+      if (!map.get(r.date)!.includes(r.domain)) map.get(r.date)!.push(r.domain)
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+  }, [detailRows])
 
   return (
     <div className="p-6">
@@ -229,29 +306,21 @@ export default function HotRadarPage() {
         <p className="text-gray-400 text-sm mt-0.5">近30天多竞品同时关注的词，捕捉趋势机会</p>
       </div>
 
-      {/* Tab bar with counts */}
+      {/* Tab bar — no counts */}
       <div className="flex items-center gap-2 mb-4">
         {TAB_CONFIG.map((tab) => {
-          const count = counts[tab.key]
           const isActive = activeTab === tab.key
           return (
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-green-600 text-white'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
               }`}
             >
               {tab.label}
-              <span
-                className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-white text-gray-600'
-                }`}
-              >
-                {loading ? '…' : count}
-              </span>
             </button>
           )
         })}
@@ -273,56 +342,90 @@ export default function HotRadarPage() {
           </div>
         ) : (
           <>
-          {/* Per-tab filter bar */}
-          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
-            {activeTab !== 'streak' ? (
-              <>
-                <span className="text-xs text-gray-400">最少站点数</span>
-                <select
-                  value={minSites}
-                  onChange={(e) => handleMinSitesChange(Number(e.target.value))}
-                  className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
-                >
-                  <option value={2}>2站</option>
-                  <option value={3}>3站</option>
-                  <option value={4}>4站</option>
-                  <option value={5}>5站</option>
-                </select>
-              </>
-            ) : (
-              <>
-                <span className="text-xs text-gray-400">站点</span>
-                <select
-                  value={streakSite}
-                  onChange={(e) => { setStreakSite(e.target.value); setPage(0) }}
-                  className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
-                >
-                  <option value="">全部</option>
-                  {streakDomains.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <span className="text-xs text-gray-400 ml-2">最少上涨天数</span>
-                <select
-                  value={minStreak}
-                  onChange={(e) => { setMinStreak(Number(e.target.value)); setPage(0) }}
-                  className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
-                >
-                  <option value={2}>2天</option>
-                  <option value={3}>3天</option>
-                  <option value={5}>5天</option>
-                  <option value={7}>7天</option>
-                </select>
-              </>
-            )}
+          {/* Unified filter bar */}
+          <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">站点</span>
+              <select
+                value={filterSite}
+                onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
+                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
+              >
+                <option value="">全部</option>
+                {allDomains.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">关键词</span>
+              <input
+                type="text"
+                value={filterKeyword}
+                onChange={(e) => { setFilterKeyword(e.target.value); setPage(0) }}
+                placeholder="搜索..."
+                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-32"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              {activeTab !== 'streak' ? (
+                <>
+                  <span className="text-xs text-gray-400">最少站点数</span>
+                  <select
+                    value={minSites}
+                    onChange={(e) => { setMinSites(Number(e.target.value)); setPage(0) }}
+                    className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
+                  >
+                    <option value={2}>2站</option>
+                    <option value={3}>3站</option>
+                    <option value={4}>4站</option>
+                    <option value={5}>5站</option>
+                  </select>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs text-gray-400">最少上涨天数</span>
+                  <select
+                    value={minStreakDays}
+                    onChange={(e) => { setMinStreakDays(Number(e.target.value)); setPage(0) }}
+                    className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
+                  >
+                    <option value={2}>2天</option>
+                    <option value={3}>3天</option>
+                    <option value={5}>5天</option>
+                    <option value={7}>7天</option>
+                  </select>
+                </>
+              )}
+            </div>
+            <button
+              onClick={copyKeywords}
+              className="text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors"
+            >
+              复制关键词
+            </button>
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-xs text-gray-400">每页</span>
+              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value) as PageSize); setPage(0) }} className="text-xs border border-gray-200 rounded px-1 py-0.5 text-gray-700 focus:outline-none">
+                {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} 条</option>)}
+              </select>
+              <span className="text-xs text-gray-400">共 {activeList.length} 条</span>
+            </div>
           </div>
+
           <div className="overflow-x-auto [&_td]:py-1.5 [&_th]:py-1.5">
             {activeTab === 'cross' && (
-              <table className="w-full">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col className="w-72" />
+                  <col className="w-24" />
+                  <col className="w-24" />
+                  <col className="w-20" />
+                </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th w-24">命中维度</th>
-                    <th className="table-th text-right w-20">搜索量</th>
-                    <th className="table-th w-8"></th>
+                    <th className="table-th">命中维度</th>
+                    <th className="table-th text-right">搜索量</th>
+                    <th className="table-th text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -344,7 +447,9 @@ export default function HotRadarPage() {
                         <td className="table-td text-right text-gray-600 text-sm">
                           {w.volume != null ? fmtVolume(w.volume) : '—'}
                         </td>
-                        <td className="table-td"></td>
+                        <td className="table-td text-center">
+                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -359,7 +464,7 @@ export default function HotRadarPage() {
                   <col className="w-20" />
                   <col className="w-16" />
                   <col />
-                  <col className="w-8" />
+                  <col className="w-20" />
                 </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
@@ -367,7 +472,7 @@ export default function HotRadarPage() {
                     <th className="table-th text-center">新增次数</th>
                     <th className="table-th text-center whitespace-nowrap">站点数</th>
                     <th className="table-th">出现站点</th>
-                    <th className="table-th"></th>
+                    <th className="table-th text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -383,7 +488,9 @@ export default function HotRadarPage() {
                           <span className="text-gray-400 text-xs">站</span>
                         </td>
                         <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
-                        <td className="table-td"></td>
+                        <td className="table-td text-center">
+                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -398,7 +505,7 @@ export default function HotRadarPage() {
                   <col className="w-20" />
                   <col className="w-20" />
                   <col />
-                  <col className="w-8" />
+                  <col className="w-20" />
                 </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
@@ -406,7 +513,7 @@ export default function HotRadarPage() {
                     <th className="table-th text-center">涨排站点</th>
                     <th className="table-th text-right">搜索量</th>
                     <th className="table-th">出现站点</th>
-                    <th className="table-th"></th>
+                    <th className="table-th text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -422,7 +529,9 @@ export default function HotRadarPage() {
                         </td>
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
                         <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
-                        <td className="table-td"></td>
+                        <td className="table-td text-center">
+                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -437,6 +546,7 @@ export default function HotRadarPage() {
                   <col className="w-24" />
                   <col className="w-24" />
                   <col />
+                  <col className="w-20" />
                 </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
@@ -444,11 +554,12 @@ export default function HotRadarPage() {
                     <th className="table-th text-center">上涨天数</th>
                     <th className="table-th text-right">搜索量</th>
                     <th className="table-th">站点</th>
+                    <th className="table-th text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
-                    <tr><td colSpan={4} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
+                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
                   ) : (
                     (pagedList as StreakEntry[]).map((w, i) => (
                       <tr key={`${w.domain}|${w.keyword}|${i}`} className="hover:bg-gray-100 transition-colors">
@@ -459,6 +570,9 @@ export default function HotRadarPage() {
                         </td>
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
                         <td className="table-td"><SiteBadge domain={w.domain} weight={weightMap.get(w.domain)} /></td>
+                        <td className="table-td text-center">
+                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -466,16 +580,51 @@ export default function HotRadarPage() {
               </table>
             )}
           </div>
-          <PaginationBar
-            page={page}
-            total={activeList.length}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={(ps) => { setPageSize(ps); setPage(0) }}
-          />
+          <PaginationBar page={page} total={activeList.length} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </div>
+
+      {/* ── 查看 Detail Modal ─────────────────────────────────────────────── */}
+      {detailKw && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setDetailKw(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h3 className="font-semibold text-gray-900">{detailKw}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">近30天出现记录</p>
+              </div>
+              <button onClick={() => setDetailKw(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {detailLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  加载中...
+                </div>
+              ) : detailByDate.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-10">暂无记录</p>
+              ) : (
+                <div className="space-y-3">
+                  {detailByDate.map(([date, domains]) => (
+                    <div key={date} className="flex items-start gap-3">
+                      <span className="text-xs text-gray-400 w-12 flex-shrink-0 pt-1.5">{date.slice(5)}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {domains.map(d => (
+                          <SiteBadge key={d} domain={d} weight={weightMap.get(d)} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
