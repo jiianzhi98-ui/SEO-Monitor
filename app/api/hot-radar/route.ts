@@ -69,7 +69,7 @@ export async function GET() {
     if (streak < 2) continue
     streakWords.push({ keyword, streak, domain, volume })
   }
-  streakWords.sort((a, b) => b.volume - a.volume || b.streak - a.streak)
+  streakWords.sort((a, b) => b.streak - a.streak || b.volume - a.volume)
 
   return NextResponse.json({ newWords, rankWords, streakWords })
 }
