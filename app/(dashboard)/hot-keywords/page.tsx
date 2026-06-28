@@ -355,7 +355,7 @@ export default function HotRadarPage() {
             {activeTab === 'new' && (
               <table className="w-full table-fixed">
                 <colgroup>
-                  <col className="w-48" />
+                  <col className="w-72" />
                   <col className="w-20" />
                   <col className="w-16" />
                   <col />
@@ -394,7 +394,7 @@ export default function HotRadarPage() {
             {activeTab === 'rank' && (
               <table className="w-full table-fixed">
                 <colgroup>
-                  <col className="w-48" />
+                  <col className="w-72" />
                   <col className="w-20" />
                   <col className="w-20" />
                   <col />
