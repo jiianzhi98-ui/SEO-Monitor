@@ -14,7 +14,6 @@ interface RankChangeRow { keyword: string; site_id: string; stat_date: string; v
 export async function GET() {
   const supabase = createServiceClient()
   const since = getMY(-30)
-  const since14 = getMY(-14)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any
@@ -25,7 +24,7 @@ export async function GET() {
     supabase.from('rank_changes')
       .select('keyword, site_id, stat_date, volume')
       .eq('type', 'rankup')
-      .gte('stat_date', since14)
+      .gte('stat_date', since)
       .order('stat_date'),
   ])
 
