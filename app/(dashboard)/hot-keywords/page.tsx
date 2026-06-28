@@ -431,30 +431,34 @@ export default function HotRadarPage() {
             )}
 
             {activeTab === 'streak' && (
-              <table className="w-full">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col className="w-72" />
+                  <col className="w-24" />
+                  <col className="w-24" />
+                  <col />
+                </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th w-32">站点</th>
-                    <th className="table-th text-center w-24">上涨天数</th>
-                    <th className="table-th text-right w-24">搜索量</th>
-                    <th className="table-th w-8"></th>
+                    <th className="table-th text-center">上涨天数</th>
+                    <th className="table-th text-right">搜索量</th>
+                    <th className="table-th">站点</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {pagedList.length === 0 ? (
-                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
+                    <tr><td colSpan={4} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
                   ) : (
                     (pagedList as StreakEntry[]).map((w, i) => (
                       <tr key={`${w.domain}|${w.keyword}|${i}`} className="hover:bg-gray-100 transition-colors">
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
-                        <td className="table-td text-xs text-gray-500">{w.domain}</td>
                         <td className="table-td text-center">
                           <span className="font-semibold text-orange-500">{w.streak}</span>
                           <span className="text-gray-400 text-xs"> 天</span>
                         </td>
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
-                        <td className="table-td"></td>
+                        <td className="table-td text-xs text-gray-500">{w.domain}</td>
                       </tr>
                     ))
                   )}
