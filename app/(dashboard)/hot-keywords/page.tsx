@@ -305,7 +305,7 @@ export default function HotRadarPage() {
                   <option value="">全部</option>
                   {streakDomains.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
-                <span className="text-xs text-gray-400 ml-2">最少连续天数</span>
+                <span className="text-xs text-gray-400 ml-2">最少上涨天数</span>
                 <select
                   value={minStreak}
                   onChange={(e) => { setMinStreak(Number(e.target.value)); setPage(0) }}
@@ -427,7 +427,7 @@ export default function HotRadarPage() {
                   <tr>
                     <th className="table-th">关键词</th>
                     <th className="table-th w-32">站点</th>
-                    <th className="table-th text-center w-24">连续天数</th>
+                    <th className="table-th text-center w-24">上涨天数</th>
                     <th className="table-th text-right w-24">搜索量</th>
                     <th className="table-th w-8"></th>
                   </tr>

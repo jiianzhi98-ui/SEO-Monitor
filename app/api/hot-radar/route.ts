@@ -60,22 +60,14 @@ export async function GET() {
     if ((r.volume || 0) > entry.volume) entry.volume = r.volume || 0
   }
 
-  // Compute current streak (from latest date backwards) per (site, keyword) — flat list
+  // Count total days each (site, keyword) appeared in rankup within the window — gaps allowed
   const streakWords: { keyword: string; streak: number; domain: string; volume: number }[] = []
   const groupedEntries = Array.from(grouped.entries())
   for (const [key, { dates, volume, domain }] of groupedEntries) {
     const pipeIdx = key.indexOf('|')
     const keyword = key.slice(pipeIdx + 1)
-    const sorted = Array.from(dates).sort() as string[]
-
-    let streak = 1
-    for (let i = sorted.length - 1; i > 0; i--) {
-      const diff = (new Date(sorted[i]).getTime() - new Date(sorted[i - 1]).getTime()) / 86400000
-      if (diff === 1) streak++
-      else break
-    }
+    const streak = dates.size  // total unique appearance days, not consecutive
     if (streak < 2) continue
-
     streakWords.push({ keyword, streak, domain, volume })
   }
   streakWords.sort((a, b) => b.streak - a.streak || b.volume - a.volume)
