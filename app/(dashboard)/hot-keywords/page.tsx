@@ -127,7 +127,6 @@ export default function HotRadarPage() {
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState<PageSize>(50)
   const [weightMap, setWeightMap] = useState<Map<string, WeightInfo>>(new Map())
-  const [allDomains, setAllDomains] = useState<string[]>([])
   const [siteIdMap, setSiteIdMap] = useState<Map<string, string>>(new Map())
   const [detailKw, setDetailKw] = useState<string | null>(null)
   const [detailRows, setDetailRows] = useState<DetailRow[]>([])
@@ -144,7 +143,6 @@ export default function HotRadarPage() {
     const sites = (siteRows || []) as { id: string; domain: string }[]
     const idToDomain = new Map(sites.map(s => [s.id, s.domain]))
     setSiteIdMap(idToDomain)
-    setAllDomains(sites.map(s => s.domain).sort())
 
     const byId = new Map<string, { pc: number; mobile: number }[]>()
     for (const r of ((whRows || []) as { site_id: string; pc_weight: number; mobile_weight: number }[])) {
@@ -265,10 +263,11 @@ export default function HotRadarPage() {
   const activeList = useMemo(() => {
     type AnyEntry = CrossEntry | WordEntry | RankEntry | StreakEntry
     let list = baseList as AnyEntry[]
-    if (filterSite) {
+    if (filterSite.trim()) {
+      const fs = filterSite.trim().toLowerCase()
       list = list.filter(w => {
-        if ('domain' in w && !('sites' in w)) return (w as StreakEntry).domain === filterSite
-        if ('sites' in w) return ((w as { sites: string[] }).sites).includes(filterSite)
+        if ('domain' in w && !('sites' in w)) return (w as StreakEntry).domain.toLowerCase().includes(fs)
+        if ('sites' in w) return ((w as { sites: string[] }).sites).some(s => s.toLowerCase().includes(fs))
         return true
       })
     }
@@ -346,14 +345,13 @@ export default function HotRadarPage() {
           <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-400">站点</span>
-              <select
+              <input
+                type="text"
                 value={filterSite}
                 onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
-                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
-              >
-                <option value="">全部</option>
-                {allDomains.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+                placeholder="输入域名..."
+                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-36"
+              />
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-400">关键词</span>
