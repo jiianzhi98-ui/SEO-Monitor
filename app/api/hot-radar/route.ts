@@ -60,8 +60,8 @@ export async function GET() {
     if ((r.volume || 0) > entry.volume) entry.volume = r.volume || 0
   }
 
-  // Compute current streak (from latest date backwards) for each (site, keyword)
-  const kwStreaks = new Map<string, { streak: number; sites: string[]; volume: number }>()
+  // Compute current streak (from latest date backwards) per (site, keyword) — flat list
+  const streakWords: { keyword: string; streak: number; domain: string; volume: number }[] = []
   const groupedEntries = Array.from(grouped.entries())
   for (const [key, { dates, volume, domain }] of groupedEntries) {
     const pipeIdx = key.indexOf('|')
@@ -76,19 +76,9 @@ export async function GET() {
     }
     if (streak < 2) continue
 
-    if (!kwStreaks.has(keyword)) kwStreaks.set(keyword, { streak: 0, sites: [], volume: 0 })
-    const entry = kwStreaks.get(keyword)!
-    if (streak > entry.streak) entry.streak = streak
-    entry.sites.push(domain)
-    if (volume > entry.volume) entry.volume = volume
+    streakWords.push({ keyword, streak, domain, volume })
   }
-
-  const kwStreakEntries = Array.from(kwStreaks.entries())
-  const streakWords = kwStreakEntries
-    .map(([keyword, { streak, sites, volume }]) => ({
-      keyword, streak, siteCount: sites.length, sites, volume,
-    }))
-    .sort((a, b) => b.streak - a.streak || b.siteCount - a.siteCount || b.volume - a.volume)
+  streakWords.sort((a, b) => b.streak - a.streak || b.volume - a.volume)
 
   return NextResponse.json({ newWords, rankWords, streakWords })
 }
