@@ -112,16 +112,11 @@ function SiteBadge({ domain, weight }: { domain: string; weight?: WeightInfo }) 
 }
 
 function SiteBadges({ sites, weightMap }: { sites: string[]; weightMap: Map<string, WeightInfo> }) {
-  const show = sites.slice(0, 3)
-  const extra = sites.length - 3
   return (
-    <div className="flex flex-wrap gap-1">
-      {show.map((d) => (
+    <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'thin' }}>
+      {sites.map((d) => (
         <SiteBadge key={d} domain={d} weight={weightMap.get(d)} />
       ))}
-      {extra > 0 && (
-        <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded self-start">+{extra}</span>
-      )}
     </div>
   )
 }
@@ -358,14 +353,21 @@ export default function HotRadarPage() {
             )}
 
             {activeTab === 'new' && (
-              <table className="w-full">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col className="w-48" />
+                  <col className="w-20" />
+                  <col className="w-16" />
+                  <col />
+                  <col className="w-8" />
+                </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th text-center w-20">新增次数</th>
-                    <th className="table-th text-center w-16 whitespace-nowrap">站点数</th>
+                    <th className="table-th text-center">新增次数</th>
+                    <th className="table-th text-center whitespace-nowrap">站点数</th>
                     <th className="table-th">出现站点</th>
-                    <th className="table-th w-8"></th>
+                    <th className="table-th"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -390,14 +392,21 @@ export default function HotRadarPage() {
             )}
 
             {activeTab === 'rank' && (
-              <table className="w-full">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col className="w-48" />
+                  <col className="w-20" />
+                  <col className="w-20" />
+                  <col />
+                  <col className="w-8" />
+                </colgroup>
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th text-center w-20">涨排站点</th>
-                    <th className="table-th text-right w-20">搜索量</th>
+                    <th className="table-th text-center">涨排站点</th>
+                    <th className="table-th text-right">搜索量</th>
                     <th className="table-th">出现站点</th>
-                    <th className="table-th w-8"></th>
+                    <th className="table-th"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
