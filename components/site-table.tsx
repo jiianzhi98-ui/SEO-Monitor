@@ -54,7 +54,15 @@ const frequencyLabel: Record<string, string> = {
 export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
   const [page, setPage] = useState(0)
   const { idMap, colorMap: groupColorMap } = useMemo(() => buildGroupMaps(allSites ?? sites), [allSites, sites])
-  const sorted = groupSortedRows([...sites].sort((a, b) => a.focus_level - b.focus_level), idMap, r => r.focus_level)
+  const CAT_ORDER: Record<string, number> = { large: 1, medium: 2, small: 3 }
+  const sorted = groupSortedRows(
+    [...sites].sort((a, b) => {
+      if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
+      return (CAT_ORDER[a.category] ?? 3) - (CAT_ORDER[b.category] ?? 3)
+    }),
+    idMap,
+    r => [r.focus_level, CAT_ORDER[r.category] ?? 3]
+  )
   const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   if (sorted.length === 0) {

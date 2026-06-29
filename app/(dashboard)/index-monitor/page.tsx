@@ -130,7 +130,7 @@ export default function IndexMonitorPage() {
         }
         return b.latest - a.latest
       })
-      setRows(groupSortedRows(sorted, idMap, r => r.focus_level))
+      setRows(groupSortedRows(sorted, idMap, r => [r.focus_level]))
       setGroupColorMap(colorMap)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')

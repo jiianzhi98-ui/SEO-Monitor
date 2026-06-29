@@ -45,41 +45,57 @@ export function buildGroupColorMap(
   return buildGroupMaps(sites).colorMap
 }
 
+function cmpArrays(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] - b[i]
+  }
+  return 0
+}
+
 /**
- * Re-orders an already-sorted array so same-company sites appear adjacent
- * within the same tier (getTierKey). Cross-tier order is never changed,
- * so the primary sort (e.g. focus_level) is always preserved.
+ * Re-orders rows so same-company sites appear adjacent.
+ * The group's position is determined by the BEST (min) getGroupKey among all
+ * members, so a group with one 重点 + one 侧重 site sits in the 重点 section.
+ * Within the same group the pre-sort order is preserved.
+ * getGroupKey should return e.g. [focus_level, category_order].
  */
 export function groupSortedRows<T extends { domain: string }>(
   rows: T[],
   idMap: Map<string, number>,
-  getTierKey: (row: T) => string | number = () => 0
+  getGroupKey: (row: T) => number[]
 ): T[] {
   const originalIndex = new Map<T, number>()
   rows.forEach((r, i) => originalIndex.set(r, i))
 
-  // First occurrence of each (tier, groupId) pair
-  const tierGroupAnchor = new Map<string, number>()
+  // Best (min) key and first occurrence index for each group
+  const groupBestKey = new Map<number, number[]>()
+  const groupFirstIdx = new Map<number, number>()
   for (let i = 0; i < rows.length; i++) {
     const gid = idMap.get(rows[i].domain)
     if (gid !== undefined) {
-      const key = `${getTierKey(rows[i])}:${gid}`
-      if (!tierGroupAnchor.has(key)) tierGroupAnchor.set(key, i)
+      const key = getGroupKey(rows[i])
+      const best = groupBestKey.get(gid)
+      if (!best || cmpArrays(key, best) < 0) groupBestKey.set(gid, key)
+      if (!groupFirstIdx.has(gid)) groupFirstIdx.set(gid, i)
     }
   }
 
   return [...rows].sort((a, b) => {
-    const tierA = getTierKey(a)
-    const tierB = getTierKey(b)
-    // Different tiers → keep original order (preserves focus_level sort)
-    if (tierA !== tierB) return originalIndex.get(a)! - originalIndex.get(b)!
-
-    // Same tier → group same-company sites together
     const gidA = idMap.get(a.domain)
     const gidB = idMap.get(b.domain)
-    const anchorA = gidA !== undefined ? tierGroupAnchor.get(`${tierA}:${gidA}`)! : originalIndex.get(a)!
-    const anchorB = gidB !== undefined ? tierGroupAnchor.get(`${tierB}:${gidB}`)! : originalIndex.get(b)!
-    if (anchorA !== anchorB) return anchorA - anchorB
+
+    // Anchor key: best in group, or own key if ungrouped
+    const anchorA = gidA !== undefined ? groupBestKey.get(gidA)! : getGroupKey(a)
+    const anchorB = gidB !== undefined ? groupBestKey.get(gidB)! : getGroupKey(b)
+    const keyCmp = cmpArrays(anchorA, anchorB)
+    if (keyCmp !== 0) return keyCmp
+
+    // Same anchor key → order groups by first occurrence in pre-sort
+    const firstA = gidA !== undefined ? groupFirstIdx.get(gidA)! : originalIndex.get(a)!
+    const firstB = gidB !== undefined ? groupFirstIdx.get(gidB)! : originalIndex.get(b)!
+    if (firstA !== firstB) return firstA - firstB
+
+    // Same group → preserve pre-sort order
     return originalIndex.get(a)! - originalIndex.get(b)!
   })
 }
