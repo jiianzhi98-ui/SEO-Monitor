@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { buildGroupMaps, groupSortedRows } from '@/lib/company-groups'
 import { useUser } from '@/lib/user-context'
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 
-interface SiteRow { id: string; domain: string; name: string; focus_level: number; category: string }
+interface SiteRow { id: string; domain: string; name: string; focus_level: number; category: string; friend_links?: string[] }
 interface HistoryRow {
   site_id: string
   record_date: string
@@ -89,6 +90,8 @@ export default function WeightMonitorPage() {
   const [selected, setSelected] = useState<WeightRow | null>(null)
   const [page, setPage] = useState(0)
   const [filterSite, setFilterSite] = useState('')
+  const [filterFocus, setFilterFocus] = useState('')
+  const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
 
   useEffect(() => { loadData() }, [])
 
@@ -100,7 +103,7 @@ export default function WeightMonitorPage() {
       const d30ago = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
       const [{ data: sitesRaw }, { data: historyRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level, category').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level, category, friend_links').eq('is_enabled', true),
         supabase.from('weight_history')
           .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max')
           .gte('record_date', d30ago)
@@ -151,14 +154,17 @@ export default function WeightMonitorPage() {
         }
       })
 
+      const { idMap, colorMap } = buildGroupMaps(sites)
       const catOrder: Record<string, number> = { large: 1, medium: 2, small: 3 }
-      setRows(result.sort((a, b) => {
+      const sorted = result.sort((a, b) => {
         if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
         const ca = catOrder[a.category] ?? 3
         const cb = catOrder[b.category] ?? 3
         if (ca !== cb) return ca - cb
         return b.avgIp - a.avgIp
-      }))
+      })
+      setRows(groupSortedRows(sorted, idMap))
+      setGroupColorMap(colorMap)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -166,23 +172,17 @@ export default function WeightMonitorPage() {
     }
   }
 
-  const visibleRows = filterSite
-    ? rows.filter(r => r.domain.toLowerCase().includes(filterSite.toLowerCase()) || r.name?.toLowerCase().includes(filterSite.toLowerCase()))
-    : rows
+  const visibleRows = rows.filter(r => {
+    if (filterSite && !r.domain.toLowerCase().includes(filterSite.toLowerCase()) && !r.name?.toLowerCase().includes(filterSite.toLowerCase())) return false
+    if (filterFocus && String(r.focus_level) !== filterFocus) return false
+    return true
+  })
 
   return (
     <div className="p-6">
       <div className="mb-5">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">权重监控</h1>
-          <input
-            type="text"
-            value={filterSite}
-            onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
-            placeholder="输入域名筛选..."
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
-          />
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">权重监控</h1>
+        <p className="text-gray-400 text-sm mt-0.5">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
       </div>
 
       {/* Detail modal */}
@@ -255,6 +255,28 @@ export default function WeightMonitorPage() {
           </div>
         ) : (
           <>
+          <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">站点</span>
+              <input
+                type="text"
+                value={filterSite}
+                onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
+                placeholder="输入域名..."
+                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-36"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">关注级别</span>
+              <select value={filterFocus} onChange={(e) => { setFilterFocus(e.target.value); setPage(0) }} className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                <option value="">全部</option>
+                <option value="1">重点</option>
+                <option value="2">侧重</option>
+                <option value="3">普通</option>
+              </select>
+            </div>
+            <span className="ml-auto text-xs text-gray-400">共 {visibleRows.length} 条</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -277,7 +299,7 @@ export default function WeightMonitorPage() {
                   </tr>
                 ) : (
                   visibleRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
-                    <tr key={row.site_id} className="hover:bg-gray-100 transition-colors">
+                    <tr key={row.site_id} className={`hover:bg-gray-100 transition-colors ${groupColorMap.get(row.domain) ? `border-l-4 ${groupColorMap.get(row.domain)}` : ''}`}>
                       <td className="table-td">
                         <span className="font-medium text-gray-900">{row.domain}</span>
                         {row.name && <span className="text-gray-400"> · {row.name}</span>}

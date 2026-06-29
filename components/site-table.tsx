@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { SimplePagination, PAGE_SIZE } from './simple-pagination'
+import { buildGroupMaps, groupSortedRows } from '@/lib/company-groups'
 
 interface Site {
   id: string
@@ -25,6 +26,7 @@ interface Site {
 
 interface SiteTableProps {
   sites: Site[]
+  allSites?: Site[]
   onEdit: (site: Site) => void
   onDelete: (site: Site) => void
   onToggle: (site: Site) => void
@@ -49,9 +51,10 @@ const frequencyLabel: Record<string, string> = {
   weekly: '每周',
 }
 
-export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
+export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
   const [page, setPage] = useState(0)
-  const sorted = [...sites].sort((a, b) => a.focus_level - b.focus_level)
+  const { idMap, colorMap: groupColorMap } = useMemo(() => buildGroupMaps(allSites ?? sites), [allSites, sites])
+  const sorted = groupSortedRows([...sites].sort((a, b) => a.focus_level - b.focus_level), idMap)
   const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   if (sorted.length === 0) {
@@ -81,7 +84,7 @@ export default function SiteTable({ sites, onEdit, onDelete, onToggle, onToggleR
         </thead>
         <tbody className="divide-y divide-gray-100">
           {paged.map((site) => (
-            <tr key={site.id} className="hover:bg-gray-100 transition-colors">
+            <tr key={site.id} className={`hover:bg-gray-100 transition-colors ${groupColorMap.get(site.domain) ? `border-l-4 ${groupColorMap.get(site.domain)}` : ''}`}>
               <td className="table-td">
                 <a
                   href={`https://${site.domain}`}

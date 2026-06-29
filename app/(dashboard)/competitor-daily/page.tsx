@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { buildGroupMaps, groupSortedRows } from '@/lib/company-groups'
 import { useUser } from '@/lib/user-context'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 import { computeKwStatus } from '@/lib/kw-status'
@@ -29,6 +30,7 @@ interface SiteRow {
   focus_level: number
   list_url: string | null
   has_rank_data: boolean
+  friend_links?: string[]
 }
 
 interface Keyword {
@@ -112,6 +114,9 @@ export default function CompetitorDailyPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filterSite, setFilterSite] = useState('')
+  const [filterFocus, setFilterFocus] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
 
   // 主列表分页
   const [mainPage, setMainPage] = useState(0)
@@ -175,7 +180,7 @@ export default function CompetitorDailyPage() {
       interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 
       const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data, friend_links').eq('is_enabled', true),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('competitor_kw_stats') as any)
           .select('site_id, stat_date, app_count, game_count')
@@ -221,14 +226,17 @@ export default function CompetitorDailyPage() {
         if (r.status === 'high') return 2
         return 3
       }
-      setRows(result.sort((a, b) => {
+      const { idMap, colorMap } = buildGroupMaps(sites)
+      const sorted = result.sort((a, b) => {
         if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
         if (a.focus_level >= 3) {
           const pd = statusPriority(a) - statusPriority(b)
           if (pd !== 0) return pd
         }
         return b.yesterday - a.yesterday
-      }))
+      })
+      setRows(groupSortedRows(sorted, idMap))
+      setGroupColorMap(colorMap)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -560,23 +568,18 @@ export default function CompetitorDailyPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  const visibleRows = filterSite
-    ? rows.filter(r => r.domain.toLowerCase().includes(filterSite.toLowerCase()) || r.name?.toLowerCase().includes(filterSite.toLowerCase()))
-    : rows
+  const visibleRows = rows.filter(r => {
+    if (filterSite && !r.domain.toLowerCase().includes(filterSite.toLowerCase()) && !r.name?.toLowerCase().includes(filterSite.toLowerCase())) return false
+    if (filterFocus && String(r.focus_level) !== filterFocus) return false
+    if (filterStatus && r.status !== filterStatus) return false
+    return true
+  })
 
   return (
     <div className="p-6">
       <div className="mb-5">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">竞品日收</h1>
-          <input
-            type="text"
-            value={filterSite}
-            onChange={(e) => { setFilterSite(e.target.value); setMainPage(0) }}
-            placeholder="输入域名筛选..."
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
-          />
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">竞品日收</h1>
+        <p className="text-gray-400 text-sm mt-0.5">各站点每日新增关键词数量对比</p>
       </div>
 
       <div className="card">
@@ -594,6 +597,38 @@ export default function CompetitorDailyPage() {
           </div>
         ) : (
           <>
+          <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">站点</span>
+              <input
+                type="text"
+                value={filterSite}
+                onChange={(e) => { setFilterSite(e.target.value); setMainPage(0) }}
+                placeholder="输入域名..."
+                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-36"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">关注级别</span>
+              <select value={filterFocus} onChange={(e) => { setFilterFocus(e.target.value); setMainPage(0) }} className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                <option value="">全部</option>
+                <option value="1">重点</option>
+                <option value="2">侧重</option>
+                <option value="3">普通</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">状态</span>
+              <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setMainPage(0) }} className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                <option value="">全部</option>
+                <option value="normal">正常</option>
+                <option value="warning">偏低</option>
+                <option value="danger">异常</option>
+                <option value="high">偏高</option>
+              </select>
+            </div>
+            <span className="ml-auto text-xs text-gray-400">共 {visibleRows.length} 条</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -613,7 +648,7 @@ export default function CompetitorDailyPage() {
                   visibleRows.slice(mainPage * PAGE_SIZE, (mainPage + 1) * PAGE_SIZE).map((row) => {
                     const s = statusConfig[row.status]
                     return (
-                      <tr key={row.site_id} className="hover:bg-gray-100 transition-colors">
+                      <tr key={row.site_id} className={`hover:bg-gray-100 transition-colors ${groupColorMap.get(row.domain) ? `border-l-4 ${groupColorMap.get(row.domain)}` : ''}`}>
                         <td className="table-td">
                           <span className="font-medium text-gray-900">{row.domain}</span>
                           {row.name && <span className="text-gray-400"> · {row.name}</span>}

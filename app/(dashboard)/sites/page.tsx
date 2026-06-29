@@ -33,6 +33,8 @@ export default function SitesPage() {
   const [editSite, setEditSite] = useState<Site | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [filterSite, setFilterSite] = useState('')
+  const [filterFocus, setFilterFocus] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
 
   async function loadSites() {
     setLoading(true)
@@ -129,16 +131,8 @@ export default function SitesPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">网站管理</h1>
-            <input
-              type="text"
-              value={filterSite}
-              onChange={(e) => setFilterSite(e.target.value)}
-              placeholder="输入域名筛选..."
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
-            />
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900">网站管理</h1>
+          <p className="text-gray-400 text-sm mt-0.5">管理所有监控站点的抓取配置</p>
         </div>
         <button
           onClick={() => { setEditSite(null); setShowModal(true) }}
@@ -164,15 +158,57 @@ export default function SitesPage() {
           <div className="p-6">
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 text-sm">{error}</div>
           </div>
-        ) : (
-          <SiteTable
-            sites={filterSite ? sites.filter(s => s.domain.toLowerCase().includes(filterSite.toLowerCase()) || s.name?.toLowerCase().includes(filterSite.toLowerCase())) : sites}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onToggle={handleToggle}
-            onToggleRank={handleToggleRank}
-          />
-        )}
+        ) : (() => {
+          const filteredSites = sites.filter(s => {
+            if (filterSite && !s.domain.toLowerCase().includes(filterSite.toLowerCase()) && !s.name?.toLowerCase().includes(filterSite.toLowerCase())) return false
+            if (filterFocus && String(s.focus_level) !== filterFocus) return false
+            if (filterCategory && s.category !== filterCategory) return false
+            return true
+          })
+          return (
+            <>
+              <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400">站点</span>
+                  <input
+                    type="text"
+                    value={filterSite}
+                    onChange={(e) => setFilterSite(e.target.value)}
+                    placeholder="输入域名..."
+                    className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-36"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400">关注级别</span>
+                  <select value={filterFocus} onChange={(e) => setFilterFocus(e.target.value)} className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                    <option value="">全部</option>
+                    <option value="1">重点</option>
+                    <option value="2">侧重</option>
+                    <option value="3">普通</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400">分类</span>
+                  <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                    <option value="">全部</option>
+                    <option value="large">大站</option>
+                    <option value="medium">中站</option>
+                    <option value="small">小站</option>
+                  </select>
+                </div>
+                <span className="ml-auto text-xs text-gray-400">共 {filteredSites.length} 条</span>
+              </div>
+              <SiteTable
+                sites={filteredSites}
+                allSites={sites}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onToggle={handleToggle}
+                onToggleRank={handleToggleRank}
+              />
+            </>
+          )
+        })()}
       </div>
 
       {showModal && (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { buildGroupMaps, groupSortedRows } from '@/lib/company-groups'
 import { useUser } from '@/lib/user-context'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -9,7 +10,7 @@ import {
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 import { computeIndexStatus } from '@/lib/index-status'
 
-interface SiteRow { id: string; domain: string; name: string; focus_level: number }
+interface SiteRow { id: string; domain: string; name: string; focus_level: number; friend_links?: string[] }
 interface SnapRow { site_id: string; snapshot_date: string; index_count: number }
 
 interface IndexRow {
@@ -51,6 +52,9 @@ export default function IndexMonitorPage() {
   const [crawling, setCrawling] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [filterSite, setFilterSite] = useState('')
+  const [filterFocus, setFilterFocus] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
 
   async function triggerCrawl(domain: string) {
     setCrawling(domain)
@@ -77,7 +81,7 @@ export default function IndexMonitorPage() {
       const d7ago = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
       const [{ data: sitesRaw }, { data: snapsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level').eq('is_enabled', true),
+        supabase.from('sites').select('id, domain, name, focus_level, friend_links').eq('is_enabled', true),
         supabase.from('index_snapshots')
           .select('site_id, snapshot_date, index_count')
           .gte('snapshot_date', d30ago)
@@ -112,20 +116,22 @@ export default function IndexMonitorPage() {
         if (r.weeklyChange > 0) return 4
         return 5
       }
-      setRows(result.sort((a, b) => {
+      const { idMap, colorMap } = buildGroupMaps(sites)
+      const sorted = result.sort((a, b) => {
         if (a.focus_level !== b.focus_level) return a.focus_level - b.focus_level
         if (a.focus_level >= 3) {
           const pd = statusPriority(a) - statusPriority(b)
           if (pd !== 0) return pd
           if (a.weeklyChange !== b.weeklyChange) {
-            // Negative: ascending (跌得多的靠前); Positive: descending (涨得多的靠前)
             return (a.weeklyChange < 0 || b.weeklyChange < 0)
               ? a.weeklyChange - b.weeklyChange
               : b.weeklyChange - a.weeklyChange
           }
         }
         return b.latest - a.latest
-      }))
+      })
+      setRows(groupSortedRows(sorted, idMap))
+      setGroupColorMap(colorMap)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -133,23 +139,18 @@ export default function IndexMonitorPage() {
     }
   }
 
-  const visibleRows = filterSite
-    ? rows.filter(r => r.domain.toLowerCase().includes(filterSite.toLowerCase()) || r.name?.toLowerCase().includes(filterSite.toLowerCase()))
-    : rows
+  const visibleRows = rows.filter(r => {
+    if (filterSite && !r.domain.toLowerCase().includes(filterSite.toLowerCase()) && !r.name?.toLowerCase().includes(filterSite.toLowerCase())) return false
+    if (filterFocus && String(r.focus_level) !== filterFocus) return false
+    if (filterStatus && r.status !== filterStatus) return false
+    return true
+  })
 
   return (
     <div className="p-6">
       <div className="mb-5">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">收录监控</h1>
-          <input
-            type="text"
-            value={filterSite}
-            onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
-            placeholder="输入域名筛选..."
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
-          />
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">收录监控</h1>
+        <p className="text-gray-400 text-sm mt-0.5">各站点百度收录每日快照，周变化趋势</p>
       </div>
 
       <div className="card">
@@ -167,6 +168,38 @@ export default function IndexMonitorPage() {
           </div>
         ) : (
           <>
+          <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">站点</span>
+              <input
+                type="text"
+                value={filterSite}
+                onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
+                placeholder="输入域名..."
+                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-36"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">关注级别</span>
+              <select value={filterFocus} onChange={(e) => { setFilterFocus(e.target.value); setPage(0) }} className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                <option value="">全部</option>
+                <option value="1">重点</option>
+                <option value="2">侧重</option>
+                <option value="3">普通</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">状态</span>
+              <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(0) }} className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                <option value="">全部</option>
+                <option value="normal">正常</option>
+                <option value="warning">下跌</option>
+                <option value="danger">危险</option>
+                <option value="rising">涨入</option>
+              </select>
+            </div>
+            <span className="ml-auto text-xs text-gray-400">共 {visibleRows.length} 条</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -189,7 +222,7 @@ export default function IndexMonitorPage() {
                     const s = statusConfig[row.status]
                     const isPos = row.weeklyChange >= 0
                     return (
-                      <tr key={row.site_id} className="hover:bg-gray-100 transition-colors">
+                      <tr key={row.site_id} className={`hover:bg-gray-100 transition-colors ${groupColorMap.get(row.domain) ? `border-l-4 ${groupColorMap.get(row.domain)}` : ''}`}>
                         <td className="table-td">
                           <span className="font-medium text-gray-900">{row.domain}</span>
                           {row.name && <span className="text-gray-400"> · {row.name}</span>}
