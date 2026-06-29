@@ -106,8 +106,8 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
           <tr>
             <th className="table-th">域名</th>
             <th className="table-th">名称</th>
-            <th className="table-th">分类</th>
-            <th className="table-th">关注</th>
+            <th className="table-th text-center">分类</th>
+            <th className="table-th text-center">关注</th>
             <th className="table-th text-center">版本清洗</th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">关键词{sortIcons('isEnabled')}</div></th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">排名{sortIcons('hasRankData')}</div></th>
@@ -128,12 +128,12 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
                 </a>
               </td>
               <td className="table-td text-gray-500">{site.name}</td>
-              <td className="table-td">
+              <td className="table-td text-center">
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">
                   {categoryLabel[site.category]}
                 </span>
               </td>
-              <td className="table-td">
+              <td className="table-td text-center">
                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${focusConfig[site.focus_level]?.className ?? 'bg-gray-50 text-gray-400'}`}>
                   {focusConfig[site.focus_level]?.label ?? '普通'}
                 </span>

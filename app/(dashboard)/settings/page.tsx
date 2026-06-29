@@ -491,7 +491,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
             <thead className="bg-gray-50">
               <tr>
                 <th className="table-th">用户名</th>
-                <th className="table-th">权限</th>
+                <th className="table-th text-center">权限</th>
                 <th className="table-th">注册时间</th>
                 <th className="table-th text-center">操作</th>
               </tr>
@@ -503,7 +503,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
                     <span className="font-medium text-gray-900">{user.username ?? <span className="text-gray-400 italic">未设置</span>}</span>
                     <span className="text-gray-400"> · {user.email}</span>
                   </td>
-                  <td className="table-td"><RoleBadge role={user.role} /></td>
+                  <td className="table-td text-center"><RoleBadge role={user.role} /></td>
                   <td className="table-td text-gray-500">
                     {new Date(user.created_at).toLocaleDateString('zh-CN')}
                   </td>
