@@ -64,10 +64,10 @@ type PageSize = 50 | 100 | 500
 const PAGE_SIZES: PageSize[] = [50, 100, 500]
 
 const statusConfig = {
-  normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
-  warning: { label: '偏低', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
-  danger:  { label: '异常', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
-  high:    { label: '偏高', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-medium' },
+  normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-sm font-medium' },
+  warning: { label: '偏低', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-sm font-medium' },
+  danger:  { label: '异常', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-sm font-medium' },
+  high:    { label: '偏高', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-sm font-medium' },
 }
 
 function PaginationBar({ page, total, pageSize, onPageChange, onPageSizeChange }: {

@@ -129,12 +129,12 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
               </td>
               <td className="table-td text-gray-500">{site.name}</td>
               <td className="table-td text-center">
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-sm font-medium bg-blue-50 text-blue-600">
                   {categoryLabel[site.category]}
                 </span>
               </td>
               <td className="table-td text-center">
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${focusConfig[site.focus_level]?.className ?? 'bg-gray-50 text-gray-400'}`}>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-sm font-medium ${focusConfig[site.focus_level]?.className ?? 'bg-gray-50 text-gray-400'}`}>
                   {focusConfig[site.focus_level]?.label ?? '普通'}
                 </span>
               </td>

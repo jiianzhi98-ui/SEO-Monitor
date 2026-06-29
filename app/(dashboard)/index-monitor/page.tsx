@@ -25,15 +25,15 @@ interface IndexRow {
 }
 
 const statusConfig = {
-  normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-medium' },
-  warning: { label: '下跌', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-xs font-medium' },
-  danger:  { label: '危险', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-medium' },
-  rising:  { label: '涨入', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-medium' },
+  normal:  { label: '正常', className: 'text-green-600 bg-green-50 px-2 py-0.5 rounded text-sm font-medium' },
+  warning: { label: '下跌', className: 'text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-sm font-medium' },
+  danger:  { label: '危险', className: 'text-red-600 bg-red-50 px-2 py-0.5 rounded text-sm font-medium' },
+  rising:  { label: '涨入', className: 'text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-sm font-medium' },
 }
 
 
 function Sparkline({ data }: { data: { date: string; count: number }[] }) {
-  if (data.length < 2) return <span className="text-gray-300 text-xs">暂无趋势</span>
+  if (data.length < 2) return <span className="text-gray-300 text-sm">暂无趋势</span>
   return (
     <ResponsiveContainer width={120} height={36}>
       <LineChart data={data}>

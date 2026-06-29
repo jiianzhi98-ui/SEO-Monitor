@@ -444,7 +444,7 @@ export default function HotRadarPage() {
                         <td className="table-td">
                           <div className="flex justify-center gap-1.5">
                             {w.dims.map((d) => (
-                              <span key={d} className={`text-xs px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
+                              <span key={d} className={`text-sm px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
                                 {DIM_LABELS[d]?.label}
                               </span>
                             ))}

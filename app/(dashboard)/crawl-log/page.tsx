@@ -106,7 +106,7 @@ const SITE_STATUS_COLORS: Record<string, string> = {
 function StatusText({ status }: { status: string }) {
   const cls = { running: 'text-blue-600', done: 'text-green-700', warn: 'text-yellow-600', fail: 'text-red-500' }[status] ?? 'text-gray-500'
   const label = { running: '进行中', done: '完成', warn: '有空值', fail: '失败' }[status] ?? status
-  return <span className={`text-xs font-medium ${cls}`}>{label}</span>
+  return <span className={`text-sm font-medium ${cls}`}>{label}</span>
 }
 
 const SELECT_CLS = 'text-xs border border-gray-200 rounded-md pl-2.5 pr-6 py-1 text-gray-600 bg-white cursor-pointer hover:border-gray-300 focus:outline-none appearance-none'
@@ -425,7 +425,7 @@ export default function CrawlLogPage() {
                 <div className="p-8 text-center text-gray-400 text-sm">暂无记录</div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs table-fixed">
+                  <table className="w-full text-sm table-fixed">
                     <colgroup>
                       <col style={{ width: '160px' }} />
                       <col style={{ width: '90px' }} />
@@ -449,10 +449,10 @@ export default function CrawlLogPage() {
                     <tbody className="divide-y divide-gray-100">
                       {pagedLogs.map(log => (
                         <tr key={log.id} className="hover:bg-gray-100">
-                          <td className="px-4 py-2.5 text-xs text-gray-500 tabular-nums whitespace-nowrap">
+                          <td className="px-4 py-2.5 text-sm text-gray-500 tabular-nums whitespace-nowrap">
                             {formatDateTime(log.logged_at)}
                           </td>
-                          <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                          <td className="px-4 py-2.5 text-sm whitespace-nowrap">
                             <span className={
                               log.type === 'cron_task' ? 'text-blue-600' :
                               log.type === 'cron_manual' ? 'text-violet-600' :
@@ -461,7 +461,7 @@ export default function CrawlLogPage() {
                               {TYPE_LABELS[log.type] ?? log.type}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-700 truncate">
+                          <td className="px-4 py-2.5 text-sm text-gray-700 truncate">
                             {log.step && <span className="font-medium">{STEP_LABELS[log.step] ?? log.step}</span>}
                             {log.domain && <span className="text-gray-400"> · {log.domain}</span>}
                             {log.ip && <span className="text-gray-400"> · IP：{log.ip}</span>}
@@ -469,7 +469,7 @@ export default function CrawlLogPage() {
                               <span className="text-gray-400"> #{log.group_index}/{log.total_groups}</span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-xs tabular-nums text-center whitespace-nowrap">
+                          <td className="px-4 py-2.5 text-sm tabular-nums text-center whitespace-nowrap">
                             <span className="text-green-700">{log.ok_count}</span>
                             <span className="text-gray-300 mx-1">/</span>
                             <span className={log.empty_count > 0 ? 'text-yellow-600' : 'text-gray-400'}>{log.empty_count}</span>
@@ -479,7 +479,7 @@ export default function CrawlLogPage() {
                           <td className="px-4 py-2.5 whitespace-nowrap">
                             <StatusText status={log.status} />
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                          <td className="px-4 py-2.5 text-sm text-gray-400 tabular-nums whitespace-nowrap">
                             {formatDuration(log.duration_ms)}
                           </td>
                           <td className="pr-4 py-2.5">
@@ -625,7 +625,7 @@ export default function CrawlLogPage() {
               ) : siteLogs.length === 0 ? (
                 <div className="text-center text-gray-400 text-sm py-8">无站点明细记录</div>
               ) : (
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100">
                       <th className="text-left py-2 text-sm font-medium text-gray-600">域名</th>
@@ -637,14 +637,14 @@ export default function CrawlLogPage() {
                   <tbody className="divide-y divide-gray-100">
                     {siteLogs.map(sl => (
                       <tr key={sl.id}>
-                        <td className="py-1.5 text-xs text-gray-700">{sl.domain}</td>
-                        <td className="py-1.5 text-xs">
+                        <td className="py-1.5 text-sm text-gray-700">{sl.domain}</td>
+                        <td className="py-1.5 text-sm">
                           <span className={SITE_STATUS_COLORS[sl.status] ?? 'text-gray-500'}>
                             {SITE_STATUS_LABELS[sl.status] ?? sl.status}
                           </span>
                         </td>
-                        <td className="py-1.5 text-xs text-gray-400">{sl.rows_written > 0 ? `${sl.rows_written} 行` : '-'}</td>
-                        <td className="py-1.5 text-xs text-gray-400 max-w-[220px] truncate" title={sl.detail ?? ''}>{sl.detail ?? ''}</td>
+                        <td className="py-1.5 text-sm text-gray-400">{sl.rows_written > 0 ? `${sl.rows_written} 行` : '-'}</td>
+                        <td className="py-1.5 text-sm text-gray-400 max-w-[220px] truncate" title={sl.detail ?? ''}>{sl.detail ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>
