@@ -118,6 +118,14 @@ export default function CompetitorDailyPage() {
   const [filterFocus, setFilterFocus] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
+  const [sortCol, setSortCol] = useState<'yesterday' | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleSort() {
+    if (sortCol === 'yesterday') { setSortDir(d => d === 'asc' ? 'desc' : 'asc') }
+    else { setSortCol('yesterday'); setSortDir('desc') }
+    setMainPage(0)
+  }
 
   // 主列表分页
   const [mainPage, setMainPage] = useState(0)
@@ -576,6 +584,10 @@ export default function CompetitorDailyPage() {
     return true
   })
 
+  const sortedVisible = sortCol === null ? visibleRows : [...visibleRows].sort((a, b) =>
+    sortDir === 'asc' ? a.yesterday - b.yesterday : b.yesterday - a.yesterday
+  )
+
   return (
     <div className="p-6">
       <div className="mb-5">
@@ -635,7 +647,7 @@ export default function CompetitorDailyPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th className="table-th text-right">昨日新增</th>
+                  <th onClick={() => handleSort()} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">昨日新增<span className={`ml-1 text-xs ${sortCol === 'yesterday' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'yesterday' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
                   <th className="table-th text-center">状态</th>
                   <th className="table-th text-right">操作</th>
                 </tr>
@@ -646,7 +658,7 @@ export default function CompetitorDailyPage() {
                     <td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td>
                   </tr>
                 ) : (
-                  visibleRows.slice(mainPage * PAGE_SIZE, (mainPage + 1) * PAGE_SIZE).map((row) => {
+                  sortedVisible.slice(mainPage * PAGE_SIZE, (mainPage + 1) * PAGE_SIZE).map((row) => {
                     const s = statusConfig[row.status]
                     return (
                       <tr key={row.site_id} className="hover:bg-gray-100 transition-colors" style={{ borderLeft: groupColorMap.has(row.domain) ? `4px solid ${groupColorMap.get(row.domain)}` : '4px solid transparent' }}>
@@ -654,7 +666,7 @@ export default function CompetitorDailyPage() {
                           <span className="font-medium text-gray-900">{row.domain}</span>
                           {row.name && <span className="text-gray-400"> · {row.name}</span>}
                         </td>
-                        <td className="table-td text-right font-semibold text-green-600">{row.yesterday.toLocaleString()}</td>
+                        <td className="table-td text-center font-semibold text-green-600">{row.yesterday.toLocaleString()}</td>
                         <td className="table-td text-center">
                           <span className={s.className}>{s.label}</span>
                         </td>
@@ -703,7 +715,7 @@ export default function CompetitorDailyPage() {
               </tbody>
             </table>
           </div>
-          <SimplePagination page={mainPage} total={visibleRows.length} onChange={setMainPage} />
+          <SimplePagination page={mainPage} total={sortedVisible.length} onChange={setMainPage} />
           </>
         )}
       </div>

@@ -53,6 +53,15 @@ const frequencyLabel: Record<string, string> = {
 
 export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
   const [page, setPage] = useState(0)
+  const [sortCol, setSortCol] = useState<'isEnabled' | 'hasRankData' | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleSort(col: 'isEnabled' | 'hasRankData') {
+    if (sortCol === col) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') }
+    else { setSortCol(col); setSortDir('desc') }
+    setPage(0)
+  }
+
   const { idMap, colorMap: groupColorMap } = useMemo(() => buildGroupMaps(allSites ?? sites), [allSites, sites])
   const CAT_ORDER: Record<string, number> = { large: 1, medium: 2, small: 3 }
   const sorted = groupSortedRows(
@@ -63,7 +72,12 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
     idMap,
     r => [r.focus_level, CAT_ORDER[r.category] ?? 3]
   )
-  const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const sortedDisplay = sortCol === null ? sorted : [...sorted].sort((a, b) => {
+    const va = sortCol === 'isEnabled' ? (a.is_enabled ? 1 : 0) : (a.has_rank_data ? 1 : 0)
+    const vb = sortCol === 'isEnabled' ? (b.is_enabled ? 1 : 0) : (b.has_rank_data ? 1 : 0)
+    return sortDir === 'asc' ? va - vb : vb - va
+  })
+  const paged = sortedDisplay.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   if (sorted.length === 0) {
     return (
@@ -84,8 +98,8 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
             <th className="table-th">分类</th>
             <th className="table-th">关注</th>
             <th className="table-th text-center">版本清洗</th>
-            <th className="table-th text-center">关键词</th>
-            <th className="table-th text-center">排名</th>
+            <th onClick={() => handleSort('isEnabled')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">关键词<span className={`ml-1 text-xs ${sortCol === 'isEnabled' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'isEnabled' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+            <th onClick={() => handleSort('hasRankData')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">排名<span className={`ml-1 text-xs ${sortCol === 'hasRankData' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'hasRankData' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
             <th className="table-th text-right">操作</th>
           </tr>
         </thead>
@@ -155,7 +169,7 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
         </tbody>
       </table>
     </div>
-    <SimplePagination page={page} total={sorted.length} onChange={setPage} />
+    <SimplePagination page={page} total={sortedDisplay.length} onChange={setPage} />
     </>
   )
 }

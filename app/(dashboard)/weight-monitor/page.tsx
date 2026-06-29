@@ -92,6 +92,15 @@ export default function WeightMonitorPage() {
   const [filterSite, setFilterSite] = useState('')
   const [filterFocus, setFilterFocus] = useState('')
   const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
+  type WSort = 'pcWeight' | 'mobileWeight' | 'pcIp' | 'mobileIp' | 'pcChange' | 'mobileChange'
+  const [sortCol, setSortCol] = useState<WSort | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleSort(col: WSort) {
+    if (sortCol === col) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') }
+    else { setSortCol(col); setSortDir('desc') }
+    setPage(0)
+  }
 
   useEffect(() => { loadData() }, [])
 
@@ -176,6 +185,17 @@ export default function WeightMonitorPage() {
     if (filterSite && !r.domain.toLowerCase().includes(filterSite.toLowerCase()) && !r.name?.toLowerCase().includes(filterSite.toLowerCase())) return false
     if (filterFocus && String(r.focus_level) !== filterFocus) return false
     return true
+  })
+
+  const sortedVisible = sortCol === null ? visibleRows : [...visibleRows].sort((a, b) => {
+    let va = 0, vb = 0
+    if (sortCol === 'pcWeight') { va = a.pcWeight; vb = b.pcWeight }
+    else if (sortCol === 'mobileWeight') { va = a.mobileWeight; vb = b.mobileWeight }
+    else if (sortCol === 'pcIp') { va = (a.pcIpMin + a.pcIpMax) / 2; vb = (b.pcIpMin + b.pcIpMax) / 2 }
+    else if (sortCol === 'mobileIp') { va = (a.mobileIpMin + a.mobileIpMax) / 2; vb = (b.mobileIpMin + b.mobileIpMax) / 2 }
+    else if (sortCol === 'pcChange') { va = a.pcIpAvgChange; vb = b.pcIpAvgChange }
+    else if (sortCol === 'mobileChange') { va = a.mobileIpAvgChange; vb = b.mobileIpAvgChange }
+    return sortDir === 'asc' ? va - vb : vb - va
   })
 
   return (
@@ -282,12 +302,12 @@ export default function WeightMonitorPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th className="table-th text-center">PC权重</th>
-                  <th className="table-th text-center">移动权重</th>
-                  <th className="table-th text-center">PC来路IP</th>
-                  <th className="table-th text-center">移动来路IP</th>
-                  <th className="table-th text-center">PC均值变化</th>
-                  <th className="table-th text-center">移动均值变化</th>
+                  <th onClick={() => handleSort('pcWeight')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">PC权重<span className={`ml-1 text-xs ${sortCol === 'pcWeight' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'pcWeight' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th onClick={() => handleSort('mobileWeight')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">移动权重<span className={`ml-1 text-xs ${sortCol === 'mobileWeight' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'mobileWeight' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th onClick={() => handleSort('pcIp')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">PC来路IP<span className={`ml-1 text-xs ${sortCol === 'pcIp' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'pcIp' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th onClick={() => handleSort('mobileIp')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">移动来路IP<span className={`ml-1 text-xs ${sortCol === 'mobileIp' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'mobileIp' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th onClick={() => handleSort('pcChange')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">PC均值变化<span className={`ml-1 text-xs ${sortCol === 'pcChange' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'pcChange' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th onClick={() => handleSort('mobileChange')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">移动均值变化<span className={`ml-1 text-xs ${sortCol === 'mobileChange' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'mobileChange' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
                   <th className="table-th text-center">30天趋势</th>
                   <th className="table-th text-center">操作</th>
                 </tr>
@@ -298,7 +318,7 @@ export default function WeightMonitorPage() {
                     <td colSpan={9} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
                   </tr>
                 ) : (
-                  visibleRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
+                  sortedVisible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
                     <tr key={row.site_id} className="hover:bg-gray-100 transition-colors" style={{ borderLeft: groupColorMap.has(row.domain) ? `4px solid ${groupColorMap.get(row.domain)}` : '4px solid transparent' }}>
                       <td className="table-td">
                         <span className="font-medium text-gray-900">{row.domain}</span>
@@ -339,7 +359,7 @@ export default function WeightMonitorPage() {
               </tbody>
             </table>
           </div>
-          <SimplePagination page={page} total={visibleRows.length} onChange={setPage} />
+          <SimplePagination page={page} total={sortedVisible.length} onChange={setPage} />
           </>
         )}
       </div>
