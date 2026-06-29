@@ -443,7 +443,7 @@ export default function CrawlLogPage() {
                         <th className="text-center px-4 py-2.5 text-sm font-medium text-gray-600 whitespace-nowrap">成 / 空 / 失</th>
                         <th className="text-left px-4 py-2.5 text-sm font-medium text-gray-600 whitespace-nowrap">状态</th>
                         <th className="text-left px-4 py-2.5 text-sm font-medium text-gray-600 whitespace-nowrap">时长</th>
-                        <th className="text-right pr-4 py-2.5 text-sm font-medium text-gray-600"></th>
+                        <th className="text-right pr-4 py-2.5 text-sm font-medium text-gray-600">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
