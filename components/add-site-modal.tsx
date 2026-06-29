@@ -16,6 +16,7 @@ interface Site {
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
   enable_version_clean: boolean
   version_suffixes: string[]
+  friend_links: string[]
   is_enabled: boolean
 }
 
@@ -50,6 +51,7 @@ const defaultForm: Site = {
   crawl_frequency: 'daily',
   enable_version_clean: false,
   version_suffixes: [],
+  friend_links: [],
   is_enabled: true,
 }
 
@@ -97,12 +99,13 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [newSuffix, setNewSuffix] = useState('')
+  const [newFriendLink, setNewFriendLink] = useState('')
   const [previewing, setPreviewing] = useState(false)
   const [previewData, setPreviewData] = useState<PreviewRow[] | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
   useEffect(() => {
-    setForm(site ? { ...site } : { ...defaultForm })
+    setForm(site ? { ...site, friend_links: site.friend_links || [] } : { ...defaultForm })
     setHtmlSources(sitToSources(site ?? null))
     setPreviewData(null)
     setPreviewError(null)
@@ -151,6 +154,17 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
 
   function removeSuffix(s: string) {
     update('version_suffixes', form.version_suffixes.filter((x) => x !== s))
+  }
+
+  function addFriendLink() {
+    const s = newFriendLink.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '')
+    if (!s || form.friend_links.includes(s)) return
+    update('friend_links', [...(form.friend_links || []), s])
+    setNewFriendLink('')
+  }
+
+  function removeFriendLink(s: string) {
+    update('friend_links', (form.friend_links || []).filter((x) => x !== s))
   }
 
   async function handlePreview() {
@@ -268,6 +282,35 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                 <option value={2}>侧重关注</option>
                 <option value={3}>普通关注</option>
               </select>
+            </div>
+          </div>
+
+          {/* Friend Links */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">友情链接 <span className="text-gray-400 font-normal">（同公司站点）</span></label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(form.friend_links || []).map((link) => (
+                <span key={link} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                  {link}
+                  <button onClick={() => removeFriendLink(link)} className="text-blue-300 hover:text-red-500 ml-0.5">×</button>
+                </span>
+              ))}
+              {(form.friend_links || []).length === 0 && (
+                <span className="text-xs text-gray-400">未设置</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newFriendLink}
+                onChange={(e) => setNewFriendLink(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addFriendLink()}
+                placeholder="输入域名，如：example.com"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <button type="button" onClick={addFriendLink} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors">
+                添加
+              </button>
             </div>
           </div>
 

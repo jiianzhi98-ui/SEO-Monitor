@@ -17,6 +17,7 @@ interface Site {
   crawl_frequency: 'daily' | 'every3days' | 'weekly'
   enable_version_clean: boolean
   version_suffixes: string[]
+  friend_links: string[]
   is_enabled: boolean
   has_rank_data: boolean
   created_at: string
