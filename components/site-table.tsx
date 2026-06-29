@@ -111,7 +111,7 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
             <th className="table-th text-center">版本清洗</th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">关键词{sortIcons('isEnabled')}</div></th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">排名{sortIcons('hasRankData')}</div></th>
-            <th className="table-th text-right">操作</th>
+            <th className="table-th text-center">操作</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">

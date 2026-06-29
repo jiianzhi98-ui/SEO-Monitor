@@ -649,7 +649,7 @@ export default function CompetitorDailyPage() {
                   <th className="table-th">域名</th>
                   <th className="table-th"><div className="flex items-center justify-center gap-1">昨日新增<span className="flex flex-col items-center gap-px select-none"><svg onClick={() => handleSort('asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${sortCol === 'yesterday' && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 0L8 5H0Z"/></svg><svg onClick={() => handleSort('desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${sortCol === 'yesterday' && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 5L0 0H8Z"/></svg></span></div></th>
                   <th className="table-th text-center">状态</th>
-                  <th className="table-th text-right">操作</th>
+                  <th className="table-th text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

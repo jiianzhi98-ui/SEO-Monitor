@@ -493,7 +493,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
                 <th className="table-th">用户名</th>
                 <th className="table-th">权限</th>
                 <th className="table-th">注册时间</th>
-                <th className="table-th text-right">操作</th>
+                <th className="table-th text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
