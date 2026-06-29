@@ -326,37 +326,37 @@ export default function WeightMonitorPage() {
               <tbody className="divide-y divide-gray-100">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
+                    <td colSpan={9} className="table-td text-sm text-center text-gray-400 py-10">暂无权重数据</td>
                   </tr>
                 ) : (
                   sortedVisible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
                     <tr key={row.site_id} className="hover:bg-gray-100 transition-colors" style={{ borderLeft: groupColorMap.has(row.domain) ? `4px solid ${groupColorMap.get(row.domain)}` : '4px solid transparent' }}>
-                      <td className="table-td">
+                      <td className="table-td text-sm">
                         <span className="font-medium text-gray-900">{row.domain}</span>
                         {row.name && <span className="text-gray-400"> · {row.name}</span>}
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <WeightCell value={row.pcWeight} change={row.pcWeightChange} />
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <WeightCell value={row.mobileWeight} change={row.mobileWeightChange} />
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <IpRangeCell min={row.pcIpMin} max={row.pcIpMax} />
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <IpRangeCell min={row.mobileIpMin} max={row.mobileIpMax} />
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <IpChangeCell change={row.pcIpAvgChange} />
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <IpChangeCell change={row.mobileIpAvgChange} />
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <Sparkline data={row.trend} />
                       </td>
-                      <td className="table-td text-center">
+                      <td className="table-td text-sm text-center">
                         <button
                           onClick={() => setSelected(row)}
                           className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors"
