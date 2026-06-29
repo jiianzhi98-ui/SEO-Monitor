@@ -212,7 +212,7 @@ export default function CrawlLogPage() {
 
   const filteredLogs = logs.filter(log => {
     if (filterType && log.type !== filterType) return false
-    if (filterDomain && log.domain !== filterDomain) return false
+    if (filterDomain && !log.domain?.toLowerCase().includes(filterDomain.toLowerCase())) return false
     if (onlyProblems && log.status !== 'warn' && log.status !== 'fail') return false
     if (filterDate) {
       const range = getDateFilterRange(filterDate)
@@ -393,20 +393,14 @@ export default function CrawlLogPage() {
                   <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">▼</span>
                 </div>
 
-                {/* 域名▼ */}
-                {domainOptions.length > 0 && (
-                  <div className="relative">
-                    <select
-                      value={filterDomain}
-                      onChange={e => { setFilterDomain(e.target.value); setPage(1) }}
-                      className={SELECT_CLS + (filterDomain ? ' border-blue-300 text-blue-600' : '')}
-                    >
-                      <option value="">域名</option>
-                      {domainOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">▼</span>
-                  </div>
-                )}
+                {/* 域名搜索 */}
+                <input
+                  type="text"
+                  placeholder="域名"
+                  value={filterDomain}
+                  onChange={e => { setFilterDomain(e.target.value); setPage(1) }}
+                  className={`text-xs border rounded-md px-2.5 py-1 bg-white focus:outline-none w-32 ${filterDomain ? 'border-blue-300 text-blue-600' : 'border-gray-200 text-gray-600'}`}
+                />
 
                 {/* 运行异常 */}
                 <button
@@ -430,7 +424,7 @@ export default function CrawlLogPage() {
                       <col style={{ width: '150px' }} />
                       <col style={{ width: '80px' }} />
                       <col style={{ width: '220px' }} />
-                      <col style={{ width: '88px' }} />
+                      <col style={{ width: '104px' }} />
                       <col style={{ width: '70px' }} />
                       <col style={{ width: '85px' }} />
                       <col style={{ width: '100px' }} />
