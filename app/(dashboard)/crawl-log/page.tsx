@@ -437,13 +437,13 @@ export default function CrawlLogPage() {
                     </colgroup>
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">时间 (MYT)</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">类型</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">步骤 / 域名 / IP</th>
-                        <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">成 / 空 / 失</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">状态</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 whitespace-nowrap">时长</th>
-                        <th className="text-right pr-4 py-2.5 text-xs font-medium text-gray-500"></th>
+                        <th className="text-left px-4 py-2.5 text-sm font-medium text-gray-500 whitespace-nowrap">时间 (MYT)</th>
+                        <th className="text-left px-4 py-2.5 text-sm font-medium text-gray-500 whitespace-nowrap">类型</th>
+                        <th className="text-left px-4 py-2.5 text-sm font-medium text-gray-500">步骤 / 域名 / IP</th>
+                        <th className="text-center px-4 py-2.5 text-sm font-medium text-gray-500 whitespace-nowrap">成 / 空 / 失</th>
+                        <th className="text-left px-4 py-2.5 text-sm font-medium text-gray-500 whitespace-nowrap">状态</th>
+                        <th className="text-left px-4 py-2.5 text-sm font-medium text-gray-500 whitespace-nowrap">时长</th>
+                        <th className="text-right pr-4 py-2.5 text-sm font-medium text-gray-500"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -628,10 +628,10 @@ export default function CrawlLogPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      <th className="text-left py-2 text-xs font-medium text-gray-500">域名</th>
-                      <th className="text-left py-2 text-xs font-medium text-gray-500">状态</th>
-                      <th className="text-left py-2 text-xs font-medium text-gray-500">写入</th>
-                      <th className="text-left py-2 text-xs font-medium text-gray-500">详情</th>
+                      <th className="text-left py-2 text-sm font-medium text-gray-500">域名</th>
+                      <th className="text-left py-2 text-sm font-medium text-gray-500">状态</th>
+                      <th className="text-left py-2 text-sm font-medium text-gray-500">写入</th>
+                      <th className="text-left py-2 text-sm font-medium text-gray-500">详情</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
