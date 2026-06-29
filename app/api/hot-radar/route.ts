@@ -21,7 +21,7 @@ export async function GET() {
   const [{ data: newWordsRaw }, { data: rankWordsRaw }, { data: siteRows }, { data: rankChangesRaw }] = await Promise.all([
     db.rpc('get_hot_new_words', { p_since: since }),
     db.rpc('get_hot_rank_words', { p_since: since }),
-    supabase.from('sites').select('id, domain').eq('is_enabled', true),
+    supabase.from('sites').select('id, domain'),
     supabase.from('rank_changes')
       .select('keyword, site_id, stat_date, volume')
       .eq('type', 'rankup')

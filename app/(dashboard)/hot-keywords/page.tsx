@@ -137,7 +137,7 @@ export default function HotRadarPage() {
     const db = getBrowserClient()
     const d14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
     const [{ data: siteRows }, { data: whRows }] = await Promise.all([
-      db.from('sites').select('id, domain').eq('is_enabled', true),
+      db.from('sites').select('id, domain'),
       db.from('weight_history').select('site_id, record_date, pc_weight, mobile_weight')
         .gte('record_date', d14).order('record_date'),
     ])

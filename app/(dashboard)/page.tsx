@@ -147,7 +147,7 @@ export default function DashboardPage() {
         { data: wrecsRaw },
         { data: kwStatsRaw },
       ] = await Promise.all([
-        db.from('sites').select('id, domain, name, category').eq('is_enabled', true),
+        db.from('sites').select('id, domain, name, category'),
         db.from('index_snapshots')
           .select('site_id, snapshot_date, index_count')
           .gte('snapshot_date', d365)
