@@ -425,7 +425,7 @@ export default function CrawlLogPage() {
                 <div className="p-8 text-center text-gray-400 text-sm">暂无记录</div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm table-fixed">
+                  <table className="w-full text-xs table-fixed">
                     <colgroup>
                       <col style={{ width: '160px' }} />
                       <col style={{ width: '90px' }} />
@@ -625,7 +625,7 @@ export default function CrawlLogPage() {
               ) : siteLogs.length === 0 ? (
                 <div className="text-center text-gray-400 text-sm py-8">无站点明细记录</div>
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100">
                       <th className="text-left py-2 text-sm font-medium text-gray-500">域名</th>

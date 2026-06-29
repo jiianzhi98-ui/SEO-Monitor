@@ -475,7 +475,7 @@ export default function HotRadarPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th text-center">新增次数</th>
+                    <th className="table-th text-center whitespace-nowrap">新增次数</th>
                     <th className="table-th text-center whitespace-nowrap">站点数</th>
                     <th className="table-th">出现站点</th>
                     <th className="table-th text-center">操作</th>
@@ -516,7 +516,7 @@ export default function HotRadarPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th text-center">涨排站点</th>
+                    <th className="table-th text-center whitespace-nowrap">涨排站点</th>
                     <th className="table-th text-right">搜索量</th>
                     <th className="table-th">出现站点</th>
                     <th className="table-th text-center">操作</th>
@@ -557,7 +557,7 @@ export default function HotRadarPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th text-center">上涨天数</th>
+                    <th className="table-th text-center whitespace-nowrap">上涨天数</th>
                     <th className="table-th text-right">搜索量</th>
                     <th className="table-th">站点</th>
                     <th className="table-th text-center">操作</th>
