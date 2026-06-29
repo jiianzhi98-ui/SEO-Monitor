@@ -46,30 +46,39 @@ export function buildGroupColorMap(
 }
 
 /**
- * Re-orders an already-sorted array so same-company sites appear adjacent,
- * anchored at the position of the first group member encountered.
+ * Re-orders an already-sorted array so same-company sites appear adjacent
+ * within the same tier (getTierKey). Cross-tier order is never changed,
+ * so the primary sort (e.g. focus_level) is always preserved.
  */
 export function groupSortedRows<T extends { domain: string }>(
   rows: T[],
-  idMap: Map<string, number>
+  idMap: Map<string, number>,
+  getTierKey: (row: T) => string | number = () => 0
 ): T[] {
   const originalIndex = new Map<T, number>()
   rows.forEach((r, i) => originalIndex.set(r, i))
 
-  // First occurrence index of each group in the current order
-  const groupFirstIndex = new Map<number, number>()
+  // First occurrence of each (tier, groupId) pair
+  const tierGroupAnchor = new Map<string, number>()
   for (let i = 0; i < rows.length; i++) {
     const gid = idMap.get(rows[i].domain)
-    if (gid !== undefined && !groupFirstIndex.has(gid)) {
-      groupFirstIndex.set(gid, i)
+    if (gid !== undefined) {
+      const key = `${getTierKey(rows[i])}:${gid}`
+      if (!tierGroupAnchor.has(key)) tierGroupAnchor.set(key, i)
     }
   }
 
   return [...rows].sort((a, b) => {
+    const tierA = getTierKey(a)
+    const tierB = getTierKey(b)
+    // Different tiers → keep original order (preserves focus_level sort)
+    if (tierA !== tierB) return originalIndex.get(a)! - originalIndex.get(b)!
+
+    // Same tier → group same-company sites together
     const gidA = idMap.get(a.domain)
     const gidB = idMap.get(b.domain)
-    const anchorA = gidA !== undefined ? groupFirstIndex.get(gidA)! : originalIndex.get(a)!
-    const anchorB = gidB !== undefined ? groupFirstIndex.get(gidB)! : originalIndex.get(b)!
+    const anchorA = gidA !== undefined ? tierGroupAnchor.get(`${tierA}:${gidA}`)! : originalIndex.get(a)!
+    const anchorB = gidB !== undefined ? tierGroupAnchor.get(`${tierB}:${gidB}`)! : originalIndex.get(b)!
     if (anchorA !== anchorB) return anchorA - anchorB
     return originalIndex.get(a)! - originalIndex.get(b)!
   })

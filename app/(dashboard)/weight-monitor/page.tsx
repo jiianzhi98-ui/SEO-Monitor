@@ -163,7 +163,7 @@ export default function WeightMonitorPage() {
         if (ca !== cb) return ca - cb
         return b.avgIp - a.avgIp
       })
-      setRows(groupSortedRows(sorted, idMap))
+      setRows(groupSortedRows(sorted, idMap, r => r.focus_level))
       setGroupColorMap(colorMap)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载失败')

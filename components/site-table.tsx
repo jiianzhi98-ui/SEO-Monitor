@@ -54,7 +54,7 @@ const frequencyLabel: Record<string, string> = {
 export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
   const [page, setPage] = useState(0)
   const { idMap, colorMap: groupColorMap } = useMemo(() => buildGroupMaps(allSites ?? sites), [allSites, sites])
-  const sorted = groupSortedRows([...sites].sort((a, b) => a.focus_level - b.focus_level), idMap)
+  const sorted = groupSortedRows([...sites].sort((a, b) => a.focus_level - b.focus_level), idMap, r => r.focus_level)
   const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   if (sorted.length === 0) {
