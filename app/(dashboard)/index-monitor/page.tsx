@@ -139,18 +139,18 @@ export default function IndexMonitorPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-5 flex items-start justify-between">
-        <div>
+      <div className="mb-5">
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">收录监控</h1>
-          <p className="text-gray-400 text-sm mt-0.5">各站点百度收录每日快照，周变化趋势</p>
+          <input
+            type="text"
+            value={filterSite}
+            onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
+            placeholder="输入域名筛选..."
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
+          />
         </div>
-        <input
-          type="text"
-          value={filterSite}
-          onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
-          placeholder="输入域名筛选..."
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
-        />
+        <p className="text-gray-400 text-sm mt-0.5">各站点百度收录每日快照，周变化趋势</p>
       </div>
 
       <div className="card">

@@ -128,27 +128,27 @@ export default function SitesPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">网站管理</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">网站管理</h1>
+            <input
+              type="text"
+              value={filterSite}
+              onChange={(e) => setFilterSite(e.target.value)}
+              placeholder="输入域名筛选..."
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
+            />
+          </div>
           <p className="text-gray-400 text-sm mt-0.5">管理所有监控站点的抓取配置</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={filterSite}
-            onChange={(e) => setFilterSite(e.target.value)}
-            placeholder="输入域名筛选..."
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
-          />
-          <button
-            onClick={() => { setEditSite(null); setShowModal(true) }}
-            className="btn-primary"
-          >
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            新增网站
-          </button>
-        </div>
+        <button
+          onClick={() => { setEditSite(null); setShowModal(true) }}
+          className="btn-primary"
+        >
+          <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          新增网站
+        </button>
       </div>
 
       <div className="card">
