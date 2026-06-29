@@ -48,7 +48,7 @@ function WeightCell({ value, change }: { value: number; change: number }) {
     <div className="flex items-center justify-center gap-1.5">
       <span className="text-sm tabular-nums font-semibold text-gray-900">{value}</span>
       {change !== 0 && (
-        <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
+        <span className={`text-sm font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
           {change > 0 ? `+${change}` : change}
         </span>
       )}
@@ -57,21 +57,21 @@ function WeightCell({ value, change }: { value: number; change: number }) {
 }
 
 function IpRangeCell({ min, max }: { min: number; max: number }) {
-  if (min === 0 && max === 0) return <span className="text-gray-300 text-xs">-</span>
-  return <span className="text-xs text-gray-700 tabular-nums">{fmt(min)} ~ {fmt(max)}</span>
+  if (min === 0 && max === 0) return <span className="text-gray-300 text-sm">-</span>
+  return <span className="text-sm text-gray-700 tabular-nums">{fmt(min)} ~ {fmt(max)}</span>
 }
 
 function IpChangeCell({ change }: { change: number }) {
-  if (change === 0) return <span className="text-gray-300 text-xs">-</span>
+  if (change === 0) return <span className="text-gray-300 text-sm">-</span>
   return (
-    <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
+    <span className={`text-sm font-medium ${change > 0 ? 'text-green-600' : 'text-red-500'}`}>
       {change > 0 ? `+${fmt(change)}` : fmt(change)}
     </span>
   )
 }
 
 function Sparkline({ data }: { data: { date: string; pcAvg: number; mobileAvg: number }[] }) {
-  if (data.length < 2) return <span className="text-gray-300 text-xs">暂无趋势</span>
+  if (data.length < 2) return <span className="text-gray-300 text-sm">暂无趋势</span>
   return (
     <ResponsiveContainer width={140} height={36}>
       <LineChart data={data}>
