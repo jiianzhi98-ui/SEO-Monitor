@@ -11,16 +11,30 @@ const GROUP_COLORS = [
   'border-l-cyan-500',
 ]
 
+function normDomain(d: string): string {
+  return d.toLowerCase().trim().replace(/^www\./, '').replace(/\/$/, '')
+}
+
 export function buildGroupMaps(
   sites: { domain: string; friend_links?: string[] | null }[]
 ): { idMap: Map<string, number>; colorMap: Map<string, string> } {
   const sorted = [...sites].sort((a, b) => a.domain.localeCompare(b.domain))
-  const domainSet = new Set(sorted.map((s) => s.domain))
+
+  // normalized domain → actual domain stored in DB（用于 friend_links 反查）
+  const normToActual = new Map<string, string>()
+  for (const site of sorted) {
+    const norm = normDomain(site.domain)
+    if (!normToActual.has(norm)) normToActual.set(norm, site.domain)
+  }
+
   const idMap = new Map<string, number>()
   let nextId = 0
 
   for (const site of sorted) {
-    const links = (site.friend_links || []).filter((l) => domainSet.has(l))
+    // 归一化 friend_links → 找到实际域名，排除自身
+    const links = (site.friend_links || [])
+      .map(l => normToActual.get(normDomain(l)))
+      .filter((d): d is string => d !== undefined && d !== site.domain)
     if (links.length === 0) continue
     const all = [site.domain, ...links]
     let gid: number | undefined
