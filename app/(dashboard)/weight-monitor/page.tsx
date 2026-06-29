@@ -88,6 +88,7 @@ export default function WeightMonitorPage() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<WeightRow | null>(null)
   const [page, setPage] = useState(0)
+  const [filterSite, setFilterSite] = useState('')
 
   useEffect(() => { loadData() }, [])
 
@@ -165,11 +166,24 @@ export default function WeightMonitorPage() {
     }
   }
 
+  const visibleRows = filterSite
+    ? rows.filter(r => r.domain.toLowerCase().includes(filterSite.toLowerCase()) || r.name?.toLowerCase().includes(filterSite.toLowerCase()))
+    : rows
+
   return (
     <div className="p-6">
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">权重监控</h1>
-        <p className="text-gray-400 text-sm mt-0.5">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">权重监控</h1>
+          <p className="text-gray-400 text-sm mt-0.5">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
+        </div>
+        <input
+          type="text"
+          value={filterSite}
+          onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
+          placeholder="输入域名筛选..."
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
+        />
       </div>
 
       {/* Detail modal */}
@@ -263,7 +277,7 @@ export default function WeightMonitorPage() {
                     <td colSpan={9} className="table-td text-center text-gray-400 py-10">暂无权重数据</td>
                   </tr>
                 ) : (
-                  rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
+                  visibleRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row) => (
                     <tr key={row.site_id} className="hover:bg-gray-100 transition-colors">
                       <td className="table-td">
                         <span className="font-medium text-gray-900">{row.domain}</span>
@@ -304,7 +318,7 @@ export default function WeightMonitorPage() {
               </tbody>
             </table>
           </div>
-          <SimplePagination page={page} total={rows.length} onChange={setPage} />
+          <SimplePagination page={page} total={visibleRows.length} onChange={setPage} />
           </>
         )}
       </div>

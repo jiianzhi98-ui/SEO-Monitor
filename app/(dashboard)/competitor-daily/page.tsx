@@ -111,6 +111,7 @@ export default function CompetitorDailyPage() {
   const [rows, setRows] = useState<CompetitorRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [filterSite, setFilterSite] = useState('')
 
   // 主列表分页
   const [mainPage, setMainPage] = useState(0)
@@ -559,11 +560,24 @@ export default function CompetitorDailyPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
+  const visibleRows = filterSite
+    ? rows.filter(r => r.domain.toLowerCase().includes(filterSite.toLowerCase()) || r.name?.toLowerCase().includes(filterSite.toLowerCase()))
+    : rows
+
   return (
     <div className="p-6">
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">竞品日收</h1>
-        <p className="text-gray-400 text-sm mt-0.5">各站点每日新增关键词数量对比</p>
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">竞品日收</h1>
+          <p className="text-gray-400 text-sm mt-0.5">各站点每日新增关键词数量对比</p>
+        </div>
+        <input
+          type="text"
+          value={filterSite}
+          onChange={(e) => { setFilterSite(e.target.value); setMainPage(0) }}
+          placeholder="输入域名筛选..."
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
+        />
       </div>
 
       <div className="card">
@@ -597,7 +611,7 @@ export default function CompetitorDailyPage() {
                     <td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td>
                   </tr>
                 ) : (
-                  rows.slice(mainPage * PAGE_SIZE, (mainPage + 1) * PAGE_SIZE).map((row) => {
+                  visibleRows.slice(mainPage * PAGE_SIZE, (mainPage + 1) * PAGE_SIZE).map((row) => {
                     const s = statusConfig[row.status]
                     return (
                       <tr key={row.site_id} className="hover:bg-gray-100 transition-colors">
@@ -654,7 +668,7 @@ export default function CompetitorDailyPage() {
               </tbody>
             </table>
           </div>
-          <SimplePagination page={mainPage} total={rows.length} onChange={setMainPage} />
+          <SimplePagination page={mainPage} total={visibleRows.length} onChange={setMainPage} />
           </>
         )}
       </div>
