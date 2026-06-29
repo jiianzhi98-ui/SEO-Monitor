@@ -198,12 +198,16 @@ export default function WeightMonitorPage() {
     return sortDir === 'asc' ? va - vb : vb - va
   })
 
-  const sortIcons = (col: WSort) => (
-    <span className="inline-flex flex-col ml-1 -translate-y-px">
-      <span onClick={() => handleSort(col, 'asc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▲</span>
-      <span onClick={() => handleSort(col, 'desc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▼</span>
-    </span>
-  )
+  const sortIcons = (col: WSort) => {
+    const isAsc = sortCol === col && sortDir === 'asc'
+    const isDesc = sortCol === col && sortDir === 'desc'
+    return (
+      <span className="inline-flex flex-col items-center ml-1 gap-px select-none">
+        <svg onClick={() => handleSort(col, 'asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isAsc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 0L8 5H0Z"/></svg>
+        <svg onClick={() => handleSort(col, 'desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isDesc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 5L0 0H8Z"/></svg>
+      </span>
+    )
+  }
 
   return (
     <div className="p-6">
