@@ -64,6 +64,8 @@ export function groupSortedRows<T extends { domain: string }>(
   idMap: Map<string, number>,
   getGroupKey: (row: T) => number[]
 ): T[] {
+  if (idMap.size === 0) return [...rows]
+
   const originalIndex = new Map<T, number>()
   rows.forEach((r, i) => originalIndex.set(r, i))
 
@@ -72,30 +74,31 @@ export function groupSortedRows<T extends { domain: string }>(
   const groupFirstIdx = new Map<number, number>()
   for (let i = 0; i < rows.length; i++) {
     const gid = idMap.get(rows[i].domain)
-    if (gid !== undefined) {
-      const key = getGroupKey(rows[i])
-      const best = groupBestKey.get(gid)
-      if (!best || cmpArrays(key, best) < 0) groupBestKey.set(gid, key)
-      if (!groupFirstIdx.has(gid)) groupFirstIdx.set(gid, i)
-    }
+    if (gid === undefined) continue
+    const key = getGroupKey(rows[i])
+    const best = groupBestKey.get(gid)
+    if (!best || cmpArrays(key, best) < 0) groupBestKey.set(gid, key)
+    if (!groupFirstIdx.has(gid)) groupFirstIdx.set(gid, i)
   }
 
   return [...rows].sort((a, b) => {
+    const oia = originalIndex.get(a) ?? 0
+    const oib = originalIndex.get(b) ?? 0
     const gidA = idMap.get(a.domain)
     const gidB = idMap.get(b.domain)
 
     // Anchor key: best in group, or own key if ungrouped
-    const anchorA = gidA !== undefined ? groupBestKey.get(gidA)! : getGroupKey(a)
-    const anchorB = gidB !== undefined ? groupBestKey.get(gidB)! : getGroupKey(b)
+    const anchorA = (gidA !== undefined ? groupBestKey.get(gidA) : undefined) ?? getGroupKey(a)
+    const anchorB = (gidB !== undefined ? groupBestKey.get(gidB) : undefined) ?? getGroupKey(b)
     const keyCmp = cmpArrays(anchorA, anchorB)
     if (keyCmp !== 0) return keyCmp
 
     // Same anchor key → order groups by first occurrence in pre-sort
-    const firstA = gidA !== undefined ? groupFirstIdx.get(gidA)! : originalIndex.get(a)!
-    const firstB = gidB !== undefined ? groupFirstIdx.get(gidB)! : originalIndex.get(b)!
+    const firstA = (gidA !== undefined ? groupFirstIdx.get(gidA) : undefined) ?? oia
+    const firstB = (gidB !== undefined ? groupFirstIdx.get(gidB) : undefined) ?? oib
     if (firstA !== firstB) return firstA - firstB
 
     // Same group → preserve pre-sort order
-    return originalIndex.get(a)! - originalIndex.get(b)!
+    return oia - oib
   })
 }
