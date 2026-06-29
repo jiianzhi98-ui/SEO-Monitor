@@ -75,7 +75,6 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
             <th className="table-th">名称</th>
             <th className="table-th">分类</th>
             <th className="table-th">关注</th>
-            <th className="table-th">频率</th>
             <th className="table-th text-center">版本清洗</th>
             <th className="table-th text-center">关键词</th>
             <th className="table-th text-center">排名</th>
@@ -106,7 +105,6 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
                   {focusConfig[site.focus_level]?.label ?? '普通'}
                 </span>
               </td>
-              <td className="table-td text-gray-500">{frequencyLabel[site.crawl_frequency]}</td>
               <td className="table-td text-center">
                 {site.enable_version_clean
                   ? <span className="text-green-600 font-medium">启用</span>
