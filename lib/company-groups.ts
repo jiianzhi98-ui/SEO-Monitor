@@ -50,6 +50,17 @@ export function buildGroupMaps(
     colorMap.set(domain, GROUP_COLORS[gid % GROUP_COLORS.length])
   }
 
+  // 调试：输出分组信息，排查问题后可删除
+  if (idMap.size > 0) {
+    console.log('[Groups] 已分组站点:', Object.fromEntries(idMap))
+  }
+  const sitesWithLinks = sites.filter(s => s.friend_links && (s.friend_links as string[]).length > 0)
+  if (sitesWithLinks.length > 0) {
+    console.log('[Groups] 有友情链接的站点:', sitesWithLinks.map(s => ({ domain: s.domain, friend_links: s.friend_links })))
+  } else {
+    console.log('[Groups] 没有任何站点有友情链接数据')
+  }
+
   return { idMap, colorMap }
 }
 
