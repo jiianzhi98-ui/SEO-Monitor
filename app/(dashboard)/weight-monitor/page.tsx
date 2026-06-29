@@ -110,7 +110,7 @@ export default function WeightMonitorPage() {
           .order('record_date', { ascending: true }),
       ])
 
-      const allSites = (sitesApiRes.sites || []).filter(s => s.is_enabled !== false)
+      const allSites = (sitesApiRes.sites || []) as SiteRow[]
       const sites = accessibleSiteIds
         ? allSites.filter(s => accessibleSiteIds.includes(s.id))
         : allSites

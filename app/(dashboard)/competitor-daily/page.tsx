@@ -188,7 +188,7 @@ export default function CompetitorDailyPage() {
           .gte('stat_date', d30ago)
           .lte('stat_date', yesterday),
       ])
-      const allSites = (sitesApiRes.sites || []).filter(s => s.is_enabled !== false)
+      const allSites = (sitesApiRes.sites || []) as SiteRow[]
       const sites = accessibleSiteIds
         ? allSites.filter(s => accessibleSiteIds.includes(s.id))
         : allSites
