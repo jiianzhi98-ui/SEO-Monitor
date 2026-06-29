@@ -222,7 +222,7 @@ export default function IndexMonitorPage() {
                     const s = statusConfig[row.status]
                     const isPos = row.weeklyChange >= 0
                     return (
-                      <tr key={row.site_id} className={`hover:bg-gray-100 transition-colors ${groupColorMap.get(row.domain) ? `border-l-4 ${groupColorMap.get(row.domain)}` : ''}`}>
+                      <tr key={row.site_id} className={`hover:bg-gray-100 transition-colors border-l-4 ${groupColorMap.get(row.domain) ?? 'border-l-transparent'}`}>
                         <td className="table-td">
                           <span className="font-medium text-gray-900">{row.domain}</span>
                           {row.name && <span className="text-gray-400"> · {row.name}</span>}

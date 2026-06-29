@@ -91,7 +91,7 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
         </thead>
         <tbody className="divide-y divide-gray-100">
           {paged.map((site) => (
-            <tr key={site.id} className={`hover:bg-gray-100 transition-colors ${groupColorMap.get(site.domain) ? `border-l-4 ${groupColorMap.get(site.domain)}` : ''}`}>
+            <tr key={site.id} className={`hover:bg-gray-100 transition-colors border-l-4 ${groupColorMap.get(site.domain) ?? 'border-l-transparent'}`}>
               <td className="table-td">
                 <a
                   href={`https://${site.domain}`}

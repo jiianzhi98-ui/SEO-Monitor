@@ -1,14 +1,14 @@
 const GROUP_COLORS = [
-  'border-blue-400',
-  'border-orange-400',
-  'border-purple-400',
-  'border-emerald-400',
-  'border-pink-400',
-  'border-indigo-400',
-  'border-teal-400',
-  'border-amber-500',
-  'border-rose-400',
-  'border-cyan-500',
+  'border-l-blue-400',
+  'border-l-orange-400',
+  'border-l-purple-400',
+  'border-l-emerald-400',
+  'border-l-pink-400',
+  'border-l-indigo-400',
+  'border-l-teal-400',
+  'border-l-amber-500',
+  'border-l-rose-400',
+  'border-l-cyan-500',
 ]
 
 export function buildGroupMaps(
