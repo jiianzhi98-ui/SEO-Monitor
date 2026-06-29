@@ -234,7 +234,7 @@ export default function IndexMonitorPage() {
                   <th className="table-th"><div className="flex items-center justify-center gap-1">周变化{sortIcons('weeklyChange')}</div></th>
                   <th className="table-th text-center">30天趋势</th>
                   <th className="table-th text-center">状态</th>
-                  <th className="table-th text-center">操作</th>
+                  <th className="table-th text-right">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
