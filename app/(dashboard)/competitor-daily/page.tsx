@@ -647,7 +647,7 @@ export default function CompetitorDailyPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th className="table-th text-center">昨日新增<span className="inline-flex flex-col items-center ml-1 gap-px select-none"><svg onClick={() => handleSort('asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${sortCol === 'yesterday' && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 0L8 5H0Z"/></svg><svg onClick={() => handleSort('desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${sortCol === 'yesterday' && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 5L0 0H8Z"/></svg></span></th>
+                  <th className="table-th text-center">昨日新增<span className="inline-flex flex-col items-center ml-1 gap-px select-none" style={{ verticalAlign: 'middle' }}><svg onClick={() => handleSort('asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${sortCol === 'yesterday' && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 0L8 5H0Z"/></svg><svg onClick={() => handleSort('desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${sortCol === 'yesterday' && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 5L0 0H8Z"/></svg></span></th>
                   <th className="table-th text-center">状态</th>
                   <th className="table-th text-right">操作</th>
                 </tr>

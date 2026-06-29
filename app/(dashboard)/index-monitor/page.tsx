@@ -164,7 +164,7 @@ export default function IndexMonitorPage() {
     const isAsc = sortCol === col && sortDir === 'asc'
     const isDesc = sortCol === col && sortDir === 'desc'
     return (
-      <span className="inline-flex flex-col items-center ml-1 gap-px select-none">
+      <span className="inline-flex flex-col items-center ml-1 gap-px select-none" style={{ verticalAlign: 'middle' }}>
         <svg onClick={() => handleSort(col, 'asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isAsc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 0L8 5H0Z"/></svg>
         <svg onClick={() => handleSort(col, 'desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isDesc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 5L0 0H8Z"/></svg>
       </span>
