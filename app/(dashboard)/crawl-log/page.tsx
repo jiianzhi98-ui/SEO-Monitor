@@ -427,12 +427,12 @@ export default function CrawlLogPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm table-fixed">
                     <colgroup>
-                      <col style={{ width: '160px' }} />
-                      <col style={{ width: '90px' }} />
-                      <col />
+                      <col style={{ width: '150px' }} />
+                      <col style={{ width: '80px' }} />
+                      <col style={{ width: '220px' }} />
                       <col style={{ width: '88px' }} />
-                      <col style={{ width: '72px' }} />
-                      <col style={{ width: '60px' }} />
+                      <col style={{ width: '70px' }} />
+                      <col style={{ width: '85px' }} />
                       <col style={{ width: '100px' }} />
                     </colgroup>
                     <thead>
