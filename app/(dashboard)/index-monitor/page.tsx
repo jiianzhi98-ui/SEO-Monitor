@@ -164,7 +164,7 @@ export default function IndexMonitorPage() {
     const isAsc = sortCol === col && sortDir === 'asc'
     const isDesc = sortCol === col && sortDir === 'desc'
     return (
-      <span className="inline-flex flex-col items-center ml-1 gap-px select-none" style={{ verticalAlign: 'middle' }}>
+      <span className="flex flex-col items-center gap-px select-none">
         <svg onClick={() => handleSort(col, 'asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isAsc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 0L8 5H0Z"/></svg>
         <svg onClick={() => handleSort(col, 'desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isDesc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 5L0 0H8Z"/></svg>
       </span>
@@ -230,8 +230,8 @@ export default function IndexMonitorPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th className="table-th text-center">当前收录{sortIcons('latest')}</th>
-                  <th className="table-th text-center">周变化{sortIcons('weeklyChange')}</th>
+                  <th className="table-th"><div className="flex items-center justify-center gap-1">当前收录{sortIcons('latest')}</div></th>
+                  <th className="table-th"><div className="flex items-center justify-center gap-1">周变化{sortIcons('weeklyChange')}</div></th>
                   <th className="table-th text-center">30天趋势</th>
                   <th className="table-th text-center">状态</th>
                   <th className="table-th text-right">操作</th>
