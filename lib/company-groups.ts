@@ -1,14 +1,14 @@
 const GROUP_COLORS = [
-  'border-l-blue-400',
-  'border-l-orange-400',
-  'border-l-purple-400',
-  'border-l-emerald-400',
-  'border-l-pink-400',
-  'border-l-indigo-400',
-  'border-l-teal-400',
-  'border-l-amber-500',
-  'border-l-rose-400',
-  'border-l-cyan-500',
+  '#60a5fa',  // blue-400
+  '#fb923c',  // orange-400
+  '#c084fc',  // purple-400
+  '#34d399',  // emerald-400
+  '#f472b6',  // pink-400
+  '#818cf8',  // indigo-400
+  '#2dd4bf',  // teal-400
+  '#f59e0b',  // amber-500
+  '#fb7185',  // rose-400
+  '#06b6d4',  // cyan-500
 ]
 
 function normDomain(d: string): string {
@@ -48,17 +48,6 @@ export function buildGroupMaps(
   const colorMap = new Map<string, string>()
   for (const [domain, gid] of Array.from(idMap.entries())) {
     colorMap.set(domain, GROUP_COLORS[gid % GROUP_COLORS.length])
-  }
-
-  // 调试：输出分组信息，排查问题后可删除
-  if (idMap.size > 0) {
-    console.log('[Groups] 已分组站点:', Object.fromEntries(idMap))
-  }
-  const sitesWithLinks = sites.filter(s => s.friend_links && (s.friend_links as string[]).length > 0)
-  if (sitesWithLinks.length > 0) {
-    console.log('[Groups] 有友情链接的站点:', sitesWithLinks.map(s => ({ domain: s.domain, friend_links: s.friend_links })))
-  } else {
-    console.log('[Groups] 没有任何站点有友情链接数据')
   }
 
   return { idMap, colorMap }
