@@ -30,7 +30,8 @@ interface SiteRow {
   focus_level: number
   list_url: string | null
   has_rank_data: boolean
-  friend_links?: string[]
+  friend_links?: string[] | null
+  is_enabled?: boolean
 }
 
 interface Keyword {
@@ -179,15 +180,15 @@ export default function CompetitorDailyPage() {
 
       interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 
-      const [{ data: sitesRaw }, { data: statsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level, list_url, has_rank_data, friend_links').eq('is_enabled', true),
+      const [sitesApiRes, { data: statsRaw }] = await Promise.all([
+        fetch('/api/sites').then(r => r.json() as Promise<{ sites: SiteRow[] }>),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('competitor_kw_stats') as any)
           .select('site_id, stat_date, app_count, game_count')
           .gte('stat_date', d30ago)
           .lte('stat_date', yesterday),
       ])
-      const allSites = (sitesRaw || []) as SiteRow[]
+      const allSites = (sitesApiRes.sites || []).filter(s => s.is_enabled !== false)
       const sites = accessibleSiteIds
         ? allSites.filter(s => accessibleSiteIds.includes(s.id))
         : allSites

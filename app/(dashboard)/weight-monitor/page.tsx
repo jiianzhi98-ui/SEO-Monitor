@@ -7,7 +7,7 @@ import { useUser } from '@/lib/user-context'
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 
-interface SiteRow { id: string; domain: string; name: string; focus_level: number; category: string; friend_links?: string[] }
+interface SiteRow { id: string; domain: string; name: string; focus_level: number; category: string; friend_links?: string[] | null; is_enabled?: boolean }
 interface HistoryRow {
   site_id: string
   record_date: string
@@ -102,15 +102,15 @@ export default function WeightMonitorPage() {
       const supabase = getBrowserClient()
       const d30ago = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
-      const [{ data: sitesRaw }, { data: historyRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level, category, friend_links').eq('is_enabled', true),
+      const [sitesApiRes, { data: historyRaw }] = await Promise.all([
+        fetch('/api/sites').then(r => r.json() as Promise<{ sites: SiteRow[] }>),
         supabase.from('weight_history')
           .select('site_id, record_date, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max')
           .gte('record_date', d30ago)
           .order('record_date', { ascending: true }),
       ])
 
-      const allSites = (sitesRaw || []) as SiteRow[]
+      const allSites = (sitesApiRes.sites || []).filter(s => s.is_enabled !== false)
       const sites = accessibleSiteIds
         ? allSites.filter(s => accessibleSiteIds.includes(s.id))
         : allSites

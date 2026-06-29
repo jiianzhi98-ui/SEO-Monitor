@@ -10,7 +10,7 @@ import {
 import { SimplePagination, PAGE_SIZE } from '@/components/simple-pagination'
 import { computeIndexStatus } from '@/lib/index-status'
 
-interface SiteRow { id: string; domain: string; name: string; focus_level: number; friend_links?: string[] }
+interface SiteRow { id: string; domain: string; name: string; focus_level: number; friend_links?: string[] | null; is_enabled?: boolean }
 interface SnapRow { site_id: string; snapshot_date: string; index_count: number }
 
 interface IndexRow {
@@ -80,15 +80,15 @@ export default function IndexMonitorPage() {
       const d30ago = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
       const d7ago = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
-      const [{ data: sitesRaw }, { data: snapsRaw }] = await Promise.all([
-        supabase.from('sites').select('id, domain, name, focus_level, friend_links').eq('is_enabled', true),
+      const [sitesApiRes, { data: snapsRaw }] = await Promise.all([
+        fetch('/api/sites').then(r => r.json() as Promise<{ sites: SiteRow[] }>),
         supabase.from('index_snapshots')
           .select('site_id, snapshot_date, index_count')
           .gte('snapshot_date', d30ago)
           .order('snapshot_date', { ascending: true }),
       ])
 
-      const allSites = (sitesRaw || []) as SiteRow[]
+      const allSites = (sitesApiRes.sites || []).filter(s => s.is_enabled !== false)
       const sites = accessibleSiteIds
         ? allSites.filter(s => accessibleSiteIds.includes(s.id))
         : allSites

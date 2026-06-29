@@ -13,10 +13,12 @@ export type Database = {
           list_url: string | null
           title_selector: string | null
           date_selector: string | null
+          source_types: string | null
           crawl_frequency: 'daily' | 'every3days' | 'weekly'
           focus_level: number
           enable_version_clean: boolean
           version_suffixes: string[]
+          friend_links: string[] | null
           is_enabled: boolean
           has_rank_data: boolean
           created_at: string
