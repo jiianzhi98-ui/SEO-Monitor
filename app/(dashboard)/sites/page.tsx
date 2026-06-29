@@ -138,7 +138,6 @@ export default function SitesPage() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
             />
           </div>
-          <p className="text-gray-400 text-sm mt-0.5">管理所有监控站点的抓取配置</p>
         </div>
         <button
           onClick={() => { setEditSite(null); setShowModal(true) }}

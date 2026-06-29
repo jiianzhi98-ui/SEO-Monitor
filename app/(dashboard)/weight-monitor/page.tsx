@@ -183,7 +183,6 @@ export default function WeightMonitorPage() {
             className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:border-gray-400 w-44"
           />
         </div>
-        <p className="text-gray-400 text-sm mt-0.5">各站点PC/移动端权重及来路IP区间，均值变化为与上次记录对比</p>
       </div>
 
       {/* Detail modal */}
