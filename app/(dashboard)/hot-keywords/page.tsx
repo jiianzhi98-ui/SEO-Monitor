@@ -429,7 +429,7 @@ export default function HotRadarPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="table-th">关键词</th>
-                    <th className="table-th">命中维度</th>
+                    <th className="table-th text-center">命中维度</th>
                     <th className="table-th text-right">搜索量</th>
                     <th className="table-th text-center">操作</th>
                   </tr>
@@ -442,7 +442,7 @@ export default function HotRadarPage() {
                       <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
                         <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                         <td className="table-td">
-                          <div className="flex gap-1.5">
+                          <div className="flex justify-center gap-1.5">
                             {w.dims.map((d) => (
                               <span key={d} className={`text-xs px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
                                 {DIM_LABELS[d]?.label}
