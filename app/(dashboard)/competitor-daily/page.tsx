@@ -121,9 +121,9 @@ export default function CompetitorDailyPage() {
   const [sortCol, setSortCol] = useState<'yesterday' | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  function handleSort() {
-    if (sortCol === 'yesterday') { setSortDir(d => d === 'asc' ? 'desc' : 'asc') }
-    else { setSortCol('yesterday'); setSortDir('desc') }
+  function handleSort(dir: 'asc' | 'desc') {
+    if (sortCol === 'yesterday' && sortDir === dir) { setSortCol(null) }
+    else { setSortCol('yesterday'); setSortDir(dir) }
     setMainPage(0)
   }
 
@@ -647,7 +647,7 @@ export default function CompetitorDailyPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th onClick={() => handleSort()} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">昨日新增<span className={`ml-1 text-xs ${sortCol === 'yesterday' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'yesterday' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th className="table-th text-center">昨日新增<span className="inline-flex flex-col ml-1 -translate-y-px"><span onClick={() => handleSort('asc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === 'yesterday' && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▲</span><span onClick={() => handleSort('desc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === 'yesterday' && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▼</span></span></th>
                   <th className="table-th text-center">状态</th>
                   <th className="table-th text-right">操作</th>
                 </tr>

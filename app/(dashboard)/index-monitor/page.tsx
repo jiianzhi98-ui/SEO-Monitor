@@ -58,9 +58,9 @@ export default function IndexMonitorPage() {
   const [sortCol, setSortCol] = useState<'latest' | 'weeklyChange' | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  function handleSort(col: 'latest' | 'weeklyChange') {
-    if (sortCol === col) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') }
-    else { setSortCol(col); setSortDir('desc') }
+  function handleSort(col: 'latest' | 'weeklyChange', dir: 'asc' | 'desc') {
+    if (sortCol === col && sortDir === dir) { setSortCol(null) }
+    else { setSortCol(col); setSortDir(dir) }
     setPage(0)
   }
 
@@ -160,6 +160,13 @@ export default function IndexMonitorPage() {
     return sortDir === 'asc' ? va - vb : vb - va
   })
 
+  const sortIcons = (col: 'latest' | 'weeklyChange') => (
+    <span className="inline-flex flex-col ml-1 -translate-y-px">
+      <span onClick={() => handleSort(col, 'asc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▲</span>
+      <span onClick={() => handleSort(col, 'desc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▼</span>
+    </span>
+  )
+
   return (
     <div className="p-6">
       <div className="mb-5">
@@ -219,8 +226,8 @@ export default function IndexMonitorPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th onClick={() => handleSort('latest')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">当前收录<span className={`ml-1 text-xs ${sortCol === 'latest' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'latest' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
-                  <th onClick={() => handleSort('weeklyChange')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">周变化<span className={`ml-1 text-xs ${sortCol === 'weeklyChange' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'weeklyChange' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th className="table-th text-center">当前收录{sortIcons('latest')}</th>
+                  <th className="table-th text-center">周变化{sortIcons('weeklyChange')}</th>
                   <th className="table-th text-center">30天趋势</th>
                   <th className="table-th text-center">状态</th>
                   <th className="table-th text-right">操作</th>

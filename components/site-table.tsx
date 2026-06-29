@@ -56,9 +56,9 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
   const [sortCol, setSortCol] = useState<'isEnabled' | 'hasRankData' | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  function handleSort(col: 'isEnabled' | 'hasRankData') {
-    if (sortCol === col) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') }
-    else { setSortCol(col); setSortDir('desc') }
+  function handleSort(col: 'isEnabled' | 'hasRankData', dir: 'asc' | 'desc') {
+    if (sortCol === col && sortDir === dir) { setSortCol(null) }
+    else { setSortCol(col); setSortDir(dir) }
     setPage(0)
   }
 
@@ -79,6 +79,13 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
   })
   const paged = sortedDisplay.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
+  const sortIcons = (col: 'isEnabled' | 'hasRankData') => (
+    <span className="inline-flex flex-col ml-1 -translate-y-px">
+      <span onClick={() => handleSort(col, 'asc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▲</span>
+      <span onClick={() => handleSort(col, 'desc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▼</span>
+    </span>
+  )
+
   if (sorted.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400 text-sm">
@@ -98,8 +105,8 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
             <th className="table-th">分类</th>
             <th className="table-th">关注</th>
             <th className="table-th text-center">版本清洗</th>
-            <th onClick={() => handleSort('isEnabled')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">关键词<span className={`ml-1 text-xs ${sortCol === 'isEnabled' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'isEnabled' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
-            <th onClick={() => handleSort('hasRankData')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">排名<span className={`ml-1 text-xs ${sortCol === 'hasRankData' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'hasRankData' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+            <th className="table-th text-center">关键词{sortIcons('isEnabled')}</th>
+            <th className="table-th text-center">排名{sortIcons('hasRankData')}</th>
             <th className="table-th text-right">操作</th>
           </tr>
         </thead>

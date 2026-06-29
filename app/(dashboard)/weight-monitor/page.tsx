@@ -96,9 +96,9 @@ export default function WeightMonitorPage() {
   const [sortCol, setSortCol] = useState<WSort | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  function handleSort(col: WSort) {
-    if (sortCol === col) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') }
-    else { setSortCol(col); setSortDir('desc') }
+  function handleSort(col: WSort, dir: 'asc' | 'desc') {
+    if (sortCol === col && sortDir === dir) { setSortCol(null) }
+    else { setSortCol(col); setSortDir(dir) }
     setPage(0)
   }
 
@@ -197,6 +197,13 @@ export default function WeightMonitorPage() {
     else if (sortCol === 'mobileChange') { va = a.mobileIpAvgChange; vb = b.mobileIpAvgChange }
     return sortDir === 'asc' ? va - vb : vb - va
   })
+
+  const sortIcons = (col: WSort) => (
+    <span className="inline-flex flex-col ml-1 -translate-y-px">
+      <span onClick={() => handleSort(col, 'asc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▲</span>
+      <span onClick={() => handleSort(col, 'desc')} className={`block text-[8px] leading-[1] cursor-pointer select-none ${sortCol === col && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>▼</span>
+    </span>
+  )
 
   return (
     <div className="p-6">
@@ -302,12 +309,12 @@ export default function WeightMonitorPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-th">域名</th>
-                  <th onClick={() => handleSort('pcWeight')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">PC权重<span className={`ml-1 text-xs ${sortCol === 'pcWeight' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'pcWeight' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
-                  <th onClick={() => handleSort('mobileWeight')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">移动权重<span className={`ml-1 text-xs ${sortCol === 'mobileWeight' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'mobileWeight' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
-                  <th onClick={() => handleSort('pcIp')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">PC来路IP<span className={`ml-1 text-xs ${sortCol === 'pcIp' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'pcIp' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
-                  <th onClick={() => handleSort('mobileIp')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">移动来路IP<span className={`ml-1 text-xs ${sortCol === 'mobileIp' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'mobileIp' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
-                  <th onClick={() => handleSort('pcChange')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">PC均值变化<span className={`ml-1 text-xs ${sortCol === 'pcChange' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'pcChange' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
-                  <th onClick={() => handleSort('mobileChange')} className="table-th text-center cursor-pointer select-none hover:bg-gray-100">移动均值变化<span className={`ml-1 text-xs ${sortCol === 'mobileChange' ? 'text-blue-500' : 'text-gray-300'}`}>{sortCol === 'mobileChange' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span></th>
+                  <th className="table-th text-center">PC权重{sortIcons('pcWeight')}</th>
+                  <th className="table-th text-center">移动权重{sortIcons('mobileWeight')}</th>
+                  <th className="table-th text-center">PC来路IP{sortIcons('pcIp')}</th>
+                  <th className="table-th text-center">移动来路IP{sortIcons('mobileIp')}</th>
+                  <th className="table-th text-center">PC均值变化{sortIcons('pcChange')}</th>
+                  <th className="table-th text-center">移动均值变化{sortIcons('mobileChange')}</th>
                   <th className="table-th text-center">30天趋势</th>
                   <th className="table-th text-center">操作</th>
                 </tr>
