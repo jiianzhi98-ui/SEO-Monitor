@@ -15,11 +15,16 @@ interface RankEntry {
   last_date: string; first_date: string
 }
 interface CrossEntry {
-  keyword: string; dims: string[]; volume: number | null; sites: string[]
+  keyword: string; dims: string[]; volume: number | null
+  newSites: string[]; rankSites: string[]; sites: string[]
   last_date: string; first_date: string
 }
 interface StreakEntry {
   keyword: string; streak: number; domain: string; volume: number
+  last_date: string; first_date: string
+}
+interface StreakGrouped {
+  keyword: string; streak: number; domains: string[]; volume: number
   last_date: string; first_date: string
 }
 interface RadarData { newWords: WordEntry[]; rankWords: RankEntry[]; streakWords: StreakEntry[] }
@@ -326,7 +331,7 @@ export default function HotRadarPage() {
         if (rwe.last_date > last_date) last_date = rwe.last_date
         if (!first_date || rwe.first_date < first_date) first_date = rwe.first_date
       }
-      return { keyword, dims, volume: rwe?.volume ?? null, sites: Array.from(sites), last_date, first_date }
+      return { keyword, dims, volume: rwe?.volume ?? null, newSites: nwe?.sites || [], rankSites: rwe?.sites || [], sites: Array.from(sites), last_date, first_date }
     }).filter(w => w.dims.length >= 2)
 
     return {
@@ -337,10 +342,23 @@ export default function HotRadarPage() {
     }
   }, [data, minSites, today])
 
-  const filteredStreakWords = useMemo(() => {
+  const filteredStreakWords = useMemo((): StreakGrouped[] => {
     if (!filtered) return []
-    const list = filtered.streakWords.filter(w => w.streak >= minStreak)
-    return sortByDate(list, today, (a, b) => b.streak - a.streak || b.volume - a.volume)
+    const raw = filtered.streakWords.filter(w => w.streak >= minStreak)
+    const grouped = new Map<string, StreakGrouped>()
+    for (const w of raw) {
+      const g = grouped.get(w.keyword)
+      if (!g) {
+        grouped.set(w.keyword, { keyword: w.keyword, streak: w.streak, domains: [w.domain], volume: w.volume, first_date: w.first_date, last_date: w.last_date })
+      } else {
+        if (!g.domains.includes(w.domain)) g.domains.push(w.domain)
+        if (w.streak > g.streak) g.streak = w.streak
+        if (w.volume > g.volume) g.volume = w.volume
+        if (w.last_date > g.last_date) g.last_date = w.last_date
+        if (!g.first_date || w.first_date < g.first_date) g.first_date = w.first_date
+      }
+    }
+    return sortByDate([...grouped.values()], today, (a, b) => b.streak - a.streak || b.volume - a.volume)
   }, [filtered, minStreak, today])
 
   const baseList = !filtered ? [] :
@@ -350,15 +368,14 @@ export default function HotRadarPage() {
     filteredStreakWords
 
   const activeList = useMemo(() => {
-    type AnyEntry = CrossEntry | WordEntry | RankEntry | StreakEntry
+    type AnyEntry = CrossEntry | WordEntry | RankEntry | StreakGrouped
     let list = baseList as AnyEntry[]
     if (filterSite.trim()) {
       const fs = filterSite.trim().toLowerCase()
-      list = list.filter(w =>
-        ('domain' in w && !('sites' in w))
-          ? (w as StreakEntry).domain.toLowerCase().includes(fs)
-          : ('sites' in w ? (w as { sites: string[] }).sites.some(s => s.toLowerCase().includes(fs)) : true)
-      )
+      list = list.filter(w => {
+        if ('domains' in w) return (w as StreakGrouped).domains.some(d => d.toLowerCase().includes(fs))
+        return 'sites' in w ? (w as { sites: string[] }).sites.some(s => s.toLowerCase().includes(fs)) : true
+      })
     }
     if (filterKeyword.trim()) {
       const kw = filterKeyword.trim().toLowerCase()
@@ -494,23 +511,27 @@ export default function HotRadarPage() {
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-20" />
-                    <col className="w-64" />
+                    <col className="w-52" />
                     <col className="w-24" />
                     <col className="w-24" />
+                    <col />
+                    <col />
                     <col className="w-20" />
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
-                      <th className="table-th text-center">命中维度</th>
+                      <th className="table-th text-center whitespace-nowrap">命中维度</th>
                       <th className="table-th text-right">搜索量</th>
+                      <th className="table-th whitespace-nowrap">新增站点</th>
+                      <th className="table-th whitespace-nowrap">涨排站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {pagedList.length === 0 ? (
-                      <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
+                      <tr><td colSpan={7} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
                     ) : (
                       (pagedList as CrossEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
@@ -519,7 +540,7 @@ export default function HotRadarPage() {
                           <td className="table-td">
                             <div className="flex justify-center gap-1.5">
                               {w.dims.map(d => (
-                                <span key={d} className={`text-sm px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
+                                <span key={d} className={`text-xs px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
                                   {DIM_LABELS[d]?.label}
                                 </span>
                               ))}
@@ -527,6 +548,18 @@ export default function HotRadarPage() {
                           </td>
                           <td className="table-td text-right text-gray-600 text-sm">
                             {w.volume != null ? fmtVolume(w.volume) : '—'}
+                          </td>
+                          <td className="table-td">
+                            {w.newSites.length > 0
+                              ? <SiteBadges sites={w.newSites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
+                              : <span className="text-gray-300 text-xs">—</span>
+                            }
+                          </td>
+                          <td className="table-td">
+                            {w.rankSites.length > 0
+                              ? <SiteBadges sites={w.rankSites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
+                              : <span className="text-gray-300 text-xs">—</span>
+                            }
                           </td>
                           <td className="table-td text-center">
                             <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
@@ -649,7 +682,7 @@ export default function HotRadarPage() {
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">上涨天数</th>
                       <th className="table-th text-right">搜索量</th>
-                      <th className="table-th">站点</th>
+                      <th className="table-th whitespace-nowrap">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
                   </thead>
@@ -657,22 +690,17 @@ export default function HotRadarPage() {
                     {pagedList.length === 0 ? (
                       <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
                     ) : (
-                      (pagedList as StreakEntry[]).map((w, i) => (
-                        <tr key={`${w.domain}|${w.keyword}|${i}`} className="hover:bg-gray-50 transition-colors">
+                      (pagedList as StreakGrouped[]).map(w => (
+                        <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
-                          <td className="table-td font-medium text-gray-900">
-                            {w.keyword}
-                            {w.first_date && w.first_date !== w.last_date && (
-                              <span className="ml-1.5 text-[10px] text-gray-300">入榜{fmtDate(w.first_date)}</span>
-                            )}
-                          </td>
+                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                           <td className="table-td text-center">
                             <span className="font-semibold text-orange-500">{w.streak}</span>
                             <span className="text-gray-400 text-xs"> 天</span>
                           </td>
                           <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
                           <td className="table-td">
-                            <SiteBadge domain={w.domain} weight={weightMap.get(w.domain)} borderColor={groupColorMap.get(w.domain)} />
+                            <SiteBadges sites={w.domains} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
                           </td>
                           <td className="table-td text-center">
                             <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
