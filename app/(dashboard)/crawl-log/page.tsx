@@ -109,6 +109,145 @@ function StatusText({ status }: { status: string }) {
   return <span className={`text-sm font-medium ${cls}`}>{label}</span>
 }
 
+// ─── Retry modal ──────────────────────────────────────────────────────────────
+
+type RetryStatus = 'pending' | 'retrying' | 'ok' | 'fail'
+
+function RetryModal({ step, sites, onClose, onRefresh }: {
+  step: string
+  sites: SiteLog[]
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(sites.map(s => s.domain)))
+  const [running, setRunning] = useState(false)
+  const [done, setDone] = useState(false)
+  const [progress, setProgress] = useState<Record<string, RetryStatus>>({})
+
+  function toggle(domain: string) {
+    if (running) return
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(domain)) next.delete(domain); else next.add(domain)
+      return next
+    })
+  }
+
+  async function handleRetry() {
+    const domains = Array.from(selected)
+    if (!domains.length) return
+    setRunning(true)
+    setDone(false)
+    const init: Record<string, RetryStatus> = {}
+    domains.forEach(d => { init[d] = 'pending' })
+    setProgress(init)
+
+    for (const domain of domains) {
+      setProgress(prev => ({ ...prev, [domain]: 'retrying' }))
+      try {
+        const res = await fetch('/api/trigger-crawl', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ site: domain, step }),
+        })
+        setProgress(prev => ({ ...prev, [domain]: res.ok ? 'ok' : 'fail' }))
+      } catch {
+        setProgress(prev => ({ ...prev, [domain]: 'fail' }))
+      }
+    }
+
+    setRunning(false)
+    setDone(true)
+    onRefresh()
+  }
+
+  const completedCount = Object.values(progress).filter(s => s === 'ok' || s === 'fail').length
+  const okCount = Object.values(progress).filter(s => s === 'ok').length
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={running ? undefined : onClose}>
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="font-semibold text-gray-900">重试失败站点</h3>
+            <p className="text-xs text-gray-400 mt-0.5">步骤：{STEP_LABELS[step] ?? step}</p>
+          </div>
+          {!running && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-5 py-3">
+          {sites.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">暂无失败或空值站点</p>
+          ) : (
+            <div className="space-y-1">
+              {sites.map(site => {
+                const ps = progress[site.domain]
+                return (
+                  <div key={site.domain} className="flex items-center justify-between py-1.5">
+                    <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                      <input type="checkbox" checked={selected.has(site.domain)}
+                        onChange={() => toggle(site.domain)} disabled={running}
+                        className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400 flex-shrink-0" />
+                      <span className="text-sm text-gray-800 truncate">{site.domain}</span>
+                      <span className={`text-xs flex-shrink-0 ${site.status === 'fail' ? 'text-red-400' : 'text-yellow-500'}`}>
+                        {site.status === 'fail' ? '失败' : '空'}
+                      </span>
+                    </label>
+                    <div className="text-xs ml-3 flex-shrink-0 w-16 text-right">
+                      {ps === 'retrying' && <span className="text-blue-500 animate-pulse">重试中…</span>}
+                      {ps === 'ok' && <span className="text-green-600">✓ 成功</span>}
+                      {ps === 'fail' && <span className="text-red-500">✗ 失败</span>}
+                      {(ps === 'pending' || !ps) && <span className="text-gray-200">—</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+          {done ? (
+            <div className="space-y-3">
+              <p className="text-sm text-center text-gray-600">
+                重试完成：<span className="text-green-600 font-medium">{okCount} 成功</span>
+                {completedCount - okCount > 0 && (
+                  <span className="text-red-500 font-medium ml-2">{completedCount - okCount} 失败</span>
+                )}
+              </p>
+              <button onClick={onClose}
+                className="w-full py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50">
+                关闭
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <button onClick={onClose} disabled={running}
+                className="flex-1 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-40">
+                取消
+              </button>
+              <button onClick={handleRetry} disabled={running || selected.size === 0}
+                className="flex-1 py-2.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50">
+                {running
+                  ? `重试中 ${completedCount}/${selected.size}`
+                  : `开始重试（${selected.size} 站）`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const SELECT_CLS = 'text-xs border border-gray-200 rounded-md pl-2.5 pr-6 py-1 text-gray-600 bg-white cursor-pointer hover:border-gray-300 focus:outline-none appearance-none'
 
 export default function CrawlLogPage() {
@@ -130,6 +269,7 @@ export default function CrawlLogPage() {
   const [detailActivity, setDetailActivity] = useState<ActivityLog | null>(null)
   const [siteLogs, setSiteLogs] = useState<SiteLog[]>([])
   const [siteLogsLoading, setSiteLogsLoading] = useState(false)
+  const [retryModal, setRetryModal] = useState<{ step: string; sites: SiteLog[] } | null>(null)
 
   // Card expand
   const [expandedStep, setExpandedStep] = useState<string | null>(null)
@@ -180,6 +320,29 @@ export default function CrawlLogPage() {
       .order('logged_at', { ascending: true })
     setSiteLogs((data || []) as SiteLog[])
     setSiteLogsLoading(false)
+  }
+
+  async function openRetry(step: string) {
+    let sites = expandedSites[step]
+    if (!sites) {
+      const supabase = getBrowserClient()
+      const stepLogs = todayLogs[step] || []
+      const latestTime = stepLogs.length > 0 ? new Date(stepLogs[0].logged_at).getTime() : 0
+      const ids = stepLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000).map(l => l.id)
+      if (ids.length === 0) {
+        sites = []
+      } else {
+        const { data } = await supabase
+          .from('activity_site_log')
+          .select('*')
+          .in('activity_id', ids)
+          .in('status', ['empty', 'fail'])
+          .order('status', { ascending: true })
+        sites = (data || []) as SiteLog[]
+        setExpandedSites(p => ({ ...p, [step]: sites! }))
+      }
+    }
+    setRetryModal({ step, sites: sites ?? [] })
   }
 
   async function toggleExpandStep(step: string) {
@@ -310,12 +473,20 @@ export default function CrawlLogPage() {
                             )}
                           </div>
                           {hasProblems && (
-                            <button
-                              onClick={() => toggleExpandStep(step)}
-                              className="text-xs text-blue-500 hover:text-blue-700"
-                            >
-                              {isExpanded ? '收起' : '查看'}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openRetry(step)}
+                                className="text-xs text-orange-500 hover:text-orange-700"
+                              >
+                                重试
+                              </button>
+                              <button
+                                onClick={() => toggleExpandStep(step)}
+                                className="text-xs text-blue-500 hover:text-blue-700"
+                              >
+                                {isExpanded ? '收起' : '查看'}
+                              </button>
+                            </div>
                           )}
                         </div>
 
@@ -551,6 +722,20 @@ export default function CrawlLogPage() {
           </div>
 
         </div>
+      )}
+
+      {/* Retry Modal */}
+      {retryModal && (
+        <RetryModal
+          step={retryModal.step}
+          sites={retryModal.sites}
+          onClose={() => setRetryModal(null)}
+          onRefresh={() => {
+            fetchData()
+            setExpandedSites({})
+            setExpandedStep(null)
+          }}
+        />
       )}
 
       {/* Rules Modal */}
