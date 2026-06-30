@@ -81,6 +81,25 @@ function EmptyState({ text }: { text: string }) {
   return <div className="flex items-center justify-center h-32 text-sm text-gray-400">{text}</div>
 }
 
+const MODAL_PS = 50
+
+function IntelModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+          <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1">{children}</div>
+      </div>
+    </div>
+  )
+}
 
 export default function SiteIntelPage() {
   const [input, setInput] = useState('')
@@ -93,6 +112,15 @@ export default function SiteIntelPage() {
 
   const [kwTab, setKwTab] = useState<'app' | 'game'>('app')
   const [rankTab, setRankTab] = useState<'up' | 'down'>('up')
+
+  const [kwModal, setKwModal] = useState(false)
+  const [kwModalTab, setKwModalTab] = useState<'app' | 'game'>('app')
+  const [kwModalPage, setKwModalPage] = useState(0)
+  const [rankModal, setRankModal] = useState(false)
+  const [rankModalTab, setRankModalTab] = useState<'up' | 'down'>('up')
+  const [rankModalPage, setRankModalPage] = useState(0)
+  const [unstableModal, setUnstableModal] = useState(false)
+  const [unstableModalPage, setUnstableModalPage] = useState(0)
 
 
   async function fetchSuggestions(raw: string) {
@@ -498,6 +526,12 @@ export default function SiteIntelPage() {
                       </div>
                     )}
                   </div>
+                  {kwCount > 12 && (
+                    <button onClick={() => { setKwModal(true); setKwModalTab(kwTab); setKwModalPage(0) }}
+                      className="mt-3 text-xs text-green-600 hover:underline w-full text-center">
+                      查看更多（共 {kwCount} 条）
+                    </button>
+                  )}
                 </>
               )}
             </SectionCard>
@@ -546,6 +580,12 @@ export default function SiteIntelPage() {
                       </div>
                     )}
                   </div>
+                  {rankCount > 12 && (
+                    <button onClick={() => { setRankModal(true); setRankModalTab(rankTab); setRankModalPage(0) }}
+                      className="mt-3 text-xs text-green-600 hover:underline w-full text-center">
+                      查看更多（共 {rankCount} 条）
+                    </button>
+                  )}
                 </>
               )}
             </SectionCard>
@@ -579,12 +619,158 @@ export default function SiteIntelPage() {
                       </div>
                     )}
                   </div>
+                  {data.unstableAll.length > 12 && (
+                    <button onClick={() => { setUnstableModal(true); setUnstableModalPage(0) }}
+                      className="mt-3 text-xs text-green-600 hover:underline w-full text-center">
+                      查看更多（共 {data.unstableAll.length} 条）
+                    </button>
+                  )}
                 </>
               )}
             </SectionCard>
           </div>
         </div>
       )}
+
+      {/* 关键词 Modal */}
+      {kwModal && data && (() => {
+        const list = kwModalTab === 'app' ? data.appKwAll : data.gameKwAll
+        const paged = list.slice(kwModalPage * MODAL_PS, (kwModalPage + 1) * MODAL_PS)
+        const totalPages = Math.max(1, Math.ceil(list.length / MODAL_PS))
+        return (
+          <IntelModal title={`最近新增关键词 · ${data.domain}${data.kwDate ? ` (${data.kwDate})` : ''}`} onClose={() => setKwModal(false)}>
+            <div className="flex border-b border-gray-200 px-5 flex-shrink-0">
+              {(['app', 'game'] as const).map(t => (
+                <button key={t} onClick={() => { setKwModalTab(t); setKwModalPage(0) }}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${kwModalTab === t ? (t === 'app' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600') : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                  {t === 'app' ? '应用' : '游戏'}
+                  <span className="ml-1.5 text-xs text-gray-400">({t === 'app' ? data.appCount : data.gameCount})</span>
+                </button>
+              ))}
+            </div>
+            {paged.length === 0 ? (
+              <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
+            ) : (
+              <ul className="divide-y divide-gray-50 px-5 py-2">
+                {paged.map((k, i) => (
+                  <li key={i} className="py-1.5 text-sm text-gray-900">{k.keyword}</li>
+                ))}
+              </ul>
+            )}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-xs text-gray-500 flex-shrink-0">
+                <span>共 {list.length} 条</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setKwModalPage(0)} disabled={kwModalPage === 0} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">«</button>
+                  <button onClick={() => setKwModalPage(p => p - 1)} disabled={kwModalPage === 0} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">‹</button>
+                  <span className="px-2">{kwModalPage + 1} / {totalPages}</span>
+                  <button onClick={() => setKwModalPage(p => p + 1)} disabled={kwModalPage >= totalPages - 1} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">›</button>
+                  <button onClick={() => setKwModalPage(totalPages - 1)} disabled={kwModalPage >= totalPages - 1} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">»</button>
+                </div>
+              </div>
+            )}
+          </IntelModal>
+        )
+      })()}
+
+      {/* 排名波动 Modal */}
+      {rankModal && data && (() => {
+        const list = rankModalTab === 'up' ? data.rankupAll : data.rankdownAll
+        const paged = list.slice(rankModalPage * MODAL_PS, (rankModalPage + 1) * MODAL_PS)
+        const totalPages = Math.max(1, Math.ceil(list.length / MODAL_PS))
+        return (
+          <IntelModal title={`排名波动 · ${data.domain}${data.rankDate ? ` (${data.rankDate})` : ''}`} onClose={() => setRankModal(false)}>
+            <div className="flex border-b border-gray-200 px-5 flex-shrink-0">
+              {(['up', 'down'] as const).map(t => (
+                <button key={t} onClick={() => { setRankModalTab(t); setRankModalPage(0) }}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${rankModalTab === t ? (t === 'up' ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600') : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                  {t === 'up' ? '涨入' : '跌出'}
+                  <span className="ml-1.5 text-xs text-gray-400">({t === 'up' ? data.rankupAll.length : data.rankdownAll.length})</span>
+                </button>
+              ))}
+            </div>
+            {paged.length === 0 ? (
+              <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-medium text-gray-500">关键词</th>
+                    <th className="px-5 py-2.5 text-right font-medium text-gray-500">搜索量</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {paged.map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-5 py-2 text-gray-900">{r.keyword}</td>
+                      <td className="px-5 py-2 text-right text-gray-600">{r.volume > 0 ? r.volume.toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-xs text-gray-500 flex-shrink-0">
+                <span>共 {list.length} 条</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setRankModalPage(0)} disabled={rankModalPage === 0} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">«</button>
+                  <button onClick={() => setRankModalPage(p => p - 1)} disabled={rankModalPage === 0} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">‹</button>
+                  <span className="px-2">{rankModalPage + 1} / {totalPages}</span>
+                  <button onClick={() => setRankModalPage(p => p + 1)} disabled={rankModalPage >= totalPages - 1} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">›</button>
+                  <button onClick={() => setRankModalPage(totalPages - 1)} disabled={rankModalPage >= totalPages - 1} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">»</button>
+                </div>
+              </div>
+            )}
+          </IntelModal>
+        )
+      })()}
+
+      {/* 不稳定词 Modal */}
+      {unstableModal && data && (() => {
+        const list = data.unstableAll
+        const paged = list.slice(unstableModalPage * MODAL_PS, (unstableModalPage + 1) * MODAL_PS)
+        const totalPages = Math.max(1, Math.ceil(list.length / MODAL_PS))
+        return (
+          <IntelModal title={`不稳定词 · ${data.domain}（近30天反复涨跌，共 ${list.length} 条）`} onClose={() => setUnstableModal(false)}>
+            {paged.length === 0 ? (
+              <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-medium text-gray-500">关键词</th>
+                    <th className="px-5 py-2.5 text-center font-medium text-green-600">↑涨</th>
+                    <th className="px-5 py-2.5 text-center font-medium text-red-500">↓跌</th>
+                    <th className="px-5 py-2.5 text-right font-medium text-gray-500">搜索量</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {paged.map((u, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-5 py-2 text-gray-900">{u.keyword}</td>
+                      <td className="px-5 py-2 text-center text-green-600">{u.upDays}</td>
+                      <td className="px-5 py-2 text-center text-red-500">{u.downDays}</td>
+                      <td className="px-5 py-2 text-right text-gray-600">{u.volume > 0 ? u.volume.toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-xs text-gray-500 flex-shrink-0">
+                <span>共 {list.length} 条</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setUnstableModalPage(0)} disabled={unstableModalPage === 0} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">«</button>
+                  <button onClick={() => setUnstableModalPage(p => p - 1)} disabled={unstableModalPage === 0} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">‹</button>
+                  <span className="px-2">{unstableModalPage + 1} / {totalPages}</span>
+                  <button onClick={() => setUnstableModalPage(p => p + 1)} disabled={unstableModalPage >= totalPages - 1} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">›</button>
+                  <button onClick={() => setUnstableModalPage(totalPages - 1)} disabled={unstableModalPage >= totalPages - 1} className="px-1.5 py-0.5 rounded hover:bg-gray-100 disabled:opacity-30">»</button>
+                </div>
+              </div>
+            )}
+          </IntelModal>
+        )
+      })()}
 
     </div>
   )
