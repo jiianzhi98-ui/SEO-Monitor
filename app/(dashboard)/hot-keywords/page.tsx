@@ -503,27 +503,27 @@ export default function HotRadarPage() {
               </div>
             </div>
 
-            {/* Tables */}
-            <div className="overflow-x-auto [&_td]:py-1.5 [&_th]:py-1.5">
+            {/* Tables — 统一列宽：日期 w-24 | 关键词 w-52 | 数字列 w-24 each | 站点 auto | 操作 w-16 */}
+            <div className="overflow-x-auto [&_td]:py-2 [&_th]:py-2">
 
-              {/* 交叉词 */}
+              {/* 交叉词：7列，关键词略收为 w-44 让两个站点列各得空间 */}
               {activeTab === 'cross' && (
                 <table className="w-full table-fixed">
                   <colgroup>
-                    <col className="w-20" />
-                    <col className="w-52" />
+                    <col className="w-24" />
+                    <col className="w-44" />
                     <col className="w-24" />
                     <col className="w-24" />
                     <col />
                     <col />
-                    <col className="w-20" />
+                    <col className="w-16" />
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">命中维度</th>
-                      <th className="table-th text-right">搜索量</th>
+                      <th className="table-th text-right whitespace-nowrap">搜索量</th>
                       <th className="table-th whitespace-nowrap">新增站点</th>
                       <th className="table-th whitespace-nowrap">涨排站点</th>
                       <th className="table-th text-center">操作</th>
@@ -538,28 +538,26 @@ export default function HotRadarPage() {
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
                           <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                           <td className="table-td">
-                            <div className="flex justify-center gap-1.5">
+                            <div className="flex justify-center gap-1">
                               {w.dims.map(d => (
-                                <span key={d} className={`text-xs px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
+                                <span key={d} className={`text-xs px-1.5 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
                                   {DIM_LABELS[d]?.label}
                                 </span>
                               ))}
                             </div>
                           </td>
-                          <td className="table-td text-right text-gray-600 text-sm">
-                            {w.volume != null ? fmtVolume(w.volume) : '—'}
+                          <td className="table-td text-right">
+                            <span className="font-semibold text-gray-900">{w.volume != null ? fmtVolume(w.volume) : '—'}</span>
                           </td>
                           <td className="table-td">
                             {w.newSites.length > 0
                               ? <SiteBadges sites={w.newSites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
-                              : <span className="text-gray-300 text-xs">—</span>
-                            }
+                              : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                           <td className="table-td">
                             {w.rankSites.length > 0
                               ? <SiteBadges sites={w.rankSites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
-                              : <span className="text-gray-300 text-xs">—</span>
-                            }
+                              : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                           <td className="table-td text-center">
                             <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
@@ -571,16 +569,16 @@ export default function HotRadarPage() {
                 </table>
               )}
 
-              {/* 共新增词 */}
+              {/* 共新增词：6列 */}
               {activeTab === 'new' && (
                 <table className="w-full table-fixed">
                   <colgroup>
-                    <col className="w-20" />
-                    <col className="w-60" />
-                    <col className="w-20" />
-                    <col className="w-16" />
+                    <col className="w-24" />
+                    <col className="w-52" />
+                    <col className="w-24" />
+                    <col className="w-24" />
                     <col />
-                    <col className="w-20" />
+                    <col className="w-16" />
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
@@ -600,7 +598,10 @@ export default function HotRadarPage() {
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
                           <td className="table-td font-medium text-gray-900">{w.keyword}</td>
-                          <td className="table-td text-center text-gray-600">{w.count}次</td>
+                          <td className="table-td text-center">
+                            <span className="font-semibold text-gray-900">{w.count}</span>
+                            <span className="text-gray-400 text-xs">次</span>
+                          </td>
                           <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{w.siteCount}</span>
                             <span className="text-gray-400 text-xs">站</span>
@@ -618,23 +619,23 @@ export default function HotRadarPage() {
                 </table>
               )}
 
-              {/* 竞品涨排名 */}
+              {/* 竞品涨排名：6列 */}
               {activeTab === 'rank' && (
                 <table className="w-full table-fixed">
                   <colgroup>
-                    <col className="w-20" />
-                    <col className="w-60" />
-                    <col className="w-20" />
+                    <col className="w-24" />
+                    <col className="w-52" />
+                    <col className="w-24" />
                     <col className="w-24" />
                     <col />
-                    <col className="w-20" />
+                    <col className="w-16" />
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">涨排站点</th>
-                      <th className="table-th text-right">搜索量</th>
+                      <th className="table-th text-right whitespace-nowrap">搜索量</th>
                       <th className="table-th">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
@@ -651,7 +652,9 @@ export default function HotRadarPage() {
                             <span className="font-semibold text-gray-900">{w.siteCount}</span>
                             <span className="text-gray-400 text-xs">站</span>
                           </td>
-                          <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
+                          <td className="table-td text-right">
+                            <span className="font-semibold text-gray-900">{fmtVolume(w.volume)}</span>
+                          </td>
                           <td className="table-td">
                             <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
                           </td>
@@ -665,23 +668,23 @@ export default function HotRadarPage() {
                 </table>
               )}
 
-              {/* 连续上涨词 */}
+              {/* 连续上涨词：6列 */}
               {activeTab === 'streak' && (
                 <table className="w-full table-fixed">
                   <colgroup>
-                    <col className="w-20" />
-                    <col className="w-60" />
+                    <col className="w-24" />
+                    <col className="w-52" />
                     <col className="w-24" />
                     <col className="w-24" />
                     <col />
-                    <col className="w-20" />
+                    <col className="w-16" />
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">上涨天数</th>
-                      <th className="table-th text-right">搜索量</th>
+                      <th className="table-th text-right whitespace-nowrap">搜索量</th>
                       <th className="table-th whitespace-nowrap">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
@@ -695,10 +698,12 @@ export default function HotRadarPage() {
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
                           <td className="table-td font-medium text-gray-900">{w.keyword}</td>
                           <td className="table-td text-center">
-                            <span className="font-semibold text-orange-500">{w.streak}</span>
-                            <span className="text-gray-400 text-xs"> 天</span>
+                            <span className="font-semibold text-gray-900">{w.streak}</span>
+                            <span className="text-gray-400 text-xs">天</span>
                           </td>
-                          <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
+                          <td className="table-td text-right">
+                            <span className="font-semibold text-gray-900">{fmtVolume(w.volume)}</span>
+                          </td>
                           <td className="table-td">
                             <SiteBadges sites={w.domains} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
                           </td>
