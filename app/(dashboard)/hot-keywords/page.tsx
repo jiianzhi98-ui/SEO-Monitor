@@ -358,7 +358,7 @@ export default function HotRadarPage() {
         if (!g.first_date || w.first_date < g.first_date) g.first_date = w.first_date
       }
     }
-    return sortByDate([...grouped.values()], today, (a, b) => b.streak - a.streak || b.volume - a.volume)
+    return sortByDate(Array.from(grouped.values()), today, (a, b) => b.streak - a.streak || b.volume - a.volume)
   }, [filtered, minStreak, today])
 
   const baseList = !filtered ? [] :
