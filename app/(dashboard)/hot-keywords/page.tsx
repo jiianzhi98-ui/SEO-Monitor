@@ -322,20 +322,7 @@ export default function HotRadarPage() {
     setLoading(true)
     fetch('/api/hot-radar')
       .then(r => r.json())
-      .then(d => {
-        // DEBUG: 检查交叉词日期来源
-        const nwMap = new Map(d.newWords?.map((w: {keyword:string;last_date:string}) => [w.keyword, w.last_date]))
-        const rwMap = new Map(d.rankWords?.map((w: {keyword:string;last_date:string}) => [w.keyword, w.last_date]))
-        const crossKws = d.newWords?.filter((w: {keyword:string}) => rwMap.has(w.keyword)).slice(0, 5)
-        console.log('[hot-radar DEBUG] 前5个交叉候选词日期:', crossKws?.map((w: {keyword:string}) => ({
-          keyword: w.keyword,
-          new_last_date: nwMap.get(w.keyword),
-          rank_last_date: rwMap.get(w.keyword),
-        })))
-        console.log('[hot-radar DEBUG] newWords 有日期的数量:', d.newWords?.filter((w: {last_date:string}) => w.last_date).length, '/ 总:', d.newWords?.length)
-        console.log('[hot-radar DEBUG] rankWords 有日期的数量:', d.rankWords?.filter((w: {last_date:string}) => w.last_date).length, '/ 总:', d.rankWords?.length)
-        setData(d)
-      })
+      .then(d => setData(d))
       .catch(e => setError(e.message || '加载失败'))
       .finally(() => setLoading(false))
     fetchWeights()

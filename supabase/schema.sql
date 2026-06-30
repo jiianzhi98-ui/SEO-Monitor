@@ -117,21 +117,27 @@ AS $$
 $$;
 
 -- 热词雷达：各 tab 关键词日期聚合（在 Supabase SQL Editor 执行）
+-- get_keyword_dates_new: 用 discovered_at 筛选，日期 COALESCE(content_date, discovered_at) 兼容 content_date=NULL
+DROP FUNCTION IF EXISTS get_keyword_dates_new(date);
 CREATE OR REPLACE FUNCTION get_keyword_dates_new(p_since date)
 RETURNS TABLE(keyword text, first_date date, last_date date)
 LANGUAGE sql STABLE AS $$
-  SELECT keyword, MIN(content_date)::date, MAX(content_date)::date
+  SELECT keyword,
+    MIN(COALESCE(content_date, discovered_at::date))::date,
+    MAX(COALESCE(content_date, discovered_at::date))::date
   FROM raw_keywords
-  WHERE content_date >= p_since AND content_date IS NOT NULL
+  WHERE discovered_at >= p_since::timestamptz
   GROUP BY keyword
 $$;
 
+-- get_keyword_dates_rank: 去掉 type='rankup' 过滤，与 get_hot_rank_words 保持一致
+DROP FUNCTION IF EXISTS get_keyword_dates_rank(date);
 CREATE OR REPLACE FUNCTION get_keyword_dates_rank(p_since date)
 RETURNS TABLE(keyword text, first_date date, last_date date)
 LANGUAGE sql STABLE AS $$
   SELECT keyword, MIN(stat_date)::date, MAX(stat_date)::date
   FROM rank_changes
-  WHERE type = 'rankup' AND stat_date >= p_since
+  WHERE stat_date >= p_since
   GROUP BY keyword
 $$;
 
