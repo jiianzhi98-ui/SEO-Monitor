@@ -63,8 +63,8 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-gray-900">修改密码</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -136,8 +136,8 @@ function AddUserModal({ callerRole, onClose, onCreated }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-gray-900">新增账号</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -228,8 +228,8 @@ function EditRoleModal({ user, callerRole, onClose, onUpdated }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-gray-900">编辑用户</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
