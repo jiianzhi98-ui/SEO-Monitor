@@ -63,7 +63,7 @@ export const CRAWL_RULES: RuleSection[] = [
     badge: '触发方式：页面按钮 → Vercel /api/trigger-crawl',
     items: [
       { label: 'IP来源', text: 'Vercel serverless（与 GitHub Actions IP 不同），仅用于单站补抓，不适合替代 GitHub Actions 跑全量' },
-      { label: '触发路径', text: '页面按钮 → POST /api/trigger-crawl { site, step } → GET /api/cron?site=xxx&step=yyy → 单站抓取；trigger-crawl 超时限制 50s，为避免超时：keywords 步骤最多翻 3 页（不受频率控制），weight 步骤重试间隔缩短为 3s（正常为 30s）' },
+      { label: '触发路径', text: '页面按钮 → POST /api/trigger-crawl { site, step } → GET /api/cron?site=xxx&step=yyy → 单站抓取；trigger-crawl 超时限制 50s，为避免超时：keywords 步骤去掉翻页间隔延迟（正常 10-15s，单站模式跳过），weight 步骤重试间隔缩短为 5s（正常为 30s）' },
       { label: '写入', text: '与定时任务相同的写入逻辑；weight 步骤写入 weight_history + index_snapshots；keywords 步骤写入 raw_keywords + competitor_kw_stats' },
       { label: '日志', text: '记录为 cron_manual，来源 Vercel，detail 显示写入行数' },
     ],

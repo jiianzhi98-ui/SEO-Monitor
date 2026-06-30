@@ -447,7 +447,7 @@ export default function CrawlLogPage() {
           <div>
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">今日任务状态</h2>
             <div className="grid grid-cols-3 gap-4">
-              {(['keywords', 'rank', 'weight'] as const).map(step => {
+              {(['keywords', 'weight', 'rank'] as const).map(step => {
                 const { ok, empty, fail, total, latestRun, runs } = getTodaySummary(step)
                 const hasProblems = empty > 0 || fail > 0
                 const isExpanded = expandedStep === step

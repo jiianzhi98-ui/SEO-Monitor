@@ -133,7 +133,8 @@ export interface HtmlSource {
 export async function fetchHtmlListPages(
   sources: HtmlSource[],
   cutoffDateStr: string,
-  maxPages = 5
+  maxPages = 5,
+  skipPageDelay = false
 ): Promise<PageEntry[]> {
   const all: PageEntry[] = []
 
@@ -169,7 +170,7 @@ export async function fetchHtmlListPages(
         if (datedEntries.length > 0 && datedEntries.every((d) => d < cutoffDateStr)) break
 
         currentUrl = findNextPageUrl($, currentUrl)
-        if (currentUrl) await randomDelay(10000, 15000)
+        if (currentUrl && !skipPageDelay) await randomDelay(10000, 15000)
       } catch {
         break
       }
