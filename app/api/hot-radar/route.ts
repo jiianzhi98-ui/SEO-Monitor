@@ -9,7 +9,7 @@ function getMY(offsetDays = 0) {
 }
 
 interface NewWordRow   { keyword: string; site_count: number; total_count: number; sites: string[]; first_date: string; last_date: string }
-interface RankWordRow  { keyword: string; site_count: number; max_volume: number;  sites: string[]; first_date: string; last_date: string }
+interface RankWordRow  { keyword: string; site_count: number; max_volume: number;  sites: string[]; first_date: string; last_date: string; rank_days: number }
 interface StreakWordRow { keyword: string; domain: string; streak: number; volume: number; first_seen: string; last_seen: string }
 
 export async function GET() {
@@ -46,6 +46,7 @@ export async function GET() {
     sites:     r.sites || [],
     last_date:  toDate(r.last_date),
     first_date: toDate(r.first_date),
+    rankDays:   Number(r.rank_days),
   }))
 
   const streakWords = ((streakWordsRaw || []) as StreakWordRow[]).map((r) => ({

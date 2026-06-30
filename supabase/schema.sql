@@ -129,15 +129,19 @@ LANGUAGE sql STABLE AS $$
   GROUP BY keyword
 $$;
 
--- get_keyword_dates_rank: 完全去掉日期过滤，覆盖 get_hot_rank_words 的全部历史数据
-DROP FUNCTION IF EXISTS get_keyword_dates_rank(date);
-CREATE OR REPLACE FUNCTION get_keyword_dates_rank(p_since date)
-RETURNS TABLE(keyword text, first_date date, last_date date)
-LANGUAGE sql STABLE AS $$
-  SELECT keyword, MIN(stat_date)::date, MAX(stat_date)::date
-  FROM rank_changes
-  GROUP BY keyword
-$$;
+-- get_hot_rank_words 含 rank_days（涨排次数 = 不同日期数）
+-- DROP FUNCTION get_hot_rank_words(text);
+-- CREATE FUNCTION public.get_hot_rank_words(p_since text)
+-- RETURNS TABLE(keyword text, site_count bigint, max_volume bigint, sites text[], first_date date, last_date date, rank_days bigint)
+-- LANGUAGE sql SECURITY DEFINER AS $function$
+--   SELECT rc.keyword, COUNT(DISTINCT rc.site_id), MAX(COALESCE(rc.volume,0)),
+--     ARRAY_AGG(DISTINCT s.domain), MIN(rc.stat_date)::date, MAX(rc.stat_date)::date,
+--     COUNT(DISTINCT rc.stat_date)
+--   FROM rank_changes rc JOIN sites s ON s.id=rc.site_id
+--   WHERE rc.type='rankup' AND rc.stat_date>=p_since::date
+--   GROUP BY rc.keyword HAVING COUNT(DISTINCT rc.site_id)>=2
+--   ORDER BY site_count DESC, max_volume DESC;
+-- $function$
 
 -- 分组任务 tables
 CREATE TABLE IF NOT EXISTS task_groups (

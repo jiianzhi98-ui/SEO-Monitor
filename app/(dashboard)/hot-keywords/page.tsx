@@ -12,7 +12,7 @@ interface WordEntry {
 }
 interface RankEntry {
   keyword: string; siteCount: number; volume: number; sites: string[]
-  last_date: string; first_date: string
+  last_date: string; first_date: string; rankDays: number
 }
 interface CrossEntry {
   keyword: string; dims: string[]; volume: number | null
@@ -42,23 +42,32 @@ function getMYDate(offsetDays = 0): string {
 }
 
 type Badge = 'new' | 'updated' | null
-function getBadge(first_date: string, last_date: string): Badge {
-  if (!last_date || !first_date) return null
-  return first_date === last_date ? 'new' : 'updated'
+
+// 今日 = first_date 是今天/昨天（刚进入此 tab）；更新 = 旧词有新活动
+function getBadge(first_date: string, last_date: string, yesterday: string): Badge {
+  if (!last_date || last_date < yesterday) return null
+  if (first_date >= yesterday) return 'new'
+  return 'updated'
 }
 
-function badgePriority(first_date: string, last_date: string): number {
-  if (!last_date) return 2
-  return first_date === last_date ? 0 : 1  // 今日=0，更新=1
+// 连续上涨词：streak==2 刚达到门槛→今日；streak>2 持续上涨→更新
+function getStreakBadge(streak: number, last_date: string, yesterday: string): Badge {
+  if (!last_date || last_date < yesterday) return null
+  return streak <= 2 ? 'new' : 'updated'
+}
+
+function badgePriority(first_date: string, last_date: string, yesterday: string): number {
+  if (!last_date || last_date < yesterday) return 2
+  if (first_date >= yesterday) return 0
+  return 1
 }
 
 function sortByDate<T extends { last_date: string; first_date: string }>(
-  list: T[],
-  secondary: (a: T, b: T) => number
+  list: T[], yesterday: string, secondary: (a: T, b: T) => number
 ): T[] {
   return [...list].sort((a, b) => {
     if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
-    const bp = badgePriority(a.first_date, a.last_date) - badgePriority(b.first_date, b.last_date)
+    const bp = badgePriority(a.first_date, a.last_date, yesterday) - badgePriority(b.first_date, b.last_date, yesterday)
     if (bp !== 0) return bp
     return secondary(a, b)
   })
@@ -88,11 +97,10 @@ function BadgeChip({ badge }: { badge: Badge }) {
   return <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-400 text-white leading-none">更新</span>
 }
 
-function DateCell({ last_date, first_date, today, yesterday }: {
-  last_date: string; first_date: string; today: string; yesterday: string
+function DateCell({ last_date, today, yesterday, badge }: {
+  last_date: string; today: string; yesterday: string; badge: Badge
 }) {
   const isRecent = last_date === today || last_date === yesterday
-  const badge = getBadge(first_date, last_date)
   return (
     <td className="table-td whitespace-nowrap w-24">
       <div className={`flex items-center gap-1 flex-wrap ${isRecent ? 'text-green-600' : 'text-gray-400'}`}>
@@ -362,12 +370,12 @@ export default function HotRadarPage() {
     }).filter(w => w.dims.length >= 2)
 
     return {
-      newWords:    sortByDate(nw, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
-      rankWords:   sortByDate(rw, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
-      crossWords:  sortByDate(cw, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
+      newWords:    sortByDate(nw, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
+      rankWords:   sortByDate(rw, yesterday, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
+      crossWords:  sortByDate(cw, yesterday, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
       streakWords: (data.streakWords || []).filter(w => !dateFrom || !w.last_date || w.last_date >= dateFrom),
     }
-  }, [data, minSites, today, dateFrom])
+  }, [data, minSites, yesterday, dateFrom])
 
   const filteredStreakWords = useMemo((): StreakGrouped[] => {
     if (!filtered) return []
@@ -385,8 +393,16 @@ export default function HotRadarPage() {
         if (!g.first_date || w.first_date < g.first_date) g.first_date = w.first_date
       }
     }
-    return sortByDate(Array.from(grouped.values()), (a, b) => b.streak - a.streak || b.volume - a.volume)
-  }, [filtered, minStreak, today])
+    // 只保留单站点（多站点归竞品涨排名）
+    const single = Array.from(grouped.values()).filter(g => g.domains.length === 1)
+    return [...single].sort((a, b) => {
+      if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
+      const pa = getStreakBadge(a.streak, a.last_date, yesterday) === 'new' ? 0 : getStreakBadge(a.streak, a.last_date, yesterday) === 'updated' ? 1 : 2
+      const pb = getStreakBadge(b.streak, b.last_date, yesterday) === 'new' ? 0 : getStreakBadge(b.streak, b.last_date, yesterday) === 'updated' ? 1 : 2
+      if (pa !== pb) return pa - pb
+      return b.streak - a.streak || b.volume - a.volume
+    })
+  }, [filtered, minStreak, yesterday])
 
   const baseList = !filtered ? [] :
     activeTab === 'cross'  ? filtered.crossWords  :
@@ -574,7 +590,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as CrossEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
+                          <DateCell last_date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
@@ -637,7 +653,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as WordEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
+                          <DateCell last_date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
@@ -677,7 +693,7 @@ export default function HotRadarPage() {
                     <tr>
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
-                      <th className="table-th text-center whitespace-nowrap">涨排站点</th>
+                      <th className="table-th text-center whitespace-nowrap">涨排次数</th>
                       <th className="table-th text-center whitespace-nowrap">搜索量</th>
                       <th className="table-th">出现站点</th>
                       <th className="table-th text-center">操作</th>
@@ -689,13 +705,13 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as RankEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
+                          <DateCell last_date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
                           <td className="table-td text-center">
-                            <span className="font-semibold text-gray-900">{w.siteCount}</span>
-                            <span className="text-gray-400 text-xs">站</span>
+                            <span className="font-semibold text-gray-900">{w.rankDays}</span>
+                            <span className="text-gray-400 text-xs">次</span>
                           </td>
                           <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{fmtVolume(w.volume)}</span>
@@ -740,7 +756,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as StreakGrouped[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
+                          <DateCell last_date={w.last_date} today={today} yesterday={yesterday} badge={getStreakBadge(w.streak, w.last_date, yesterday)} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
