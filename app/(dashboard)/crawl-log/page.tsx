@@ -281,13 +281,13 @@ export default function CrawlLogPage() {
     const today = getMalaysiaToday()
     const { from, to } = getMytDayRange(today)
 
-    // Cards: only GitHub Actions (cron_task)
+    // Cards: cron_task (main crawl) + cron_manual (manual retries) for accurate per-site status
     const { data: todayData } = await supabase
       .from('activity_log')
       .select('*')
       .gte('logged_at', from)
       .lte('logged_at', to)
-      .eq('type', 'cron_task')
+      .in('type', ['cron_task', 'cron_manual'])
       .order('logged_at', { ascending: false })
 
     const grouped: Record<string, ActivityLog[]> = { keywords: [], rank: [], weight: [] }
@@ -322,25 +322,40 @@ export default function CrawlLogPage() {
     setSiteLogsLoading(false)
   }
 
+  // Fetch problem sites for a step using latest-per-domain status.
+  // Manual retries that succeeded are excluded (their latest status is 'ok').
+  async function fetchProblemSites(step: string): Promise<SiteLog[]> {
+    const supabase = getBrowserClient()
+    const allStepLogs = todayLogs[step] || []
+    const mainLogs = allStepLogs.filter(l => l.type === 'cron_task')
+    const manualLogs = allStepLogs.filter(l => l.type === 'cron_manual')
+    if (mainLogs.length === 0) return []
+    const latestTime = new Date(mainLogs[0].logged_at).getTime()
+    const mainIds = mainLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000).map(l => l.id)
+    const manualIds = manualLogs.map(l => l.id)
+    const ids = [...mainIds, ...manualIds]
+    if (ids.length === 0) return []
+    const { data } = await supabase
+      .from('activity_site_log')
+      .select('*')
+      .in('activity_id', ids)
+      .not('status', 'eq', 'skip')
+      .order('logged_at', { ascending: false })
+    // Take latest status per domain, keep only still-problematic ones
+    const latestPerDomain = new Map<string, SiteLog>()
+    for (const log of (data || []) as SiteLog[]) {
+      if (!latestPerDomain.has(log.domain)) latestPerDomain.set(log.domain, log)
+    }
+    return Array.from(latestPerDomain.values())
+      .filter(s => s.status === 'fail' || s.status === 'empty')
+      .sort((a, b) => a.status.localeCompare(b.status))
+  }
+
   async function openRetry(step: string) {
     let sites = expandedSites[step]
     if (!sites) {
-      const supabase = getBrowserClient()
-      const stepLogs = todayLogs[step] || []
-      const latestTime = stepLogs.length > 0 ? new Date(stepLogs[0].logged_at).getTime() : 0
-      const ids = stepLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000).map(l => l.id)
-      if (ids.length === 0) {
-        sites = []
-      } else {
-        const { data } = await supabase
-          .from('activity_site_log')
-          .select('*')
-          .in('activity_id', ids)
-          .in('status', ['empty', 'fail'])
-          .order('status', { ascending: true })
-        sites = (data || []) as SiteLog[]
-        setExpandedSites(p => ({ ...p, [step]: sites! }))
-      }
+      sites = await fetchProblemSites(step)
+      setExpandedSites(p => ({ ...p, [step]: sites! }))
     }
     setRetryModal({ step, sites: sites ?? [] })
   }
@@ -349,18 +364,8 @@ export default function CrawlLogPage() {
     if (expandedStep === step) { setExpandedStep(null); return }
     setExpandedStep(step)
     if (expandedSites[step]) return
-    const supabase = getBrowserClient()
-    const stepLogs = todayLogs[step] || []
-    const latestTime = stepLogs.length > 0 ? new Date(stepLogs[0].logged_at).getTime() : 0
-    const ids = stepLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000).map(l => l.id)
-    if (ids.length === 0) { setExpandedSites(p => ({ ...p, [step]: [] })); return }
-    const { data } = await supabase
-      .from('activity_site_log')
-      .select('*')
-      .in('activity_id', ids)
-      .in('status', ['empty', 'fail'])
-      .order('status', { ascending: true })
-    setExpandedSites(p => ({ ...p, [step]: (data || []) as SiteLog[] }))
+    const sites = await fetchProblemSites(step)
+    setExpandedSites(p => ({ ...p, [step]: sites }))
   }
 
   function resetFilters() {
@@ -390,17 +395,26 @@ export default function CrawlLogPage() {
   const pagedLogs = filteredLogs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   function getTodaySummary(step: string) {
-    const stepLogs = todayLogs[step] || []
-    if (stepLogs.length === 0) return { ok: 0, empty: 0, fail: 0, total: 0, latestRun: undefined, runs: 0 }
-    // stepLogs is DESC by logged_at; only sum entries belonging to the latest run
-    // (entries within 3 hours of the most recent = same GitHub Actions job run)
-    const latestTime = new Date(stepLogs[0].logged_at).getTime()
-    const latestBatch = stepLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000)
-    const ok = latestBatch.reduce((s, l) => s + l.ok_count, 0)
-    const empty = latestBatch.reduce((s, l) => s + l.empty_count, 0)
-    const fail = latestBatch.reduce((s, l) => s + l.fail_count, 0)
+    const allStepLogs = todayLogs[step] || []
+    const mainLogs = allStepLogs.filter(l => l.type === 'cron_task')
+    if (mainLogs.length === 0) return { ok: 0, empty: 0, fail: 0, total: 0, latestRun: undefined, runs: 0 }
+
+    const latestTime = new Date(mainLogs[0].logged_at).getTime()
+    const latestBatch = mainLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000)
+    let ok = latestBatch.reduce((s, l) => s + l.ok_count, 0)
+    let empty = latestBatch.reduce((s, l) => s + l.empty_count, 0)
+    let fail = latestBatch.reduce((s, l) => s + l.fail_count, 0)
+
+    // Adjust for manual retries that succeeded (subtract from empty/fail, add to ok)
+    for (const ml of allStepLogs.filter(l => l.type === 'cron_manual' && l.ok_count > 0)) {
+      const fromEmpty = Math.min(empty, ml.ok_count)
+      empty = Math.max(0, empty - fromEmpty)
+      fail = Math.max(0, fail - Math.max(0, ml.ok_count - fromEmpty))
+      ok += ml.ok_count
+    }
+
     const total = ok + empty + fail
-    return { ok, empty, fail, total, latestRun: stepLogs[0], runs: latestBatch.length }
+    return { ok, empty, fail, total, latestRun: mainLogs[0], runs: latestBatch.length }
   }
 
   const rulesSection = CRAWL_RULES.find(r => r.key === rulesStep)
