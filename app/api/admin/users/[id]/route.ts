@@ -22,9 +22,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { role } = await req.json() as { role: UserRole }
+  const { role, username, email, password } = await req.json() as {
+    role?: UserRole; username?: string; email?: string; password?: string
+  }
 
-  if (caller.role === 'admin' && role === 'super') {
+  if (role !== undefined && caller.role === 'admin' && role === 'super') {
     return NextResponse.json({ error: '无权限设置超级账号' }, { status: 403 })
   }
 
@@ -36,7 +38,22 @@ export async function PATCH(
     return NextResponse.json({ error: '无权限修改超级账号' }, { status: 403 })
   }
 
-  await service.from('user_profiles').upsert({ id: params.id, role })
+  // Update user_profiles (role / username)
+  const profileUpdate: Record<string, unknown> = {}
+  if (role !== undefined) profileUpdate.role = role
+  if (username !== undefined) profileUpdate.username = username || null
+  if (Object.keys(profileUpdate).length > 0) {
+    await service.from('user_profiles').update(profileUpdate).eq('id', params.id)
+  }
+
+  // Update auth user (email / password)
+  if (email || password) {
+    const authUpdate: { email?: string; password?: string } = {}
+    if (email) authUpdate.email = email
+    if (password) authUpdate.password = password
+    const { error } = await service.auth.admin.updateUserById(params.id, authUpdate)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true })
 }

@@ -190,8 +190,11 @@ function EditRoleModal({ user, callerRole, onClose, onUpdated }: {
   user: UserRecord
   callerRole: UserRole
   onClose: () => void
-  onUpdated: (id: string, role: UserRole) => void
+  onUpdated: (id: string, updates: Partial<UserRecord>) => void
 }) {
+  const [username, setUsername] = useState(user.username ?? '')
+  const [email, setEmail] = useState(user.email)
+  const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>(user.role)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -202,17 +205,24 @@ function EditRoleModal({ user, callerRole, onClose, onUpdated }: {
     e.preventDefault()
     setError(null)
     setLoading(true)
+    const body: Record<string, string> = { role }
+    if (username !== (user.username ?? '')) body.username = username
+    if (email !== user.email) body.email = email
+    if (password) body.password = password
     const res = await fetch(`/api/admin/users/${user.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role }),
+      body: JSON.stringify(body),
     })
     const data = await res.json()
     setLoading(false)
     if (!res.ok) {
       setError(data.error ?? '修改失败')
     } else {
-      onUpdated(user.id, role)
+      const updates: Partial<UserRecord> = { role }
+      if (body.username !== undefined) updates.username = username || null
+      if (body.email) updates.email = email
+      onUpdated(user.id, updates)
       onClose()
     }
   }
@@ -221,15 +231,29 @@ function EditRoleModal({ user, callerRole, onClose, onUpdated }: {
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold text-gray-900">修改权限</h3>
+          <h3 className="text-base font-semibold text-gray-900">编辑用户</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
-        <p className="text-sm text-gray-500 mb-4">{user.email}</p>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">用户名</label>
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="登录时显示的名称"
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">邮箱</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">新密码 <span className="text-gray-400 font-normal">（留空则不修改）</span></label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="留空则保持原密码"
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">权限</label>
             <select value={role} onChange={e => setRole(e.target.value as UserRole)}
@@ -554,7 +578,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
           user={editingUser}
           callerRole={callerRole}
           onClose={() => setEditingUser(null)}
-          onUpdated={(id, role) => setUsers(prev => prev.map(u => u.id === id ? { ...u, role } : u))}
+          onUpdated={(id, updates) => setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u))}
         />
       )}
       {accessUser && (
