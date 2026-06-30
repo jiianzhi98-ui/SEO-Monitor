@@ -472,11 +472,12 @@ async function main() {
   const siteFilter = args.find((a) => a.startsWith('--site='))?.split('=')[1] ?? null
   const group = parseInt(args.find((a) => a.startsWith('--group='))?.split('=')[1] ?? '0', 10)
   const totalGroups = parseInt(args.find((a) => a.startsWith('--total-groups='))?.split('=')[1] ?? '1', 10)
+  const retryFailed = args.includes('--retry-failed')
 
   const totalStart = Date.now()
   const ip = await getPublicIp()
   console.log(`\n${'▶'.repeat(60)}`)
-  console.log(`  SEO Monitor Crawl`)
+  console.log(`  SEO Monitor Crawl${retryFailed ? ' [重试模式]' : ''}`)
   console.log(`  step=${step}  site=${siteFilter ?? 'all'}  group=${group}/${totalGroups}  ip=${ip}  启动时间=${ts()} MYT`)
   console.log(`${'▶'.repeat(60)}`)
 
@@ -490,17 +491,64 @@ async function main() {
 
   const allSites = (sitesRaw || []) as SiteRecord[]
   // 多组时按域名排序确保分组稳定；单组时随机打乱
-  const sites = totalGroups > 1
+  let sites = totalGroups > 1
     ? [...allSites].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
     : shuffle(allSites)
 
+  // 重试模式：只跑今日主抓取中 fail/empty 的站
+  if (retryFailed && step !== 'all') {
+    const todayStart = new Date(today + 'T00:00:00+08:00').toISOString()
+    const todayEnd = new Date(today + 'T23:59:59.999+08:00').toISOString()
+
+    // 查今日该步骤的 cron_task 活动 ID
+    const { data: activities } = await supabase
+      .from('activity_log')
+      .select('id')
+      .eq('step', step)
+      .eq('type', 'cron_task')
+      .gte('logged_at', todayStart)
+      .lte('logged_at', todayEnd)
+
+    const activityIds = ((activities || []) as { id: string }[]).map(a => a.id)
+    if (activityIds.length === 0) {
+      console.log(`\n  重试模式：今日尚无 ${step} 主抓取记录，跳过\n`)
+      return
+    }
+
+    // 查这些活动里失败/空的站点域名
+    const { data: failedLogs } = await supabase
+      .from('activity_site_log')
+      .select('domain')
+      .in('activity_id', activityIds)
+      .in('status', ['fail', 'empty'])
+
+    const failedDomains = new Set(((failedLogs || []) as { domain: string }[]).map(l => l.domain))
+    console.log(`  重试模式：今日 ${step} 失败/空共 ${failedDomains.size} 站`)
+
+    if (failedDomains.size === 0) {
+      console.log('  无失败站点，退出\n')
+      return
+    }
+
+    // 只保留失败站，按域名重新分组
+    const failedSites = allSites.filter(s => failedDomains.has(s.domain))
+    sites = totalGroups > 1
+      ? [...failedSites].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
+      : failedSites
+  }
+
   console.log(`  共 ${allSites.length} 个站点，本组 ${sites.length} 个  today=${today}  yesterday=${yesterday}`)
 
-  const logBase = { type: 'cron_task' as const, source: 'github_actions', groupIndex: group, totalGroups, ip }
+  const logBase = {
+    type: 'cron_task' as const,
+    source: retryFailed ? 'github_retry' : 'github_actions',
+    groupIndex: group, totalGroups, ip,
+  }
 
   if (step === 'keywords' || step === 'all') {
     const aid = await activityStart(supabase, { ...logBase, step: 'keywords' })
-    await runKeywords(sites.filter(s => s.is_enabled), today, yesterday, group === 0, aid)
+    // 重试模式下不执行旧数据清理（主抓取 group0 已完成）
+    await runKeywords(sites.filter(s => s.is_enabled), today, yesterday, !retryFailed && group === 0, aid)
   }
   if (step === 'weight' || step === 'all') {
     const aid = await activityStart(supabase, { ...logBase, step: 'weight' })
