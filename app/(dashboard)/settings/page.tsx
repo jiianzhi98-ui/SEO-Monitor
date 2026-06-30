@@ -318,16 +318,14 @@ function SiteAccessModal({ user, onClose }: { user: UserRecord; onClose: () => v
         ) : (
           <div className="max-h-72 overflow-y-auto space-y-2 mb-4">
             {sites.map(site => (
-              <label key={site.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 cursor-pointer">
+              <label key={site.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" checked={checked.has(site.id)} onChange={() => toggle(site.id)}
-                  className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
-                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                  className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0" />
+                <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
                   site.focus_level === 1 ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'
                 }`}>{focusLabel[site.focus_level]}</span>
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-800 font-medium truncate">{site.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{site.domain}</p>
-                </div>
+                <span className="text-sm text-gray-800 font-medium truncate">{site.name}</span>
+                <span className="text-xs text-gray-400 truncate flex-shrink-0">{site.domain}</span>
               </label>
             ))}
           </div>
