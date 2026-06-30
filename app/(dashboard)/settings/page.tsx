@@ -276,6 +276,145 @@ function EditRoleModal({ user, callerRole, onClose, onUpdated }: {
   )
 }
 
+// ─── IP whitelist modal ───────────────────────────────────────────────────────
+
+const ipv4Re = /^(\d{1,3}\.){3}\d{1,3}$/
+
+function IpWhitelistModal({ user, onClose }: { user: UserRecord; onClose: () => void }) {
+  const [ips, setIps] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [newIp, setNewIp] = useState('')
+  const [myIp, setMyIp] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/admin/users/${user.id}/ip-whitelist`).then(r => r.json()),
+      fetch('/api/my-ip').then(r => r.json()),
+    ]).then(([ipData, myIpData]) => {
+      setIps(ipData.allowedIps ?? [])
+      setMyIp(myIpData.ip ?? null)
+      setLoading(false)
+    })
+  }, [user.id])
+
+  function addIp() {
+    const ip = newIp.trim()
+    if (!ip) return
+    if (ips.includes(ip)) { setError('该IP已在白名单中'); return }
+    if (!ipv4Re.test(ip)) { setError('IP格式不正确，请输入如 192.168.1.1'); return }
+    setIps(prev => [...prev, ip])
+    setNewIp('')
+    setError(null)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    const res = await fetch(`/api/admin/users/${user.id}/ip-whitelist`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowedIps: ips }),
+    })
+    setSaving(false)
+    if (!res.ok) {
+      const d = await res.json()
+      setError(d.error ?? '保存失败')
+    } else {
+      onClose()
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-base font-semibold text-gray-900">IP 白名单</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">{user.email} · 留空则不限制 IP 访问</p>
+
+        {myIp && (
+          <div className="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2 mb-4">
+            <span className="text-xs text-blue-600">您当前 IP：</span>
+            <span className="text-xs font-mono text-blue-700 font-medium">{myIp}</span>
+            {!loading && !ips.includes(myIp) && (
+              <button
+                onClick={() => { setIps(prev => [...prev, myIp!]); setError(null) }}
+                className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                添加
+              </button>
+            )}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="h-20 flex items-center justify-center text-gray-400 text-sm">加载中...</div>
+        ) : ips.length === 0 ? (
+          <div className="h-16 flex items-center justify-center text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg mb-4">
+            暂无限制 · 所有 IP 均可访问
+          </div>
+        ) : (
+          <div className="max-h-48 overflow-y-auto space-y-1.5 mb-4">
+            {ips.map(ip => (
+              <div key={ip} className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50">
+                <span className="text-sm font-mono text-gray-800">{ip}</span>
+                <button onClick={() => setIps(prev => prev.filter(i => i !== ip))}
+                  className="text-gray-300 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={newIp}
+            onChange={e => { setNewIp(e.target.value); setError(null) }}
+            onKeyDown={e => e.key === 'Enter' && addIp()}
+            placeholder="输入 IP，如 192.168.1.1"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          <button onClick={addIp}
+            className="px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
+            添加
+          </button>
+        </div>
+
+        {error && (
+          <div className="rounded-lg px-4 py-3 text-sm bg-red-50 border border-red-200 text-red-600 mb-3">{error}</div>
+        )}
+
+        {ips.length > 0 && (
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+            ⚠ 设置后该账号只能从以上 IP 访问页面，请确认 IP 正确
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+            取消
+          </button>
+          <button onClick={handleSave} disabled={saving || loading}
+            className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Site access modal ────────────────────────────────────────────────────────
 
 function SiteAccessModal({ user, onClose }: { user: UserRecord; onClose: () => void }) {
@@ -455,6 +594,7 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
   const [showAddUser, setShowAddUser] = useState(false)
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null)
   const [accessUser, setAccessUser] = useState<UserRecord | null>(null)
+  const [ipWhitelistUser, setIpWhitelistUser] = useState<UserRecord | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
@@ -531,6 +671,12 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
                   </td>
                   <td className="table-td text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => setIpWhitelistUser(user)}
+                        className="text-xs text-orange-500 hover:text-orange-700 border border-orange-100 rounded px-1.5 py-0.5 hover:border-orange-200 transition-colors"
+                      >
+                        IP白名单
+                      </button>
                       {user.role === 'normal' && (
                         <button
                           onClick={() => setAccessUser(user)}
@@ -583,6 +729,9 @@ function ManagerSettings({ callerRole }: { callerRole: UserRole }) {
       )}
       {accessUser && (
         <SiteAccessModal user={accessUser} onClose={() => setAccessUser(null)} />
+      )}
+      {ipWhitelistUser && (
+        <IpWhitelistModal user={ipWhitelistUser} onClose={() => setIpWhitelistUser(null)} />
       )}
     </div>
   )
