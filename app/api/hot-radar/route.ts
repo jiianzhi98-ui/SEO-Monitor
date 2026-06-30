@@ -29,17 +29,18 @@ export async function GET() {
     db.rpc('get_hot_new_words',      { p_since: since }),
     db.rpc('get_hot_rank_words',     { p_since: since }),
     db.rpc('get_hot_streak_words',   { p_since: since }),
-    db.rpc('get_keyword_dates_new',  { p_since: since }),
-    db.rpc('get_keyword_dates_rank', { p_since: since }),
+    db.rpc('get_keyword_dates_new',  { p_since: since }).limit(10000),
+    db.rpc('get_keyword_dates_rank', { p_since: since }).limit(10000),
   ])
 
   const _debug = {
-    newWords_count:    (newWordsRaw  as unknown[])?.length ?? null,
-    rankWords_count:   (rankWordsRaw as unknown[])?.length ?? null,
-    newDates_count:    (kwNewDatesRaw  as unknown[])?.length ?? null,
-    rankDates_count:   (kwRankDatesRaw as unknown[])?.length ?? null,
+    newWords_count:       (newWordsRaw  as unknown[])?.length ?? null,
+    rankWords_count:      (rankWordsRaw as unknown[])?.length ?? null,
+    newDates_count:       (kwNewDatesRaw  as unknown[])?.length ?? null,
+    rankDates_count:      (kwRankDatesRaw as unknown[])?.length ?? null,
     errors: [e1, e2, e3, e4, e5].filter(Boolean).map(e => (e as {message:string}).message),
   }
+  // populated after maps are built below
 
   const toDate = (v: unknown) => v ? String(v).slice(0, 10) : ''
 
@@ -69,6 +70,9 @@ export async function GET() {
     first_date: toDate(r.first_seen),
     last_date:  toDate(r.last_seen),
   }))
+
+  _debug.newWords_with_dates  = newWords.filter(w => w.last_date).length as never
+  _debug.rankWords_with_dates = rankWords.filter(w => w.last_date).length as never
 
   return NextResponse.json({ newWords, rankWords, streakWords, _debug })
 }
