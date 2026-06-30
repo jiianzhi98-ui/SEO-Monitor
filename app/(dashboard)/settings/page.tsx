@@ -146,7 +146,8 @@ function AddUserModal({ callerRole, onClose, onCreated }: {
             </svg>
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4"
+          onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">用户名 <span className="text-red-500">*</span></label>
             <input type="text" value={username} onChange={e => setUsername(e.target.value)} required placeholder="登录时使用的用户名"
@@ -238,7 +239,8 @@ function EditRoleModal({ user, callerRole, onClose, onUpdated }: {
             </svg>
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4"
+          onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">用户名</label>
             <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="登录时显示的名称"
