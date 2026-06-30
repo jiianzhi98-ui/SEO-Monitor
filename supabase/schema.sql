@@ -116,6 +116,25 @@ AS $$
   ORDER BY last_seen DESC, streak DESC, volume DESC
 $$;
 
+-- 热词雷达：各 tab 关键词日期聚合（在 Supabase SQL Editor 执行）
+CREATE OR REPLACE FUNCTION get_keyword_dates_new(p_since date)
+RETURNS TABLE(keyword text, first_date date, last_date date)
+LANGUAGE sql STABLE AS $$
+  SELECT keyword, MIN(content_date)::date, MAX(content_date)::date
+  FROM raw_keywords
+  WHERE content_date >= p_since AND content_date IS NOT NULL
+  GROUP BY keyword
+$$;
+
+CREATE OR REPLACE FUNCTION get_keyword_dates_rank(p_since date)
+RETURNS TABLE(keyword text, first_date date, last_date date)
+LANGUAGE sql STABLE AS $$
+  SELECT keyword, MIN(stat_date)::date, MAX(stat_date)::date
+  FROM rank_changes
+  WHERE type = 'rankup' AND stat_date >= p_since
+  GROUP BY keyword
+$$;
+
 -- 分组任务 tables
 CREATE TABLE IF NOT EXISTS task_groups (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

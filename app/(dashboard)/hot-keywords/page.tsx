@@ -4,59 +4,101 @@ import { useEffect, useState, useMemo } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { buildGroupMaps } from '@/lib/company-groups'
 
+// ── Interfaces ────────────────────────────────────────────────────────────────
+
 interface WordEntry {
-  keyword: string
-  count: number
-  siteCount: number
-  sites: string[]
+  keyword: string; count: number; siteCount: number; sites: string[]
+  last_date: string; first_date: string
 }
-
 interface RankEntry {
-  keyword: string
-  siteCount: number
-  volume: number
-  sites: string[]
+  keyword: string; siteCount: number; volume: number; sites: string[]
+  last_date: string; first_date: string
 }
-
 interface CrossEntry {
-  keyword: string
-  dims: string[]
-  volume: number | null
-  sites: string[]
+  keyword: string; dims: string[]; volume: number | null; sites: string[]
+  last_date: string; first_date: string
 }
-
 interface StreakEntry {
-  keyword: string
-  streak: number
-  domain: string
-  volume: number
-  first_seen: string
-  last_seen: string
+  keyword: string; streak: number; domain: string; volume: number
+  last_date: string; first_date: string
 }
-
-interface RadarData {
-  newWords: WordEntry[]
-  rankWords: RankEntry[]
-  streakWords: StreakEntry[]
-}
-
+interface RadarData { newWords: WordEntry[]; rankWords: RankEntry[]; streakWords: StreakEntry[] }
 interface WeightInfo { pc: number; mobile: number; pcChg: number; mobileChg: number }
-interface DetailRow { date: string; domain: string }
+interface DetailRow  { date: string; domain: string }
 
-type Tab = 'cross' | 'new' | 'rank' | 'streak'
+type Tab      = 'cross' | 'new' | 'rank' | 'streak'
 type PageSize = 50 | 100 | 500
 const PAGE_SIZES: PageSize[] = [50, 100, 500]
+
+// ── Pure helpers ──────────────────────────────────────────────────────────────
 
 function getMYDate(): string {
   return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
 }
-function getMYDateOffset(days: number): string {
-  return new Date(Date.now() + 8 * 3600000 + days * 86400000).toISOString().slice(0, 10)
+
+type Badge = 'new' | 'updated' | null
+function getBadge(first_date: string, last_date: string, today: string): Badge {
+  if (last_date !== today) return null
+  return first_date === today ? 'new' : 'updated'
+}
+
+function badgePriority(first_date: string, last_date: string, today: string): number {
+  if (last_date !== today) return 2
+  return first_date === today ? 0 : 1
+}
+
+function sortByDate<T extends { last_date: string; first_date: string }>(
+  list: T[],
+  today: string,
+  secondary: (a: T, b: T) => number
+): T[] {
+  return [...list].sort((a, b) => {
+    if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
+    const bp = badgePriority(a.first_date, a.last_date, today) - badgePriority(b.first_date, b.last_date, today)
+    if (bp !== 0) return bp
+    return secondary(a, b)
+  })
+}
+
+function fmtDate(d: string): string {
+  if (!d) return '—'
+  return d.slice(5).replace('-', '/')
+}
+
+function fmtVolume(v: number): string {
+  if (v <= 0) return '—'
+  return v.toLocaleString()
+}
+
+// ── Small components ──────────────────────────────────────────────────────────
+
+const DIM_LABELS: Record<string, { label: string; cls: string }> = {
+  new:  { label: '新增', cls: 'bg-blue-50 text-blue-600' },
+  rank: { label: '涨排', cls: 'bg-orange-50 text-orange-600' },
+}
+
+function BadgeChip({ badge }: { badge: Badge }) {
+  if (!badge) return null
+  if (badge === 'new')
+    return <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-green-500 text-white leading-none">今日</span>
+  return <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-400 text-white leading-none">更新</span>
+}
+
+function DateCell({ last_date, first_date, today }: { last_date: string; first_date: string; today: string }) {
+  const isToday = last_date === today
+  const badge = getBadge(first_date, last_date, today)
+  return (
+    <td className="table-td whitespace-nowrap w-20">
+      <div className={`flex items-center gap-1 ${isToday ? 'text-green-600' : 'text-gray-400'}`}>
+        <span className={`text-xs ${isToday ? 'font-semibold' : ''}`}>{fmtDate(last_date)}</span>
+        <BadgeChip badge={badge} />
+      </div>
+    </td>
+  )
 }
 
 function PaginationBar({ page, total, pageSize, onPageChange }: {
-  page: number; total: number; pageSize: PageSize
-  onPageChange: (p: number) => void
+  page: number; total: number; pageSize: PageSize; onPageChange: (p: number) => void
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   if (totalPages <= 1) return null
@@ -71,27 +113,10 @@ function PaginationBar({ page, total, pageSize, onPageChange }: {
   )
 }
 
-const TAB_CONFIG: { key: Tab; label: string }[] = [
-  { key: 'cross', label: '交叉词' },
-  { key: 'new', label: '共新增词' },
-  { key: 'rank', label: '竞品涨排名' },
-  { key: 'streak', label: '连续上涨词' },
-]
-
-const DIM_LABELS: Record<string, { label: string; cls: string }> = {
-  new: { label: '新增', cls: 'bg-blue-50 text-blue-600' },
-  rank: { label: '涨排', cls: 'bg-orange-50 text-orange-600' },
-}
-
-function fmtVolume(v: number): string {
-  if (v <= 0) return '—'
-  return v.toLocaleString()
-}
+// ── SiteBadge / SiteBadges ────────────────────────────────────────────────────
 
 function SiteBadge({ domain, weight, borderColor }: {
-  domain: string
-  weight?: WeightInfo
-  borderColor?: string
+  domain: string; weight?: WeightInfo; borderColor?: string
 }) {
   return (
     <span
@@ -103,30 +128,18 @@ function SiteBadge({ domain, weight, borderColor }: {
         <span className="text-[10px] flex items-center gap-1 mt-px">
           <span className="text-gray-400">PC</span>
           <span className="text-gray-600 font-medium">{weight.pc}</span>
-          {weight.pcChg !== 0 && (
-            <span className={weight.pcChg > 0 ? 'text-green-500' : 'text-red-500'}>
-              {weight.pcChg > 0 ? '↑' : '↓'}
-            </span>
-          )}
+          {weight.pcChg !== 0 && <span className={weight.pcChg > 0 ? 'text-green-500' : 'text-red-500'}>{weight.pcChg > 0 ? '↑' : '↓'}</span>}
           <span className="text-gray-300">·</span>
           <span className="text-gray-400">M</span>
           <span className="text-gray-600 font-medium">{weight.mobile}</span>
-          {weight.mobileChg !== 0 && (
-            <span className={weight.mobileChg > 0 ? 'text-green-500' : 'text-red-500'}>
-              {weight.mobileChg > 0 ? '↑' : '↓'}
-            </span>
-          )}
+          {weight.mobileChg !== 0 && <span className={weight.mobileChg > 0 ? 'text-green-500' : 'text-red-500'}>{weight.mobileChg > 0 ? '↑' : '↓'}</span>}
         </span>
       )}
     </span>
   )
 }
 
-function sortSitesByWeight(
-  sites: string[],
-  weightMap: Map<string, WeightInfo>,
-  idMap: Map<string, number>
-): string[] {
+function sortSitesByWeight(sites: string[], weightMap: Map<string, WeightInfo>, idMap: Map<string, number>): string[] {
   const score = (d: string) => { const w = weightMap.get(d); return w ? (w.pc + w.mobile) / 2 : -1 }
   const groupMax = new Map<number, number>()
   for (const d of sites) {
@@ -147,15 +160,10 @@ function sortSitesByWeight(
 }
 
 function SiteBadges({ sites, weightMap, idMap, colorMap }: {
-  sites: string[]
-  weightMap: Map<string, WeightInfo>
-  idMap: Map<string, number>
-  colorMap: Map<string, string>
+  sites: string[]; weightMap: Map<string, WeightInfo>
+  idMap: Map<string, number>; colorMap: Map<string, string>
 }) {
-  const sorted = useMemo(
-    () => sortSitesByWeight(sites, weightMap, idMap),
-    [sites, weightMap, idMap]
-  )
+  const sorted = useMemo(() => sortSitesByWeight(sites, weightMap, idMap), [sites, weightMap, idMap])
   return (
     <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'thin' }}>
       {sorted.map((d) => (
@@ -165,25 +173,38 @@ function SiteBadges({ sites, weightMap, idMap, colorMap }: {
   )
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+const TAB_CONFIG: { key: Tab; label: string }[] = [
+  { key: 'cross',  label: '交叉词' },
+  { key: 'new',    label: '共新增词' },
+  { key: 'rank',   label: '竞品涨排名' },
+  { key: 'streak', label: '连续上涨词' },
+]
+
 export default function HotRadarPage() {
-  const [data, setData] = useState<RadarData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [data, setData]           = useState<RadarData | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('cross')
-  const [minSites, setMinSites] = useState(2)
-  const [minStreakDays, setMinStreakDays] = useState(2)
-  const [filterSite, setFilterSite] = useState('')
+  const [minSites, setMinSites]   = useState(2)
+  const [minStreak, setMinStreak] = useState(2)
+  const [filterSite, setFilterSite]       = useState('')
   const [filterKeyword, setFilterKeyword] = useState('')
-  const [page, setPage] = useState(0)
+  const [page, setPage]         = useState(0)
   const [pageSize, setPageSize] = useState<PageSize>(50)
-  const [weightMap, setWeightMap] = useState<Map<string, WeightInfo>>(new Map())
-  const [siteIdMap, setSiteIdMap] = useState<Map<string, string>>(new Map())
-  const [groupIdMap, setGroupIdMap] = useState<Map<string, number>>(new Map())
+  const [weightMap, setWeightMap]     = useState<Map<string, WeightInfo>>(new Map())
+  const [siteIdMap, setSiteIdMap]     = useState<Map<string, string>>(new Map())
+  const [groupIdMap, setGroupIdMap]   = useState<Map<string, number>>(new Map())
   const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
-  const [copied, setCopied] = useState(false)
-  const [detailKw, setDetailKw] = useState<string | null>(null)
-  const [detailRows, setDetailRows] = useState<DetailRow[]>([])
+  const [copied, setCopied]           = useState(false)
+  const [detailKw, setDetailKw]       = useState<string | null>(null)
+  const [detailRows, setDetailRows]   = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+
+  const today = useMemo(() => getMYDate(), [])
+
+  // ── Fetch ────────────────────────────────────────────────────────────────
 
   async function fetchWeights() {
     const db = getBrowserClient()
@@ -211,7 +232,7 @@ export default function HotRadarPage() {
       const domain = idToDomain.get(sid)
       if (!domain) continue
       const latest = recs[recs.length - 1]
-      const prev = recs.length >= 2 ? recs[recs.length - 2] : null
+      const prev   = recs.length >= 2 ? recs[recs.length - 2] : null
       map.set(domain, {
         pc: latest.pc, mobile: latest.mobile,
         pcChg: prev ? latest.pc - prev.pc : 0,
@@ -233,25 +254,22 @@ export default function HotRadarPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: raw } = await (db.from('raw_keywords') as any)
           .select('site_id, content_date')
-          .eq('keyword', keyword)
-          .gte('content_date', since)
+          .eq('keyword', keyword).gte('content_date', since)
           .order('content_date', { ascending: false })
         for (const r of (raw || [])) {
           const domain = siteIdMap.get(r.site_id)
-          if (domain) rows.push({ date: (r.content_date as string).slice(0, 10), domain })
+          if (domain) rows.push({ date: String(r.content_date).slice(0, 10), domain })
         }
       }
       if (activeTab === 'rank' || activeTab === 'streak' || activeTab === 'cross') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: raw } = await (db.from('rank_changes') as any)
           .select('site_id, stat_date')
-          .eq('keyword', keyword)
-          .eq('type', 'rankup')
-          .gte('stat_date', since)
+          .eq('keyword', keyword).eq('type', 'rankup').gte('stat_date', since)
           .order('stat_date', { ascending: false })
         for (const r of (raw || [])) {
           const domain = siteIdMap.get(r.site_id)
-          if (domain) rows.push({ date: (r.stat_date as string).slice(0, 10), domain })
+          if (domain) rows.push({ date: String(r.stat_date).slice(0, 10), domain })
         }
       }
       const seen = new Set<string>()
@@ -271,50 +289,64 @@ export default function HotRadarPage() {
   useEffect(() => {
     setLoading(true)
     fetch('/api/hot-radar')
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch((e) => setError(e.message || '加载失败'))
+      .then(r => r.json())
+      .then(d => setData(d))
+      .catch(e => setError(e.message || '加载失败'))
       .finally(() => setLoading(false))
     fetchWeights()
-  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Derived data ──────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
     if (!data) return null
-    const nw = data.newWords.filter((w) => w.siteCount >= minSites)
-    const rw = data.rankWords.filter((w) => w.siteCount >= minSites)
+    const nw = data.newWords.filter(w => w.siteCount >= minSites)
+    const rw = data.rankWords.filter(w => w.siteCount >= minSites)
 
     const nwMap = new Map(nw.map(w => [w.keyword, w]))
     const rwMap = new Map(rw.map(w => [w.keyword, w]))
     const allKws = new Set([...Array.from(nwMap.keys()), ...Array.from(rwMap.keys())])
 
-    const cw: CrossEntry[] = Array.from(allKws)
-      .map((keyword) => {
-        const dims: string[] = []
-        const sites = new Set<string>()
-        if (nwMap.has(keyword)) { dims.push('new'); nwMap.get(keyword)!.sites.forEach(s => sites.add(s)) }
-        if (rwMap.has(keyword)) { dims.push('rank'); rwMap.get(keyword)!.sites.forEach(s => sites.add(s)) }
-        return { keyword, dims, volume: rwMap.get(keyword)?.volume ?? null, sites: Array.from(sites) }
-      })
-      .filter((w) => w.dims.length >= 2)
-      .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0) || b.dims.length - a.dims.length)
+    const cw: CrossEntry[] = Array.from(allKws).map(keyword => {
+      const dims: string[] = []
+      const sites = new Set<string>()
+      let last_date = '', first_date = ''
+
+      const nwe = nwMap.get(keyword)
+      if (nwe) {
+        dims.push('new')
+        nwe.sites.forEach(s => sites.add(s))
+        if (nwe.last_date > last_date) last_date = nwe.last_date
+        if (!first_date || nwe.first_date < first_date) first_date = nwe.first_date
+      }
+      const rwe = rwMap.get(keyword)
+      if (rwe) {
+        dims.push('rank')
+        rwe.sites.forEach(s => sites.add(s))
+        if (rwe.last_date > last_date) last_date = rwe.last_date
+        if (!first_date || rwe.first_date < first_date) first_date = rwe.first_date
+      }
+      return { keyword, dims, volume: rwe?.volume ?? null, sites: Array.from(sites), last_date, first_date }
+    }).filter(w => w.dims.length >= 2)
 
     return {
-      newWords: nw,
-      rankWords: rw.sort((a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
-      crossWords: cw,
+      newWords:    sortByDate(nw, today, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
+      rankWords:   sortByDate(rw, today, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
+      crossWords:  sortByDate(cw, today, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
       streakWords: data.streakWords || [],
     }
-  }, [data, minSites])
+  }, [data, minSites, today])
 
   const filteredStreakWords = useMemo(() => {
     if (!filtered) return []
-    return filtered.streakWords.filter(w => w.streak >= minStreakDays)
-  }, [filtered, minStreakDays])
+    const list = filtered.streakWords.filter(w => w.streak >= minStreak)
+    return sortByDate(list, today, (a, b) => b.streak - a.streak || b.volume - a.volume)
+  }, [filtered, minStreak, today])
 
   const baseList = !filtered ? [] :
-    activeTab === 'cross' ? filtered.crossWords :
-    activeTab === 'new' ? filtered.newWords :
-    activeTab === 'rank' ? filtered.rankWords :
+    activeTab === 'cross'  ? filtered.crossWords  :
+    activeTab === 'new'    ? filtered.newWords     :
+    activeTab === 'rank'   ? filtered.rankWords    :
     filteredStreakWords
 
   const activeList = useMemo(() => {
@@ -322,11 +354,11 @@ export default function HotRadarPage() {
     let list = baseList as AnyEntry[]
     if (filterSite.trim()) {
       const fs = filterSite.trim().toLowerCase()
-      list = list.filter(w => {
-        if ('domain' in w && !('sites' in w)) return (w as StreakEntry).domain.toLowerCase().includes(fs)
-        if ('sites' in w) return ((w as { sites: string[] }).sites).some(s => s.toLowerCase().includes(fs))
-        return true
-      })
+      list = list.filter(w =>
+        ('domain' in w && !('sites' in w))
+          ? (w as StreakEntry).domain.toLowerCase().includes(fs)
+          : ('sites' in w ? (w as { sites: string[] }).sites.some(s => s.toLowerCase().includes(fs)) : true)
+      )
     }
     if (filterKeyword.trim()) {
       const kw = filterKeyword.trim().toLowerCase()
@@ -341,8 +373,7 @@ export default function HotRadarPage() {
   function handleTabChange(tab: Tab) { setActiveTab(tab); setPage(0) }
 
   function copyKeywords() {
-    const text = activeList.map(w => w.keyword).join('\n')
-    navigator.clipboard.writeText(text)
+    navigator.clipboard.writeText(activeList.map(w => w.keyword).join('\n'))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -356,8 +387,7 @@ export default function HotRadarPage() {
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [detailRows])
 
-  const today = getMYDate()
-  const yesterday = getMYDateOffset(-1)
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-6">
@@ -368,22 +398,19 @@ export default function HotRadarPage() {
 
       {/* Tab bar */}
       <div className="flex items-center gap-2 mb-4">
-        {TAB_CONFIG.map((tab) => {
-          const isActive = activeTab === tab.key
-          return (
-            <button
-              key={tab.key}
-              onClick={() => handleTabChange(tab.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          )
-        })}
+        {TAB_CONFIG.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => handleTabChange(tab.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="card">
@@ -401,224 +428,216 @@ export default function HotRadarPage() {
           </div>
         ) : (
           <>
-          {/* Filter bar */}
-          <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-400">站点</span>
-              <input
-                type="text"
-                value={filterSite}
-                onChange={(e) => { setFilterSite(e.target.value); setPage(0) }}
-                placeholder="输入域名..."
-                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-36"
-              />
+            {/* Filter bar */}
+            <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">站点</span>
+                <input type="text" value={filterSite}
+                  onChange={e => { setFilterSite(e.target.value); setPage(0) }}
+                  placeholder="输入域名..."
+                  className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-36" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">关键词</span>
+                <input type="text" value={filterKeyword}
+                  onChange={e => { setFilterKeyword(e.target.value); setPage(0) }}
+                  placeholder="搜索..."
+                  className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-32" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                {activeTab !== 'streak' ? (
+                  <>
+                    <span className="text-xs text-gray-400">最少站点数</span>
+                    <select value={minSites} onChange={e => { setMinSites(Number(e.target.value)); setPage(0) }}
+                      className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                      <option value={2}>2站</option>
+                      <option value={3}>3站</option>
+                      <option value={4}>4站</option>
+                      <option value={5}>5站</option>
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-gray-400">最少上涨天数</span>
+                    <select value={minStreak} onChange={e => { setMinStreak(Number(e.target.value)); setPage(0) }}
+                      className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                      <option value={2}>2天</option>
+                      <option value={3}>3天</option>
+                      <option value={5}>5天</option>
+                      <option value={7}>7天</option>
+                    </select>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <button onClick={copyKeywords}
+                  className={`text-xs px-2.5 py-1 rounded font-medium transition-all duration-200 ${
+                    copied ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-blue-500 text-white hover:bg-blue-600'
+                  }`}>
+                  {copied ? '已复制 ✓' : '复制关键词'}
+                </button>
+                <span className="text-gray-200">|</span>
+                <span className="text-xs text-gray-400">每页</span>
+                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value) as PageSize); setPage(0) }}
+                  className="text-xs border border-gray-200 rounded px-1 py-0.5 text-gray-700 focus:outline-none">
+                  {PAGE_SIZES.map(s => <option key={s} value={s}>{s} 条</option>)}
+                </select>
+                <span className="text-xs text-gray-400">共 {activeList.length} 条</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-400">关键词</span>
-              <input
-                type="text"
-                value={filterKeyword}
-                onChange={(e) => { setFilterKeyword(e.target.value); setPage(0) }}
-                placeholder="搜索..."
-                className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-32"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              {activeTab !== 'streak' ? (
-                <>
-                  <span className="text-xs text-gray-400">最少站点数</span>
-                  <select
-                    value={minSites}
-                    onChange={(e) => { setMinSites(Number(e.target.value)); setPage(0) }}
-                    className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
-                  >
-                    <option value={2}>2站</option>
-                    <option value={3}>3站</option>
-                    <option value={4}>4站</option>
-                    <option value={5}>5站</option>
-                  </select>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs text-gray-400">最少上涨天数</span>
-                  <select
-                    value={minStreakDays}
-                    onChange={(e) => { setMinStreakDays(Number(e.target.value)); setPage(0) }}
-                    className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none"
-                  >
-                    <option value={2}>2天</option>
-                    <option value={3}>3天</option>
-                    <option value={5}>5天</option>
-                    <option value={7}>7天</option>
-                  </select>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <button
-                onClick={copyKeywords}
-                className={`text-xs px-2.5 py-1 rounded font-medium transition-all duration-200 ${
-                  copied
-                    ? 'bg-green-100 text-green-700 border border-green-300'
-                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                }`}
-              >
-                {copied ? '已复制 ✓' : '复制关键词'}
-              </button>
-              <span className="text-gray-200">|</span>
-              <span className="text-xs text-gray-400">每页</span>
-              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value) as PageSize); setPage(0) }} className="text-xs border border-gray-200 rounded px-1 py-0.5 text-gray-700 focus:outline-none">
-                {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} 条</option>)}
-              </select>
-              <span className="text-xs text-gray-400">共 {activeList.length} 条</span>
-            </div>
-          </div>
 
-          <div className="overflow-x-auto [&_td]:py-1.5 [&_th]:py-1.5">
-            {activeTab === 'cross' && (
-              <table className="w-full table-fixed">
-                <colgroup>
-                  <col className="w-72" />
-                  <col className="w-24" />
-                  <col className="w-24" />
-                  <col className="w-20" />
-                </colgroup>
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="table-th">关键词</th>
-                    <th className="table-th text-center">命中维度</th>
-                    <th className="table-th text-right">搜索量</th>
-                    <th className="table-th text-center">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {pagedList.length === 0 ? (
-                    <tr><td colSpan={4} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
-                  ) : (
-                    (pagedList as CrossEntry[]).map((w) => (
-                      <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
-                        <td className="table-td font-medium text-gray-900">{w.keyword}</td>
-                        <td className="table-td">
-                          <div className="flex justify-center gap-1.5">
-                            {w.dims.map((d) => (
-                              <span key={d} className={`text-sm px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
-                                {DIM_LABELS[d]?.label}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="table-td text-right text-gray-600 text-sm">
-                          {w.volume != null ? fmtVolume(w.volume) : '—'}
-                        </td>
-                        <td className="table-td text-center">
-                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+            {/* Tables */}
+            <div className="overflow-x-auto [&_td]:py-1.5 [&_th]:py-1.5">
 
-            {activeTab === 'new' && (
-              <table className="w-full table-fixed">
-                <colgroup>
-                  <col className="w-72" />
-                  <col className="w-20" />
-                  <col className="w-16" />
-                  <col />
-                  <col className="w-20" />
-                </colgroup>
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="table-th">关键词</th>
-                    <th className="table-th text-center whitespace-nowrap">新增次数</th>
-                    <th className="table-th text-center whitespace-nowrap">站点数</th>
-                    <th className="table-th">出现站点</th>
-                    <th className="table-th text-center">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {pagedList.length === 0 ? (
-                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
-                  ) : (
-                    (pagedList as WordEntry[]).map((w) => (
-                      <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
-                        <td className="table-td font-medium text-gray-900">{w.keyword}</td>
-                        <td className="table-td text-center text-gray-600">{w.count}次</td>
-                        <td className="table-td text-center">
-                          <span className="font-semibold text-gray-900">{w.siteCount}</span>
-                          <span className="text-gray-400 text-xs">站</span>
-                        </td>
-                        <td className="table-td">
-                          <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
-                        </td>
-                        <td className="table-td text-center">
-                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === 'rank' && (
-              <table className="w-full table-fixed">
-                <colgroup>
-                  <col className="w-72" />
-                  <col className="w-20" />
-                  <col className="w-20" />
-                  <col />
-                  <col className="w-20" />
-                </colgroup>
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="table-th">关键词</th>
-                    <th className="table-th text-center whitespace-nowrap">涨排站点</th>
-                    <th className="table-th text-right">搜索量</th>
-                    <th className="table-th">出现站点</th>
-                    <th className="table-th text-center">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {pagedList.length === 0 ? (
-                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
-                  ) : (
-                    (pagedList as RankEntry[]).map((w) => (
-                      <tr key={w.keyword} className="hover:bg-gray-100 transition-colors">
-                        <td className="table-td font-medium text-gray-900">{w.keyword}</td>
-                        <td className="table-td text-center">
-                          <span className="font-semibold text-gray-900">{w.siteCount}</span>
-                          <span className="text-gray-400 text-xs">站</span>
-                        </td>
-                        <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
-                        <td className="table-td">
-                          <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
-                        </td>
-                        <td className="table-td text-center">
-                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === 'streak' && (() => {
-              const dateGroups: { date: string; words: StreakEntry[] }[] = []
-              for (const w of pagedList as StreakEntry[]) {
-                const d = w.last_seen || ''
-                if (dateGroups.length === 0 || dateGroups[dateGroups.length - 1].date !== d) {
-                  dateGroups.push({ date: d, words: [] })
-                }
-                dateGroups[dateGroups.length - 1].words.push(w)
-              }
-              return (
+              {/* 交叉词 */}
+              {activeTab === 'cross' && (
                 <table className="w-full table-fixed">
                   <colgroup>
-                    <col className="w-72" />
+                    <col className="w-20" />
+                    <col className="w-64" />
+                    <col className="w-24" />
+                    <col className="w-24" />
+                    <col className="w-20" />
+                  </colgroup>
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="table-th">日期</th>
+                      <th className="table-th">关键词</th>
+                      <th className="table-th text-center">命中维度</th>
+                      <th className="table-th text-right">搜索量</th>
+                      <th className="table-th text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pagedList.length === 0 ? (
+                      <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无交叉词数据</td></tr>
+                    ) : (
+                      (pagedList as CrossEntry[]).map(w => (
+                        <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                          <td className="table-td">
+                            <div className="flex justify-center gap-1.5">
+                              {w.dims.map(d => (
+                                <span key={d} className={`text-sm px-2 py-0.5 rounded font-medium ${DIM_LABELS[d]?.cls}`}>
+                                  {DIM_LABELS[d]?.label}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="table-td text-right text-gray-600 text-sm">
+                            {w.volume != null ? fmtVolume(w.volume) : '—'}
+                          </td>
+                          <td className="table-td text-center">
+                            <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              {/* 共新增词 */}
+              {activeTab === 'new' && (
+                <table className="w-full table-fixed">
+                  <colgroup>
+                    <col className="w-20" />
+                    <col className="w-60" />
+                    <col className="w-20" />
+                    <col className="w-16" />
+                    <col />
+                    <col className="w-20" />
+                  </colgroup>
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="table-th">日期</th>
+                      <th className="table-th">关键词</th>
+                      <th className="table-th text-center whitespace-nowrap">新增次数</th>
+                      <th className="table-th text-center whitespace-nowrap">站点数</th>
+                      <th className="table-th">出现站点</th>
+                      <th className="table-th text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pagedList.length === 0 ? (
+                      <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
+                    ) : (
+                      (pagedList as WordEntry[]).map(w => (
+                        <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                          <td className="table-td text-center text-gray-600">{w.count}次</td>
+                          <td className="table-td text-center">
+                            <span className="font-semibold text-gray-900">{w.siteCount}</span>
+                            <span className="text-gray-400 text-xs">站</span>
+                          </td>
+                          <td className="table-td">
+                            <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
+                          </td>
+                          <td className="table-td text-center">
+                            <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              {/* 竞品涨排名 */}
+              {activeTab === 'rank' && (
+                <table className="w-full table-fixed">
+                  <colgroup>
+                    <col className="w-20" />
+                    <col className="w-60" />
+                    <col className="w-20" />
+                    <col className="w-24" />
+                    <col />
+                    <col className="w-20" />
+                  </colgroup>
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="table-th">日期</th>
+                      <th className="table-th">关键词</th>
+                      <th className="table-th text-center whitespace-nowrap">涨排站点</th>
+                      <th className="table-th text-right">搜索量</th>
+                      <th className="table-th">出现站点</th>
+                      <th className="table-th text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pagedList.length === 0 ? (
+                      <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
+                    ) : (
+                      (pagedList as RankEntry[]).map(w => (
+                        <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                          <td className="table-td text-center">
+                            <span className="font-semibold text-gray-900">{w.siteCount}</span>
+                            <span className="text-gray-400 text-xs">站</span>
+                          </td>
+                          <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
+                          <td className="table-td">
+                            <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
+                          </td>
+                          <td className="table-td text-center">
+                            <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              {/* 连续上涨词 */}
+              {activeTab === 'streak' && (
+                <table className="w-full table-fixed">
+                  <colgroup>
+                    <col className="w-20" />
+                    <col className="w-60" />
                     <col className="w-24" />
                     <col className="w-24" />
                     <col />
@@ -626,6 +645,7 @@ export default function HotRadarPage() {
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">上涨天数</th>
                       <th className="table-th text-right">搜索量</th>
@@ -633,51 +653,39 @@ export default function HotRadarPage() {
                       <th className="table-th text-center">操作</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-100">
                     {pagedList.length === 0 ? (
-                      <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
+                      <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
                     ) : (
-                      dateGroups.flatMap(({ date, words }) => [
-                        <tr key={`dh-${date}`}>
-                          <td colSpan={5} className={`px-4 py-1.5 text-xs font-semibold border-b border-gray-100 ${date === today ? 'bg-green-50 text-green-700' : 'bg-gray-50/70 text-gray-400'}`}>
-                            <div className="flex items-center gap-2">
-                              <span>{date ? date.slice(5).replace('-', '/') : '—'}</span>
-                              {date === today && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-500 text-white">今日</span>}
-                              {date === yesterday && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-500">昨日</span>}
-                            </div>
+                      (pagedList as StreakEntry[]).map((w, i) => (
+                        <tr key={`${w.domain}|${w.keyword}|${i}`} className="hover:bg-gray-50 transition-colors">
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <td className="table-td font-medium text-gray-900">
+                            {w.keyword}
+                            {w.first_date && w.first_date !== w.last_date && (
+                              <span className="ml-1.5 text-[10px] text-gray-300">入榜{fmtDate(w.first_date)}</span>
+                            )}
                           </td>
-                        </tr>,
-                        ...words.map((w, i) => (
-                          <tr key={`${w.domain}|${w.keyword}|${i}`} className="hover:bg-gray-100 transition-colors border-b border-gray-100">
-                            <td className="table-td font-medium text-gray-900">
-                              {w.keyword}
-                              {w.first_seen && w.first_seen !== w.last_seen && (
-                                <span className="ml-1.5 text-[10px] text-gray-300">
-                                  入榜{w.first_seen.slice(5).replace('-', '/')}
-                                </span>
-                              )}
-                            </td>
-                            <td className="table-td text-center">
-                              <span className="font-semibold text-orange-500">{w.streak}</span>
-                              <span className="text-gray-400 text-xs"> 天</span>
-                            </td>
-                            <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
-                            <td className="table-td">
-                              <SiteBadge domain={w.domain} weight={weightMap.get(w.domain)} borderColor={groupColorMap.get(w.domain)} />
-                            </td>
-                            <td className="table-td text-center">
-                              <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
-                            </td>
-                          </tr>
-                        ))
-                      ])
+                          <td className="table-td text-center">
+                            <span className="font-semibold text-orange-500">{w.streak}</span>
+                            <span className="text-gray-400 text-xs"> 天</span>
+                          </td>
+                          <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
+                          <td className="table-td">
+                            <SiteBadge domain={w.domain} weight={weightMap.get(w.domain)} borderColor={groupColorMap.get(w.domain)} />
+                          </td>
+                          <td className="table-td text-center">
+                            <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                          </td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>
-              )
-            })()}
-          </div>
-          <PaginationBar page={page} total={activeList.length} pageSize={pageSize} onPageChange={setPage} />
+              )}
+
+            </div>
+            <PaginationBar page={page} total={activeList.length} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </div>
