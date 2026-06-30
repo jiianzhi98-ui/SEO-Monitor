@@ -88,7 +88,7 @@ const STEP_LABELS: Record<string, string> = {
 }
 
 const STEP_TIMES: Record<string, string> = {
-  keywords: '每日 00:00', rank: '每日 02:00', weight: '每日 07:00',
+  keywords: '每日 02:00', rank: '每日 05:00', weight: '每日 04:00',
 }
 
 const TYPE_LABELS: Record<string, string> = {

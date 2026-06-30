@@ -114,7 +114,7 @@ export async function GET(request: Request) {
           if (hasCrawlConfig) {
             const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
             const htmlCutoff = getMalaysiaDate(-cutoffDays)
-            const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
+            const maxPg = isSingleSite ? 3 : site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
             const SRC_SEP = '|||'
             const listUrl = site.list_url!
             const isNew = listUrl.includes(SRC_SEP)
@@ -348,7 +348,7 @@ export async function GET(request: Request) {
         let lastData: { pc: number; mobile: number; indexCount: number } | null = null
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            if (attempt > 0) await new Promise((r) => setTimeout(r, 30000))
+            if (attempt > 0) await new Promise((r) => setTimeout(r, isSingleSite ? 3000 : 30000))
             const { pc, mobile, indexCount, pcIpMin, pcIpMax, mobileIpMin, mobileIpMax } = await fetchAizhanData(site.domain)
             await Promise.all([
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
