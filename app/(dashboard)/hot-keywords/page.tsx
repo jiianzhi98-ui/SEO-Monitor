@@ -47,19 +47,18 @@ function getBadge(first_date: string, last_date: string): Badge {
   return first_date === last_date ? 'new' : 'updated'
 }
 
-function badgePriority(first_date: string, last_date: string, today: string): number {
-  if (last_date !== today) return 2
-  return first_date === today ? 0 : 1
+function badgePriority(first_date: string, last_date: string): number {
+  if (!last_date) return 2
+  return first_date === last_date ? 0 : 1  // 今日=0，更新=1
 }
 
 function sortByDate<T extends { last_date: string; first_date: string }>(
   list: T[],
-  today: string,
   secondary: (a: T, b: T) => number
 ): T[] {
   return [...list].sort((a, b) => {
     if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
-    const bp = badgePriority(a.first_date, a.last_date, today) - badgePriority(b.first_date, b.last_date, today)
+    const bp = badgePriority(a.first_date, a.last_date) - badgePriority(b.first_date, b.last_date)
     if (bp !== 0) return bp
     return secondary(a, b)
   })
@@ -363,9 +362,9 @@ export default function HotRadarPage() {
     }).filter(w => w.dims.length >= 2)
 
     return {
-      newWords:    sortByDate(nw, today, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
-      rankWords:   sortByDate(rw, today, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
-      crossWords:  sortByDate(cw, today, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
+      newWords:    sortByDate(nw, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
+      rankWords:   sortByDate(rw, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
+      crossWords:  sortByDate(cw, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
       streakWords: (data.streakWords || []).filter(w => !dateFrom || !w.last_date || w.last_date >= dateFrom),
     }
   }, [data, minSites, today, dateFrom])
@@ -386,7 +385,7 @@ export default function HotRadarPage() {
         if (!g.first_date || w.first_date < g.first_date) g.first_date = w.first_date
       }
     }
-    return sortByDate(Array.from(grouped.values()), today, (a, b) => b.streak - a.streak || b.volume - a.volume)
+    return sortByDate(Array.from(grouped.values()), (a, b) => b.streak - a.streak || b.volume - a.volume)
   }, [filtered, minStreak, today])
 
   const baseList = !filtered ? [] :
