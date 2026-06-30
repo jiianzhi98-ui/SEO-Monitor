@@ -85,3 +85,29 @@ CREATE INDEX IF NOT EXISTS idx_weight_history_record_date ON weight_history(reco
 -- Optional: create a scheduled job using pg_cron (if available)
 -- SELECT cron.schedule('0 2 * * *', $$SELECT delete_old_raw_keywords()$$);
 -- SELECT cron.schedule('0 3 * * *', $$SELECT delete_old_hot_keywords()$$);
+
+-- RPC: 热词雷达 — 连续上涨词（按 site×keyword 聚合 rankup 天数）
+-- 在 Supabase SQL Editor 执行：
+CREATE OR REPLACE FUNCTION get_hot_streak_words(p_since date)
+RETURNS TABLE(
+  keyword text,
+  domain  text,
+  streak  bigint,
+  volume  bigint
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    rc.keyword,
+    s.domain,
+    COUNT(DISTINCT rc.stat_date) AS streak,
+    MAX(rc.volume)::bigint        AS volume
+  FROM rank_changes rc
+  JOIN sites s ON s.id = rc.site_id
+  WHERE rc.type = 'rankup'
+    AND rc.stat_date >= p_since
+  GROUP BY rc.keyword, rc.site_id, s.domain
+  HAVING COUNT(DISTINCT rc.stat_date) >= 2
+  ORDER BY streak DESC, volume DESC
+$$;
