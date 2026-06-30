@@ -13,7 +13,7 @@ interface Site {
   title_selector: string
   date_selector: string
   source_types: string
-  crawl_frequency: 'daily' | 'every3days' | 'weekly'
+  crawl_frequency: 'daily'
   enable_version_clean: boolean
   version_suffixes: string[]
   friend_links: string[]

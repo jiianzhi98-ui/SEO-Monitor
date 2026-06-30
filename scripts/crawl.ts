@@ -33,17 +33,6 @@ function parseContentDate(dateStr: string | undefined): string | null {
   return null
 }
 
-function shouldCrawlToday(frequency: string, createdAt: string): boolean {
-  const todayMY = getMalaysiaDate()
-  const dayOfWeek = new Date(todayMY).getDay()
-  if (frequency === 'daily') return true
-  if (frequency === 'every3days') {
-    const diffDays = Math.floor((new Date(todayMY).getTime() - new Date(createdAt).getTime()) / 86400000)
-    return diffDays % 3 === 0
-  }
-  if (frequency === 'weekly') return dayOfWeek === 1
-  return false
-}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -109,7 +98,7 @@ async function getPublicIp(): Promise<string> {
 interface SiteRecord {
   id: string
   domain: string
-  crawl_frequency: 'daily' | 'every3days' | 'weekly'
+  crawl_frequency: 'daily'
   list_url: string | null
   title_selector: string | null
   date_selector: string | null
@@ -118,7 +107,6 @@ interface SiteRecord {
   version_suffixes: string[]
   is_enabled: boolean
   has_rank_data: boolean
-  created_at: string
 }
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
@@ -135,22 +123,14 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
     const site = sites[idx]
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
-    if (!shouldCrawlToday(site.crawl_frequency, site.created_at)) {
-      console.log(`${prefix} ⊘ 跳过 (${site.crawl_frequency})`)
-      skipped++
-      if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'skip', detail: site.crawl_frequency })
-      continue
-    }
-
     try {
       type RawEntry = { title: string; content_date: string | null; content_type?: string }
       let rawEntries: RawEntry[] = []
       const hasCrawlConfig = !!(site.list_url && site.title_selector)
 
       if (hasCrawlConfig) {
-        const cutoffDays = site.crawl_frequency === 'weekly' ? 7 : site.crawl_frequency === 'every3days' ? 3 : 1
-        const htmlCutoff = getMalaysiaDate(-cutoffDays)
-        const maxPg = site.crawl_frequency === 'weekly' ? 10 : site.crawl_frequency === 'every3days' ? 5 : 3
+        const htmlCutoff = getMalaysiaDate(-1)
+        const maxPg = 3
         const SRC_SEP = '|||'
         const listUrl = site.list_url!
         const isNew = listUrl.includes(SRC_SEP)

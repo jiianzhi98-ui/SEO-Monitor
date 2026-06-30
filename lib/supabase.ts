@@ -14,7 +14,7 @@ export type Database = {
           title_selector: string | null
           date_selector: string | null
           source_types: string | null
-          crawl_frequency: 'daily' | 'every3days' | 'weekly'
+          crawl_frequency: 'daily'
           focus_level: number
           enable_version_clean: boolean
           version_suffixes: string[]

@@ -22,8 +22,8 @@ export const CRAWL_RULES: RuleSection[] = [
     items: [
       { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 13 * * * UTC = 21:00 MYT 前一天)，5个 matrix job 并行，每组抓约1/5的站点；GitHub runner 排队约5小时，实际执行约 02:00 MYT。失败/空站由 retry-crawl.yml (cron 0 18 UTC = 02:00 MYT) 在约 07:00 MYT 自动补抓' },
       { label: '抓取对象', text: '仅 is_enabled=true 且 list_url 已填写的站点；is_enabled 由用户在网站管理"关键词数据"开关控制，关闭后跳过关键词抓取但权重/排名照常运行' },
-      { label: '频率规则', text: 'daily=每天，every3days=每3天（按建站日期mod3），weekly=每周一；不在频率内的站记为 skip' },
-      { label: '翻页策略', text: 'daily 最多3页，every3days 最多5页，weekly 最多10页；每页翻页随机等待10~15秒' },
+      { label: '频率规则', text: '所有站点均为 daily（每天）' },
+      { label: '翻页策略', text: '最多3页；正式 GitHub Actions 抓取每页间隔随机等待10~15秒；单站手动重试跳过等待直接顺序翻页' },
       { label: '去重', text: '与数据库同日期已有词对比去重，批次内也去重；新词写入 raw_keywords' },
       { label: '写入表', text: 'raw_keywords（新词）/ competitor_kw_stats（app/game分类计数）' },
       { label: '清理', text: '每日关键词步骤结束后由 group0 执行：raw_keywords 30天，rank_changes 30天，competitor_kw_stats 10天' },

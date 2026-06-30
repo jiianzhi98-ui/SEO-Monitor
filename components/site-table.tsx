@@ -15,7 +15,7 @@ interface Site {
   title_selector: string
   date_selector: string
   source_types: string
-  crawl_frequency: 'daily' | 'every3days' | 'weekly'
+  crawl_frequency: 'daily'
   enable_version_clean: boolean
   version_suffixes: string[]
   friend_links: string[]
@@ -47,8 +47,6 @@ const focusConfig: Record<number, { label: string; className: string }> = {
 
 const frequencyLabel: Record<string, string> = {
   daily: '每天',
-  every3days: '每3天',
-  weekly: '每周',
 }
 
 export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
