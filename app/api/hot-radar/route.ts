@@ -10,7 +10,7 @@ function getMY(offsetDays = 0) {
 
 interface NewWordRow { keyword: string; site_count: number; total_count: number; sites: string[] }
 interface RankWordRow { keyword: string; site_count: number; max_volume: number; sites: string[] }
-interface StreakWordRow { keyword: string; domain: string; streak: number; volume: number }
+interface StreakWordRow { keyword: string; domain: string; streak: number; volume: number; first_seen: string; last_seen: string }
 
 export async function GET() {
   const supabase = createServiceClient()
@@ -43,6 +43,8 @@ export async function GET() {
     streak: Number(r.streak),
     domain: r.domain,
     volume: Number(r.volume),
+    first_seen: r.first_seen as string,
+    last_seen: r.last_seen as string,
   }))
 
   return NextResponse.json({ newWords, rankWords, streakWords })

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
+import { buildGroupMaps } from '@/lib/company-groups'
 
 interface WordEntry {
   keyword: string
@@ -29,6 +30,8 @@ interface StreakEntry {
   streak: number
   domain: string
   volume: number
+  first_seen: string
+  last_seen: string
 }
 
 interface RadarData {
@@ -43,6 +46,13 @@ interface DetailRow { date: string; domain: string }
 type Tab = 'cross' | 'new' | 'rank' | 'streak'
 type PageSize = 50 | 100 | 500
 const PAGE_SIZES: PageSize[] = [50, 100, 500]
+
+function getMYDate(): string {
+  return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
+}
+function getMYDateOffset(days: number): string {
+  return new Date(Date.now() + 8 * 3600000 + days * 86400000).toISOString().slice(0, 10)
+}
 
 function PaginationBar({ page, total, pageSize, onPageChange }: {
   page: number; total: number; pageSize: PageSize
@@ -78,9 +88,16 @@ function fmtVolume(v: number): string {
   return v.toLocaleString()
 }
 
-function SiteBadge({ domain, weight }: { domain: string; weight?: WeightInfo }) {
+function SiteBadge({ domain, weight, borderColor }: {
+  domain: string
+  weight?: WeightInfo
+  borderColor?: string
+}) {
   return (
-    <span className="inline-flex flex-col text-xs bg-gray-100 rounded px-1.5 py-1 min-w-0 flex-shrink-0">
+    <span
+      className="inline-flex flex-col text-xs bg-gray-100 rounded px-1.5 py-1 min-w-0 flex-shrink-0"
+      style={borderColor ? { borderLeft: `3px solid ${borderColor}` } : undefined}
+    >
       <span className="text-gray-700 truncate max-w-[130px]">{domain}</span>
       {weight && (
         <span className="text-[10px] flex items-center gap-1 mt-px">
@@ -105,11 +122,44 @@ function SiteBadge({ domain, weight }: { domain: string; weight?: WeightInfo }) 
   )
 }
 
-function SiteBadges({ sites, weightMap }: { sites: string[]; weightMap: Map<string, WeightInfo> }) {
+function sortSitesByWeight(
+  sites: string[],
+  weightMap: Map<string, WeightInfo>,
+  idMap: Map<string, number>
+): string[] {
+  const score = (d: string) => { const w = weightMap.get(d); return w ? (w.pc + w.mobile) / 2 : -1 }
+  const groupMax = new Map<number, number>()
+  for (const d of sites) {
+    const gid = idMap.get(d)
+    if (gid !== undefined) {
+      const s = score(d)
+      if (!groupMax.has(gid) || s > groupMax.get(gid)!) groupMax.set(gid, s)
+    }
+  }
+  return [...sites].sort((a, b) => {
+    const gidA = idMap.get(a), gidB = idMap.get(b)
+    const anchorA = gidA !== undefined ? (groupMax.get(gidA) ?? score(a)) : score(a)
+    const anchorB = gidB !== undefined ? (groupMax.get(gidB) ?? score(b)) : score(b)
+    if (anchorA !== anchorB) return anchorB - anchorA
+    if (gidA !== gidB) return (gidA ?? 999999) - (gidB ?? 999999)
+    return score(b) - score(a)
+  })
+}
+
+function SiteBadges({ sites, weightMap, idMap, colorMap }: {
+  sites: string[]
+  weightMap: Map<string, WeightInfo>
+  idMap: Map<string, number>
+  colorMap: Map<string, string>
+}) {
+  const sorted = useMemo(
+    () => sortSitesByWeight(sites, weightMap, idMap),
+    [sites, weightMap, idMap]
+  )
   return (
     <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'thin' }}>
-      {sites.map((d) => (
-        <SiteBadge key={d} domain={d} weight={weightMap.get(d)} />
+      {sorted.map((d) => (
+        <SiteBadge key={d} domain={d} weight={weightMap.get(d)} borderColor={colorMap.get(d)} />
       ))}
     </div>
   )
@@ -128,6 +178,8 @@ export default function HotRadarPage() {
   const [pageSize, setPageSize] = useState<PageSize>(50)
   const [weightMap, setWeightMap] = useState<Map<string, WeightInfo>>(new Map())
   const [siteIdMap, setSiteIdMap] = useState<Map<string, string>>(new Map())
+  const [groupIdMap, setGroupIdMap] = useState<Map<string, number>>(new Map())
+  const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
   const [copied, setCopied] = useState(false)
   const [detailKw, setDetailKw] = useState<string | null>(null)
   const [detailRows, setDetailRows] = useState<DetailRow[]>([])
@@ -137,13 +189,17 @@ export default function HotRadarPage() {
     const db = getBrowserClient()
     const d14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
     const [{ data: siteRows }, { data: whRows }] = await Promise.all([
-      db.from('sites').select('id, domain'),
+      db.from('sites').select('id, domain, friend_links'),
       db.from('weight_history').select('site_id, record_date, pc_weight, mobile_weight')
         .gte('record_date', d14).order('record_date'),
     ])
-    const sites = (siteRows || []) as { id: string; domain: string }[]
+    const sites = (siteRows || []) as { id: string; domain: string; friend_links?: string[] | null }[]
     const idToDomain = new Map(sites.map(s => [s.id, s.domain]))
     setSiteIdMap(idToDomain)
+
+    const { idMap, colorMap } = buildGroupMaps(sites)
+    setGroupIdMap(idMap)
+    setGroupColorMap(colorMap)
 
     const byId = new Map<string, { pc: number; mobile: number }[]>()
     for (const r of ((whRows || []) as { site_id: string; pc_weight: number; mobile_weight: number }[])) {
@@ -291,7 +347,6 @@ export default function HotRadarPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Group detail rows by date for modal display
   const detailByDate = useMemo(() => {
     const map = new Map<string, string[]>()
     for (const r of detailRows) {
@@ -301,6 +356,9 @@ export default function HotRadarPage() {
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [detailRows])
 
+  const today = getMYDate()
+  const yesterday = getMYDateOffset(-1)
+
   return (
     <div className="p-6">
       <div className="mb-4">
@@ -308,7 +366,7 @@ export default function HotRadarPage() {
         <p className="text-gray-400 text-sm mt-0.5">近30天多竞品同时关注的词，捕捉趋势机会</p>
       </div>
 
-      {/* Tab bar — no counts */}
+      {/* Tab bar */}
       <div className="flex items-center gap-2 mb-4">
         {TAB_CONFIG.map((tab) => {
           const isActive = activeTab === tab.key
@@ -328,7 +386,6 @@ export default function HotRadarPage() {
         })}
       </div>
 
-      {/* Content */}
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-gray-400 gap-3">
@@ -344,7 +401,7 @@ export default function HotRadarPage() {
           </div>
         ) : (
           <>
-          {/* Unified filter bar */}
+          {/* Filter bar */}
           <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-400">站点</span>
@@ -493,7 +550,9 @@ export default function HotRadarPage() {
                           <span className="font-semibold text-gray-900">{w.siteCount}</span>
                           <span className="text-gray-400 text-xs">站</span>
                         </td>
-                        <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
+                        <td className="table-td">
+                          <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
+                        </td>
                         <td className="table-td text-center">
                           <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
                         </td>
@@ -534,7 +593,9 @@ export default function HotRadarPage() {
                           <span className="text-gray-400 text-xs">站</span>
                         </td>
                         <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
-                        <td className="table-td"><SiteBadges sites={w.sites} weightMap={weightMap} /></td>
+                        <td className="table-td">
+                          <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
+                        </td>
                         <td className="table-td text-center">
                           <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
                         </td>
@@ -545,53 +606,83 @@ export default function HotRadarPage() {
               </table>
             )}
 
-            {activeTab === 'streak' && (
-              <table className="w-full table-fixed">
-                <colgroup>
-                  <col className="w-72" />
-                  <col className="w-24" />
-                  <col className="w-24" />
-                  <col />
-                  <col className="w-20" />
-                </colgroup>
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="table-th">关键词</th>
-                    <th className="table-th text-center whitespace-nowrap">上涨天数</th>
-                    <th className="table-th text-right">搜索量</th>
-                    <th className="table-th">站点</th>
-                    <th className="table-th text-center">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {pagedList.length === 0 ? (
-                    <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
-                  ) : (
-                    (pagedList as StreakEntry[]).map((w, i) => (
-                      <tr key={`${w.domain}|${w.keyword}|${i}`} className="hover:bg-gray-100 transition-colors">
-                        <td className="table-td font-medium text-gray-900">{w.keyword}</td>
-                        <td className="table-td text-center">
-                          <span className="font-semibold text-orange-500">{w.streak}</span>
-                          <span className="text-gray-400 text-xs"> 天</span>
-                        </td>
-                        <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
-                        <td className="table-td"><SiteBadge domain={w.domain} weight={weightMap.get(w.domain)} /></td>
-                        <td className="table-td text-center">
-                          <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+            {activeTab === 'streak' && (() => {
+              const dateGroups: { date: string; words: StreakEntry[] }[] = []
+              for (const w of pagedList as StreakEntry[]) {
+                const d = w.last_seen || ''
+                if (dateGroups.length === 0 || dateGroups[dateGroups.length - 1].date !== d) {
+                  dateGroups.push({ date: d, words: [] })
+                }
+                dateGroups[dateGroups.length - 1].words.push(w)
+              }
+              return (
+                <table className="w-full table-fixed">
+                  <colgroup>
+                    <col className="w-72" />
+                    <col className="w-24" />
+                    <col className="w-24" />
+                    <col />
+                    <col className="w-20" />
+                  </colgroup>
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="table-th">关键词</th>
+                      <th className="table-th text-center whitespace-nowrap">上涨天数</th>
+                      <th className="table-th text-right">搜索量</th>
+                      <th className="table-th">站点</th>
+                      <th className="table-th text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedList.length === 0 ? (
+                      <tr><td colSpan={5} className="table-td text-center text-gray-400 py-10">暂无连续上涨词</td></tr>
+                    ) : (
+                      dateGroups.flatMap(({ date, words }) => [
+                        <tr key={`dh-${date}`}>
+                          <td colSpan={5} className={`px-4 py-1.5 text-xs font-semibold border-b border-gray-100 ${date === today ? 'bg-green-50 text-green-700' : 'bg-gray-50/70 text-gray-400'}`}>
+                            <div className="flex items-center gap-2">
+                              <span>{date ? date.slice(5).replace('-', '/') : '—'}</span>
+                              {date === today && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-500 text-white">今日</span>}
+                              {date === yesterday && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-500">昨日</span>}
+                            </div>
+                          </td>
+                        </tr>,
+                        ...words.map((w, i) => (
+                          <tr key={`${w.domain}|${w.keyword}|${i}`} className="hover:bg-gray-100 transition-colors border-b border-gray-100">
+                            <td className="table-td font-medium text-gray-900">
+                              {w.keyword}
+                              {w.first_seen && w.first_seen !== w.last_seen && (
+                                <span className="ml-1.5 text-[10px] text-gray-300">
+                                  入榜{w.first_seen.slice(5).replace('-', '/')}
+                                </span>
+                              )}
+                            </td>
+                            <td className="table-td text-center">
+                              <span className="font-semibold text-orange-500">{w.streak}</span>
+                              <span className="text-gray-400 text-xs"> 天</span>
+                            </td>
+                            <td className="table-td text-right text-gray-700 font-medium">{fmtVolume(w.volume)}</td>
+                            <td className="table-td">
+                              <SiteBadge domain={w.domain} weight={weightMap.get(w.domain)} borderColor={groupColorMap.get(w.domain)} />
+                            </td>
+                            <td className="table-td text-center">
+                              <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                            </td>
+                          </tr>
+                        ))
+                      ])
+                    )}
+                  </tbody>
+                </table>
+              )
+            })()}
           </div>
           <PaginationBar page={page} total={activeList.length} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </div>
 
-      {/* ── 查看 Detail Modal ─────────────────────────────────────────────── */}
+      {/* 查看 Detail Modal */}
       {detailKw && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setDetailKw(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -620,7 +711,7 @@ export default function HotRadarPage() {
                       <span className="text-xs text-gray-400 w-12 flex-shrink-0 pt-1.5">{date.slice(5)}</span>
                       <div className="flex flex-wrap gap-1">
                         {domains.map(d => (
-                          <SiteBadge key={d} domain={d} weight={weightMap.get(d)} />
+                          <SiteBadge key={d} domain={d} weight={weightMap.get(d)} borderColor={groupColorMap.get(d)} />
                         ))}
                       </div>
                     </div>

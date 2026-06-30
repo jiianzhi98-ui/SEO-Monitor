@@ -21,6 +21,9 @@
   .btn-danger {
     @apply inline-flex items-center px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors;
   }
+  .btn-ghost {
+    @apply inline-flex items-center px-3 py-1.5 bg-white text-gray-600 text-sm font-medium rounded border border-gray-200 hover:bg-gray-50 transition-colors;
+  }
   .table-th {
     @apply px-4 py-2.5 text-left text-sm font-medium text-gray-600;
   }

@@ -90,10 +90,12 @@ CREATE INDEX IF NOT EXISTS idx_weight_history_record_date ON weight_history(reco
 -- 在 Supabase SQL Editor 执行：
 CREATE OR REPLACE FUNCTION get_hot_streak_words(p_since date)
 RETURNS TABLE(
-  keyword text,
-  domain  text,
-  streak  bigint,
-  volume  bigint
+  keyword    text,
+  domain     text,
+  streak     bigint,
+  volume     bigint,
+  first_seen date,
+  last_seen  date
 )
 LANGUAGE sql
 STABLE
@@ -101,13 +103,30 @@ AS $$
   SELECT
     rc.keyword,
     s.domain,
-    COUNT(DISTINCT rc.stat_date) AS streak,
-    MAX(rc.volume)::bigint        AS volume
+    COUNT(DISTINCT rc.stat_date)  AS streak,
+    MAX(rc.volume)::bigint        AS volume,
+    MIN(rc.stat_date)             AS first_seen,
+    MAX(rc.stat_date)             AS last_seen
   FROM rank_changes rc
   JOIN sites s ON s.id = rc.site_id
   WHERE rc.type = 'rankup'
     AND rc.stat_date >= p_since
   GROUP BY rc.keyword, rc.site_id, s.domain
   HAVING COUNT(DISTINCT rc.stat_date) >= 2
-  ORDER BY streak DESC, volume DESC
+  ORDER BY last_seen DESC, streak DESC, volume DESC
 $$;
+
+-- 分组任务 tables
+CREATE TABLE IF NOT EXISTS task_groups (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name       TEXT NOT NULL,
+  type       TEXT NOT NULL DEFAULT 'both' CHECK (type IN ('game', 'app', 'both')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS task_group_members (
+  group_id  UUID NOT NULL REFERENCES task_groups(id) ON DELETE CASCADE,
+  user_id   UUID NOT NULL,
+  username  TEXT,
+  PRIMARY KEY (group_id, user_id)
+);
