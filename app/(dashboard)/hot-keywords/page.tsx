@@ -506,12 +506,12 @@ export default function HotRadarPage() {
             {/* Tables — 统一列宽：日期 w-24 | 关键词 w-52 | 数字列 w-24 each | 站点 auto | 操作 w-16 */}
             <div className="overflow-x-auto [&_td]:py-2 [&_th]:py-2">
 
-              {/* 交叉词：7列，关键词略收为 w-44 让两个站点列各得空间 */}
+              {/* 交叉词：7列 */}
               {activeTab === 'cross' && (
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-24" />
-                    <col className="w-44" />
+                    <col className="w-56" />
                     <col className="w-24" />
                     <col className="w-24" />
                     <col />
@@ -536,7 +536,9 @@ export default function HotRadarPage() {
                       (pagedList as CrossEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
-                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                          <td className="table-td font-medium text-gray-900 overflow-hidden">
+                            <span className="block truncate" title={w.keyword}>{w.keyword}</span>
+                          </td>
                           <td className="table-td">
                             <div className="flex justify-center gap-1">
                               {w.dims.map(d => (
@@ -574,7 +576,7 @@ export default function HotRadarPage() {
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-24" />
-                    <col className="w-52" />
+                    <col className="w-64" />
                     <col className="w-24" />
                     <col className="w-24" />
                     <col />
@@ -597,7 +599,9 @@ export default function HotRadarPage() {
                       (pagedList as WordEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
-                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                          <td className="table-td font-medium text-gray-900 overflow-hidden">
+                            <span className="block truncate" title={w.keyword}>{w.keyword}</span>
+                          </td>
                           <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{w.count}</span>
                             <span className="text-gray-400 text-xs">次</span>
@@ -624,7 +628,7 @@ export default function HotRadarPage() {
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-24" />
-                    <col className="w-52" />
+                    <col className="w-64" />
                     <col className="w-24" />
                     <col className="w-24" />
                     <col />
@@ -647,7 +651,9 @@ export default function HotRadarPage() {
                       (pagedList as RankEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
-                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                          <td className="table-td font-medium text-gray-900 overflow-hidden">
+                            <span className="block truncate" title={w.keyword}>{w.keyword}</span>
+                          </td>
                           <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{w.siteCount}</span>
                             <span className="text-gray-400 text-xs">站</span>
@@ -673,7 +679,7 @@ export default function HotRadarPage() {
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-24" />
-                    <col className="w-52" />
+                    <col className="w-64" />
                     <col className="w-24" />
                     <col className="w-24" />
                     <col />
@@ -696,7 +702,9 @@ export default function HotRadarPage() {
                       (pagedList as StreakGrouped[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
                           <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
-                          <td className="table-td font-medium text-gray-900">{w.keyword}</td>
+                          <td className="table-td font-medium text-gray-900 overflow-hidden">
+                            <span className="block truncate" title={w.keyword}>{w.keyword}</span>
+                          </td>
                           <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{w.streak}</span>
                             <span className="text-gray-400 text-xs">天</span>
