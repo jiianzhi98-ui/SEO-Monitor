@@ -42,9 +42,9 @@ function getMYDate(): string {
 }
 
 type Badge = 'new' | 'updated' | null
-function getBadge(first_date: string, last_date: string, today: string): Badge {
-  if (last_date !== today) return null
-  return first_date === today ? 'new' : 'updated'
+function getBadge(first_date: string, last_date: string): Badge {
+  if (!last_date || !first_date) return null
+  return first_date === last_date ? 'new' : 'updated'
 }
 
 function badgePriority(first_date: string, last_date: string, today: string): number {
@@ -91,14 +91,35 @@ function BadgeChip({ badge }: { badge: Badge }) {
 
 function DateCell({ last_date, first_date, today }: { last_date: string; first_date: string; today: string }) {
   const isToday = last_date === today
-  const badge = getBadge(first_date, last_date, today)
+  const badge = getBadge(first_date, last_date)
   return (
-    <td className="table-td whitespace-nowrap w-20">
-      <div className={`flex items-center gap-1 ${isToday ? 'text-green-600' : 'text-gray-400'}`}>
+    <td className="table-td whitespace-nowrap w-24">
+      <div className={`flex items-center gap-1 flex-wrap ${isToday ? 'text-green-600' : 'text-gray-400'}`}>
         <span className={`text-xs ${isToday ? 'font-semibold' : ''}`}>{fmtDate(last_date)}</span>
         <BadgeChip badge={badge} />
       </div>
     </td>
+  )
+}
+
+function DetailDateList({ byDate, weightMap, colorMap }: {
+  byDate: [string, string[]][]
+  weightMap: Map<string, WeightInfo>
+  colorMap: Map<string, string>
+}) {
+  return (
+    <div className="space-y-2">
+      {byDate.map(([date, domains]) => (
+        <div key={date} className="flex items-start gap-2">
+          <span className="text-xs text-gray-400 w-10 flex-shrink-0 pt-1.5">{date.slice(5)}</span>
+          <div className="flex flex-wrap gap-1">
+            {domains.map(d => (
+              <SiteBadge key={d} domain={d} weight={weightMap.get(d)} borderColor={colorMap.get(d)} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -204,8 +225,12 @@ export default function HotRadarPage() {
   const [groupColorMap, setGroupColorMap] = useState<Map<string, string>>(new Map())
   const [copied, setCopied]           = useState(false)
   const [detailKw, setDetailKw]       = useState<string | null>(null)
-  const [detailRows, setDetailRows]   = useState<DetailRow[]>([])
+  const [detailNewRows, setDetailNewRows]   = useState<DetailRow[]>([])
+  const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+  const [dateFrom, setDateFrom] = useState(() =>
+    new Date(Date.now() + 8 * 3600000 - 30 * 86400000).toISOString().slice(0, 10)
+  )
 
   const today = useMemo(() => getMYDate(), [])
 
@@ -247,14 +272,23 @@ export default function HotRadarPage() {
     setWeightMap(map)
   }
 
+  function dedupDetailRows(rows: DetailRow[]): DetailRow[] {
+    const seen = new Set<string>()
+    return rows
+      .filter(r => { const k = `${r.date}|${r.domain}`; if (seen.has(k)) return false; seen.add(k); return true })
+      .sort((a, b) => b.date.localeCompare(a.date) || a.domain.localeCompare(b.domain))
+  }
+
   async function openDetail(keyword: string) {
     setDetailKw(keyword)
     setDetailLoading(true)
-    setDetailRows([])
+    setDetailNewRows([])
+    setDetailRankRows([])
     const db = getBrowserClient()
     const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
     try {
-      const rows: DetailRow[] = []
+      const nRows: DetailRow[] = []
+      const rRows: DetailRow[] = []
       if (activeTab === 'new' || activeTab === 'cross') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: raw } = await (db.from('raw_keywords') as any)
@@ -263,7 +297,7 @@ export default function HotRadarPage() {
           .order('content_date', { ascending: false })
         for (const r of (raw || [])) {
           const domain = siteIdMap.get(r.site_id)
-          if (domain) rows.push({ date: String(r.content_date).slice(0, 10), domain })
+          if (domain) nRows.push({ date: String(r.content_date).slice(0, 10), domain })
         }
       }
       if (activeTab === 'rank' || activeTab === 'streak' || activeTab === 'cross') {
@@ -274,18 +308,11 @@ export default function HotRadarPage() {
           .order('stat_date', { ascending: false })
         for (const r of (raw || [])) {
           const domain = siteIdMap.get(r.site_id)
-          if (domain) rows.push({ date: String(r.stat_date).slice(0, 10), domain })
+          if (domain) rRows.push({ date: String(r.stat_date).slice(0, 10), domain })
         }
       }
-      const seen = new Set<string>()
-      const unique = rows.filter(r => {
-        const k = `${r.date}|${r.domain}`
-        if (seen.has(k)) return false
-        seen.add(k)
-        return true
-      })
-      unique.sort((a, b) => b.date.localeCompare(a.date) || a.domain.localeCompare(b.domain))
-      setDetailRows(unique)
+      setDetailNewRows(dedupDetailRows(nRows))
+      setDetailRankRows(dedupDetailRows(rRows))
     } finally {
       setDetailLoading(false)
     }
@@ -305,8 +332,8 @@ export default function HotRadarPage() {
 
   const filtered = useMemo(() => {
     if (!data) return null
-    const nw = data.newWords.filter(w => w.siteCount >= minSites)
-    const rw = data.rankWords.filter(w => w.siteCount >= minSites)
+    const nw = data.newWords.filter(w => w.siteCount >= minSites && w.last_date >= dateFrom)
+    const rw = data.rankWords.filter(w => w.siteCount >= minSites && w.last_date >= dateFrom)
 
     const nwMap = new Map(nw.map(w => [w.keyword, w]))
     const rwMap = new Map(rw.map(w => [w.keyword, w]))
@@ -338,9 +365,9 @@ export default function HotRadarPage() {
       newWords:    sortByDate(nw, today, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
       rankWords:   sortByDate(rw, today, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
       crossWords:  sortByDate(cw, today, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
-      streakWords: data.streakWords || [],
+      streakWords: (data.streakWords || []).filter(w => w.last_date >= dateFrom),
     }
-  }, [data, minSites, today])
+  }, [data, minSites, today, dateFrom])
 
   const filteredStreakWords = useMemo((): StreakGrouped[] => {
     if (!filtered) return []
@@ -395,14 +422,16 @@ export default function HotRadarPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const detailByDate = useMemo(() => {
+  function groupByDate(rows: DetailRow[]) {
     const map = new Map<string, string[]>()
-    for (const r of detailRows) {
+    for (const r of rows) {
       if (!map.has(r.date)) map.set(r.date, [])
       if (!map.get(r.date)!.includes(r.domain)) map.get(r.date)!.push(r.domain)
     }
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [detailRows])
+  }
+  const detailNewByDate  = useMemo(() => groupByDate(detailNewRows),  [detailNewRows])  // eslint-disable-line react-hooks/exhaustive-deps
+  const detailRankByDate = useMemo(() => groupByDate(detailRankRows), [detailRankRows]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -447,6 +476,16 @@ export default function HotRadarPage() {
           <>
             {/* Filter bar */}
             <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">日期从</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  max={today}
+                  onChange={e => { setDateFrom(e.target.value); setPage(0) }}
+                  className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none focus:border-green-400"
+                />
+              </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-400">站点</span>
                 <input type="text" value={filterSite}
@@ -523,7 +562,7 @@ export default function HotRadarPage() {
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">命中维度</th>
-                      <th className="table-th text-right whitespace-nowrap">搜索量</th>
+                      <th className="table-th text-center whitespace-nowrap">搜索量</th>
                       <th className="table-th whitespace-nowrap">新增站点</th>
                       <th className="table-th whitespace-nowrap">涨排站点</th>
                       <th className="table-th text-center">操作</th>
@@ -548,7 +587,7 @@ export default function HotRadarPage() {
                               ))}
                             </div>
                           </td>
-                          <td className="table-td text-right">
+                          <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{w.volume != null ? fmtVolume(w.volume) : '—'}</span>
                           </td>
                           <td className="table-td">
@@ -639,7 +678,7 @@ export default function HotRadarPage() {
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">涨排站点</th>
-                      <th className="table-th text-right whitespace-nowrap">搜索量</th>
+                      <th className="table-th text-center whitespace-nowrap">搜索量</th>
                       <th className="table-th">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
@@ -658,7 +697,7 @@ export default function HotRadarPage() {
                             <span className="font-semibold text-gray-900">{w.siteCount}</span>
                             <span className="text-gray-400 text-xs">站</span>
                           </td>
-                          <td className="table-td text-right">
+                          <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{fmtVolume(w.volume)}</span>
                           </td>
                           <td className="table-td">
@@ -690,7 +729,7 @@ export default function HotRadarPage() {
                       <th className="table-th">日期</th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">上涨天数</th>
-                      <th className="table-th text-right whitespace-nowrap">搜索量</th>
+                      <th className="table-th text-center whitespace-nowrap">搜索量</th>
                       <th className="table-th whitespace-nowrap">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
@@ -709,7 +748,7 @@ export default function HotRadarPage() {
                             <span className="font-semibold text-gray-900">{w.streak}</span>
                             <span className="text-gray-400 text-xs">天</span>
                           </td>
-                          <td className="table-td text-right">
+                          <td className="table-td text-center">
                             <span className="font-semibold text-gray-900">{fmtVolume(w.volume)}</span>
                           </td>
                           <td className="table-td">
@@ -734,7 +773,7 @@ export default function HotRadarPage() {
       {/* 查看 Detail Modal */}
       {detailKw && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setDetailKw(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className={`bg-white rounded-xl shadow-2xl w-full max-h-[80vh] flex flex-col ${activeTab === 'cross' ? 'max-w-3xl' : 'max-w-lg'}`} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h3 className="font-semibold text-gray-900">{detailKw}</h3>
@@ -751,21 +790,30 @@ export default function HotRadarPage() {
                   </svg>
                   加载中...
                 </div>
-              ) : detailByDate.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-10">暂无记录</p>
-              ) : (
-                <div className="space-y-3">
-                  {detailByDate.map(([date, domains]) => (
-                    <div key={date} className="flex items-start gap-3">
-                      <span className="text-xs text-gray-400 w-12 flex-shrink-0 pt-1.5">{date.slice(5)}</span>
-                      <div className="flex flex-wrap gap-1">
-                        {domains.map(d => (
-                          <SiteBadge key={d} domain={d} weight={weightMap.get(d)} borderColor={groupColorMap.get(d)} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+              ) : activeTab === 'cross' ? (
+                /* 交叉词：左右两栏 */
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-xs font-semibold text-blue-600 mb-2 pb-1 border-b border-blue-100">新增站点</p>
+                    {detailNewByDate.length === 0
+                      ? <p className="text-xs text-gray-400">暂无记录</p>
+                      : <DetailDateList byDate={detailNewByDate} weightMap={weightMap} colorMap={groupColorMap} />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-orange-500 mb-2 pb-1 border-b border-orange-100">涨排站点</p>
+                    {detailRankByDate.length === 0
+                      ? <p className="text-xs text-gray-400">暂无记录</p>
+                      : <DetailDateList byDate={detailRankByDate} weightMap={weightMap} colorMap={groupColorMap} />}
+                  </div>
                 </div>
+              ) : (
+                /* 其他 tab：单栏 */
+                (() => {
+                  const byDate = activeTab === 'new' ? detailNewByDate : detailRankByDate
+                  return byDate.length === 0
+                    ? <p className="text-sm text-gray-400 text-center py-10">暂无记录</p>
+                    : <DetailDateList byDate={byDate} weightMap={weightMap} colorMap={groupColorMap} />
+                })()
               )}
             </div>
           </div>
