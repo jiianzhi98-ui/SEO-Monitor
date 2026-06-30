@@ -26,7 +26,8 @@ export async function GET() {
       .select('keyword, site_id, stat_date, volume')
       .eq('type', 'rankup')
       .gte('stat_date', since)
-      .order('stat_date'),
+      .order('stat_date')
+      .limit(200000),
   ])
 
   const newWords = ((newWordsRaw || []) as NewWordRow[]).map((r) => ({
