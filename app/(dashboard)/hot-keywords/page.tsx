@@ -37,8 +37,8 @@ const PAGE_SIZES: PageSize[] = [50, 100, 500]
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
-function getMYDate(): string {
-  return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
+function getMYDate(offsetDays = 0): string {
+  return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
 }
 
 type Badge = 'new' | 'updated' | null
@@ -89,13 +89,15 @@ function BadgeChip({ badge }: { badge: Badge }) {
   return <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-400 text-white leading-none">更新</span>
 }
 
-function DateCell({ last_date, first_date, today }: { last_date: string; first_date: string; today: string }) {
-  const isToday = last_date === today
+function DateCell({ last_date, first_date, today, yesterday }: {
+  last_date: string; first_date: string; today: string; yesterday: string
+}) {
+  const isRecent = last_date === today || last_date === yesterday
   const badge = getBadge(first_date, last_date)
   return (
     <td className="table-td whitespace-nowrap w-24">
-      <div className={`flex items-center gap-1 flex-wrap ${isToday ? 'text-green-600' : 'text-gray-400'}`}>
-        <span className={`text-xs ${isToday ? 'font-semibold' : ''}`}>{fmtDate(last_date)}</span>
+      <div className={`flex items-center gap-1 flex-wrap ${isRecent ? 'text-green-600' : 'text-gray-400'}`}>
+        <span className={`text-xs ${isRecent ? 'font-semibold' : ''}`}>{fmtDate(last_date)}</span>
         <BadgeChip badge={badge} />
       </div>
     </td>
@@ -228,11 +230,10 @@ export default function HotRadarPage() {
   const [detailNewRows, setDetailNewRows]   = useState<DetailRow[]>([])
   const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
-  const [dateFrom, setDateFrom] = useState(() =>
-    new Date(Date.now() + 8 * 3600000 - 30 * 86400000).toISOString().slice(0, 10)
-  )
+  const [dateFrom, setDateFrom] = useState('')
 
-  const today = useMemo(() => getMYDate(), [])
+  const today     = useMemo(() => getMYDate(),    [])
+  const yesterday = useMemo(() => getMYDate(-1),  [])
 
   // ── Fetch ────────────────────────────────────────────────────────────────
 
@@ -332,8 +333,8 @@ export default function HotRadarPage() {
 
   const filtered = useMemo(() => {
     if (!data) return null
-    const nw = data.newWords.filter(w => w.siteCount >= minSites && w.last_date >= dateFrom)
-    const rw = data.rankWords.filter(w => w.siteCount >= minSites && w.last_date >= dateFrom)
+    const nw = data.newWords.filter(w => w.siteCount >= minSites && (!dateFrom || !w.last_date || w.last_date >= dateFrom))
+    const rw = data.rankWords.filter(w => w.siteCount >= minSites && (!dateFrom || !w.last_date || w.last_date >= dateFrom))
 
     const nwMap = new Map(nw.map(w => [w.keyword, w]))
     const rwMap = new Map(rw.map(w => [w.keyword, w]))
@@ -365,7 +366,7 @@ export default function HotRadarPage() {
       newWords:    sortByDate(nw, today, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
       rankWords:   sortByDate(rw, today, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
       crossWords:  sortByDate(cw, today, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
-      streakWords: (data.streakWords || []).filter(w => w.last_date >= dateFrom),
+      streakWords: (data.streakWords || []).filter(w => !dateFrom || !w.last_date || w.last_date >= dateFrom),
     }
   }, [data, minSites, today, dateFrom])
 
@@ -574,7 +575,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as CrossEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
@@ -637,7 +638,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as WordEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
@@ -689,7 +690,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as RankEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
@@ -740,7 +741,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as StreakGrouped[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} />
+                          <DateCell last_date={w.last_date} first_date={w.first_date} today={today} yesterday={yesterday} />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
