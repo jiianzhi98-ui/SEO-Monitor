@@ -111,7 +111,7 @@ export default function TaskGroupsPage() {
   const [editMemberTypes, setEditMemberTypes] = useState<Record<string, 'app' | 'game'>>({})
   const [editSelectedUsers, setEditSelectedUsers] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
-  const [memberView, setMemberView] = useState<TaskMember | null>(null)
+  const [activeMemberId, setActiveMemberId] = useState<string | null>(null)
 
   async function loadGroups() {
     setLoading(true)
@@ -240,10 +240,11 @@ export default function TaskGroupsPage() {
   }
 
   const activeGroup = groups.find(g => g.id === activeGroupId) ?? null
+  const activeMember = activeGroup?.members.find(m => m.user_id === activeMemberId) ?? null
 
   const filteredData = useMemo(() => {
     if (!radarData || !activeGroup) return null
-    const t = activeGroup.type
+    const t = activeMember?.member_type || activeGroup.type
 
     const streakWords = radarData.streakWords.filter(w => matchesType(w.domain, t))
 
@@ -256,7 +257,7 @@ export default function TaskGroupsPage() {
       .filter(w => w.sites.length > 0)
 
     return { streakWords, rankWords, newWords }
-  }, [radarData, activeGroup, domainTypeMap])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [radarData, activeGroup, activeMember, domainTypeMap])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const allKeywords = useMemo(() => {
     if (!filteredData) return []
@@ -318,7 +319,7 @@ export default function TaskGroupsPage() {
             {groups.map(g => (
               <button
                 key={g.id}
-                onClick={() => setActiveGroupId(g.id)}
+                onClick={() => { setActiveGroupId(g.id); setActiveMemberId(null) }}
                 className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap border-b-2 transition-colors ${
                   activeGroupId === g.id
                     ? 'border-green-500 text-green-700 bg-green-50/60'
@@ -333,17 +334,35 @@ export default function TaskGroupsPage() {
           {/* Group content */}
           {activeGroup && (
             <div className="p-4">
-              {/* Group meta */}
-              <div className="flex items-center gap-2 flex-wrap mb-4 pb-3 border-b border-gray-100">
+              {/* Member sub-tabs */}
+              <div className="flex items-center gap-1.5 flex-wrap mb-4 pb-3 border-b border-gray-100">
+                <button
+                  onClick={() => setActiveMemberId(null)}
+                  className={`text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
+                    activeMemberId === null
+                      ? 'bg-gray-800 text-white border-gray-800'
+                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  }`}
+                >
+                  全部
+                </button>
                 {activeGroup.members.map(m => (
                   <button
                     key={m.user_id}
-                    onClick={() => setMemberView(m)}
-                    className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-2.5 py-1 hover:bg-gray-200 transition-colors"
+                    onClick={() => setActiveMemberId(m.user_id)}
+                    className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
+                      activeMemberId === m.user_id
+                        ? 'bg-green-600 text-white border-green-600'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
                   >
                     {m.username || '—'}
                     {m.member_type && m.member_type !== 'both' && (
-                      <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${m.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                      <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${
+                        activeMemberId === m.user_id
+                          ? 'bg-white/20 text-white'
+                          : m.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
+                      }`}>
                         {m.member_type === 'app' ? '应用' : '游戏'}
                       </span>
                     )}
@@ -527,28 +546,6 @@ export default function TaskGroupsPage() {
               >
                 {saving ? '保存中...' : '保存'}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Member view modal */}
-      {memberView && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMemberView(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-gray-900">{memberView.username || '—'}</h3>
-                {memberView.member_type && memberView.member_type !== 'both' && (
-                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${memberView.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
-                    {memberView.member_type === 'app' ? '应用' : '游戏'}
-                  </span>
-                )}
-              </div>
-              <button onClick={() => setMemberView(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-            </div>
-            <div className="flex-1 flex items-center justify-center py-20 text-gray-400 text-sm">
-              暂无资料
             </div>
           </div>
         </div>
