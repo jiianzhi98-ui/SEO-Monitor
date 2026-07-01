@@ -7,15 +7,14 @@ import { getBrowserClient } from '@/lib/supabase-browser'
 interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
 interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[] }
 interface UserOption { id: string; email: string; username: string | null; role: string }
-interface SiteRow { domain: string; source_types: string | null }
-
 interface NewWord { keyword: string; count: number; siteCount: number; sites: string[]; last_date: string; first_date: string }
 interface RankWord { keyword: string; siteCount: number; volume: number; sites: string[]; last_date: string; first_date: string; rankDays: number }
 interface StreakWord { keyword: string; streak: number; domain: string; volume: number; first_date: string; last_date: string }
+interface CrossWord { keyword: string; volume: number; last_date: string; first_date: string; newSites: string[]; rankSites: string[] }
 
 interface ClaimedKeyword {
-  id: string; keyword: string; keyword_type: 'app' | 'game'
-  source: string; search_volume: number; status: string; created_at: string
+  id: string; keyword: string; source: string
+  search_volume: number; status: string; created_at: string
 }
 
 type RightTab = 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
@@ -51,11 +50,6 @@ function DateBadge({ date, today }: { date: string; today: string }) {
   )
 }
 
-function SourceTag({ s }: { s: string }) {
-  const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库' }
-  return <span className="text-[10px] text-gray-300">{map[s] ?? s}</span>
-}
-
 function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
   const pages = Math.ceil(total / PAGE_SIZE)
   if (pages <= 1) return null
@@ -70,6 +64,31 @@ function Pager({ page, total, onPage }: { page: number; total: number; onPage: (
   )
 }
 
+// Defined outside component to avoid remounting issues
+interface KwRowProps {
+  date: string; keyword: string; today: string; claimed: boolean
+  onClaim: () => void; onView: () => void
+  children: React.ReactNode // metric columns
+}
+function KwRow({ date, keyword, today, claimed, onClaim, onView, children }: KwRowProps) {
+  return (
+    <tr onDoubleClick={onClaim}
+      className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
+      title={claimed ? '已认领' : '双击认领'}>
+      <td className="px-3 py-2 w-24"><DateBadge date={date} today={today} /></td>
+      <td className="px-2 py-2">
+        <span className="text-sm text-gray-800" title={keyword}>{keyword.length > 20 ? keyword.slice(0, 20) + '…' : keyword}</span>
+        {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
+      </td>
+      {children}
+      <td className="px-2 py-2 w-12 text-right">
+        <button onClick={e => { e.stopPropagation(); onView() }}
+          className="text-xs text-blue-400 hover:text-blue-600 px-1">查看</button>
+      </td>
+    </tr>
+  )
+}
+
 export default function TaskGroupsPage() {
   const { role, id: currentUserId } = useUser()
   const canManage = role === 'super' || role === 'admin'
@@ -80,9 +99,9 @@ export default function TaskGroupsPage() {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
 
   const [viewingMemberId, setViewingMemberId] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState(today)
   const [claimedKeywords, setClaimedKeywords] = useState<ClaimedKeyword[]>([])
   const [claimedLoading, setClaimedLoading] = useState(false)
-  const [activeCompletionType, setActiveCompletionType] = useState<'app' | 'game'>('app')
   const [submitting, setSubmitting] = useState(false)
 
   const [rightTab, setRightTab] = useState<RightTab>('search')
@@ -92,7 +111,6 @@ export default function TaskGroupsPage() {
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
   const [radarLoaded, setRadarLoaded] = useState(false)
   const [radarLoading, setRadarLoading] = useState(false)
-  const [siteRows, setSiteRows] = useState<SiteRow[]>([])
 
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -115,35 +133,14 @@ export default function TaskGroupsPage() {
   const [saving, setSaving] = useState(false)
 
   const claimingRef = useRef<Set<string>>(new Set())
-
-  interface CrossWord { keyword: string; volume: number; last_date: string; first_date: string; newSites: string[]; rankSites: string[] }
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const activeGroup = groups.find(g => g.id === activeGroupId) ?? null
   const effectiveViewingId = viewingMemberId || currentUserId || ''
-  const viewingMember = activeGroup?.members.find(m => m.user_id === effectiveViewingId) ?? null
-  const viewingMemberType: 'app' | 'game' = viewingMember?.member_type === 'game' ? 'game' : 'app'
   const isViewingOwn = effectiveViewingId === currentUserId
 
-  const domainTypeMap = useMemo(() => {
-    const map = new Map<string, Set<string>>()
-    for (const s of siteRows) {
-      const types = (s.source_types || '').split(/[\n|,]/).map(t => t.trim().toLowerCase()).filter(Boolean)
-      map.set(s.domain, new Set(types))
-    }
-    return map
-  }, [siteRows])
-
-  function matchesDomain(domain: string, type: 'app' | 'game') {
-    const types = domainTypeMap.get(domain)
-    return types ? types.has(type) : false
-  }
-
   const claimedSet = useMemo(() => new Set(claimedKeywords.map(k => k.keyword)), [claimedKeywords])
-  const appKeywords = claimedKeywords.filter(k => k.keyword_type === 'app')
-  const gameKeywords = claimedKeywords.filter(k => k.keyword_type === 'game')
   const pendingCount = claimedKeywords.filter(k => k.status === 'pending').length
-  const activeCompletionKeywords = activeCompletionType === 'app' ? appKeywords : gameKeywords
-  const completionTabs: Array<'app' | 'game'> = viewingMemberType === 'game' ? ['game', 'app'] : ['app', 'game']
 
   const crossWords = useMemo((): CrossWord[] => {
     if (!radarData) return []
@@ -177,10 +174,10 @@ export default function TaskGroupsPage() {
     } finally { setLoading(false) }
   }
 
-  async function loadClaimed(groupId: string, userId: string) {
+  async function loadClaimed(groupId: string, userId: string, date: string) {
     setClaimedLoading(true)
     try {
-      const res = await fetch(`/api/task-groups/${groupId}/claimed?userId=${userId}&date=${today}`)
+      const res = await fetch(`/api/task-groups/${groupId}/claimed?userId=${userId}&date=${date}`)
       const data = await res.json()
       setClaimedKeywords(data.keywords || [])
     } finally { setClaimedLoading(false) }
@@ -190,26 +187,25 @@ export default function TaskGroupsPage() {
     if (radarLoaded || radarLoading) return
     setRadarLoading(true)
     try {
-      const [radarRes, sitesRes] = await Promise.all([fetch('/api/hot-radar'), fetch('/api/sites')])
-      const [rd, sd] = await Promise.all([radarRes.json(), sitesRes.json()])
-      setRadarData(rd); setSiteRows(sd.sites || []); setRadarLoaded(true)
+      const radarRes = await fetch('/api/hot-radar')
+      const rd = await radarRes.json()
+      setRadarData(rd); setRadarLoaded(true)
     } finally { setRadarLoading(false) }
   }
 
-  async function claimKeyword(keyword: string, keyword_type: 'app' | 'game', source: string, search_volume = 0) {
+  async function claimKeyword(keyword: string, source: string, search_volume = 0) {
     if (!activeGroupId || claimedSet.has(keyword) || claimingRef.current.has(keyword)) return
     claimingRef.current.add(keyword)
     try {
       const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword, keyword_type, source, search_volume }),
+        body: JSON.stringify({ keyword, source, search_volume }),
       })
       if (res.status === 409) return
       if (res.ok) {
         const data = await res.json()
         setClaimedKeywords(prev => [...prev, data.keyword])
-        setActiveCompletionType(keyword_type)
       }
     } finally { claimingRef.current.delete(keyword) }
   }
@@ -223,11 +219,15 @@ export default function TaskGroupsPage() {
     })
   }
 
-  async function submitToday() {
+  async function submitForDate() {
     if (!activeGroupId || submitting || pendingCount === 0) return
     setSubmitting(true)
     try {
-      const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, { method: 'PUT' })
+      const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate }),
+      })
       if (res.ok) setClaimedKeywords(prev => prev.map(k => k.status === 'pending' ? { ...k, status: 'submitted' } : k))
     } finally { setSubmitting(false) }
   }
@@ -245,13 +245,13 @@ export default function TaskGroupsPage() {
   function triggerSearch() { setSearchQuery(searchInput); doSearch(searchInput, 0) }
 
   useEffect(() => { loadGroups() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId) }, [activeGroupId, effectiveViewingId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setActiveCompletionType(viewingMemberType) }, [viewingMemberType])
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Realtime: only subscribe when viewing today's data
   useEffect(() => {
-    if (!activeGroupId) return
+    if (!activeGroupId || selectedDate !== today) return
     const supabase = getBrowserClient()
     const channel = supabase
       .channel(`claimed-${activeGroupId}`)
@@ -270,7 +270,7 @@ export default function TaskGroupsPage() {
         })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [activeGroupId, effectiveViewingId, today]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeGroupId, effectiveViewingId, selectedDate, today]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function setPage(tab: RightTab, p: number) { setTabPage(prev => ({ ...prev, [tab]: p })) }
 
@@ -406,31 +406,8 @@ export default function TaskGroupsPage() {
     )
   }
 
-  function KwRow({ date, keyword, col2, col2Label, sites, onClaim }: {
-    date: string; keyword: string; col2: string | number; col2Label: string
-    sites: string[]; onClaim: () => void
-  }) {
-    const claimed = claimedSet.has(keyword)
-    return (
-      <tr onDoubleClick={onClaim}
-        className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
-        title={claimed ? '已认领' : '双击认领'}
-      >
-        <td className="px-3 py-2 w-24"><DateBadge date={date} today={today} /></td>
-        <td className="px-2 py-2">
-          <span className="text-sm text-gray-800" title={keyword}>{keyword.length > 22 ? keyword.slice(0, 22) + '…' : keyword}</span>
-          {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
-        </td>
-        <td className="px-2 py-2 text-xs text-gray-400 text-center w-16">{col2}{col2Label}</td>
-        <td className="px-2 py-2 w-12 text-right">
-          <button onClick={e => { e.stopPropagation(); setViewingSites({ keyword, sites }) }}
-            className="text-xs text-blue-400 hover:text-blue-600 px-1">查看</button>
-        </td>
-      </tr>
-    )
-  }
-
-  function RightContent() {
+  // Right panel content
+  function renderRightContent() {
     const pg = tabPage[rightTab]
 
     if (rightTab === 'search') {
@@ -438,7 +415,7 @@ export default function TaskGroupsPage() {
       return (
         <div>
           <div className="flex gap-2 mb-4">
-            <input type="text" value={searchInput}
+            <input ref={searchInputRef} type="text" value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && triggerSearch()}
               placeholder="输入关键词..."
@@ -457,21 +434,21 @@ export default function TaskGroupsPage() {
               <table className="w-full">
                 <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
                   <th className="px-3 py-2 text-left font-medium">关键词</th>
-                  <th className="px-2 py-2 text-right font-medium">搜索量</th>
+                  <th className="px-2 py-2 text-right font-medium w-24">搜索量</th>
                   <th className="w-12" />
                 </tr></thead>
                 <tbody>
                   {searchResults.map((r, i) => {
                     const claimed = claimedSet.has(r.keyword)
                     return (
-                      <tr key={`${r.keyword}|${i}`} onDoubleClick={() => claimKeyword(r.keyword, viewingMemberType, '搜索量查询', r.volume)}
+                      <tr key={`${r.keyword}|${i}`} onDoubleClick={() => claimKeyword(r.keyword, '搜索量查询', r.volume)}
                         className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
                         title={claimed ? '已认领' : '双击认领'}>
                         <td className="px-3 py-2">
                           <span className="text-sm text-gray-800" title={r.keyword}>{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
                           {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
                         </td>
-                        <td className="px-2 py-2 text-right text-xs text-gray-400">{fmtVol(r.volume)}</td>
+                        <td className="px-2 py-2 text-right text-xs text-gray-500">{fmtVol(r.volume)}</td>
                         <td className="w-12" />
                       </tr>
                     )
@@ -479,7 +456,7 @@ export default function TaskGroupsPage() {
                 </tbody>
               </table>
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-3 py-3 border-t border-gray-50 text-sm">
+                <div className="flex items-center justify-center gap-3 py-3 border-t border-gray-50">
                   <button onClick={() => doSearch(searchQuery, searchPage - 1)} disabled={searchPage === 0}
                     className="px-3 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-30 text-xs">上一页</button>
                   <span className="text-gray-400 text-xs">{searchPage + 1} / {totalPages}　共 {searchTotal} 条</span>
@@ -504,14 +481,24 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">搜索量</th>
+              <th className="px-2 py-2 text-center font-medium w-28">命中维度</th>
+              <th className="px-2 py-2 text-right font-medium w-20">搜索量</th>
               <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={fmtVol(w.volume)} col2Label="" sites={[...w.newSites, ...w.rankSites.filter(s => !w.newSites.includes(s))]}
-                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '交叉词', w.volume)} />
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                  claimed={claimedSet.has(w.keyword)}
+                  onClaim={() => claimKeyword(w.keyword, '交叉词', w.volume)}
+                  onView={() => setViewingSites({ keyword: w.keyword, sites: [...w.newSites, ...w.rankSites.filter(s => !w.newSites.includes(s))] })}>
+                  <td className="px-2 py-2 w-28">
+                    <div className="flex gap-1 justify-center">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-green-100 text-green-700">新增</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-100 text-orange-700">涨排</span>
+                    </div>
+                  </td>
+                  <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
+                </KwRow>
               ))}
             </tbody>
           </table>
@@ -530,14 +517,19 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-16">站点</th>
+              <th className="px-2 py-2 text-center font-medium w-20">涨排次数</th>
+              <th className="px-2 py-2 text-right font-medium w-20">搜索量</th>
               <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.siteCount} col2Label="站" sites={w.sites}
-                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '竞品涨排名', w.volume)} />
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                  claimed={claimedSet.has(w.keyword)}
+                  onClaim={() => claimKeyword(w.keyword, '竞品涨排名', w.volume)}
+                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.sites })}>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.rankDays}次</td>
+                  <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
+                </KwRow>
               ))}
             </tbody>
           </table>
@@ -556,14 +548,19 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-16">连涨</th>
+              <th className="px-2 py-2 text-center font-medium w-20">上涨天数</th>
+              <th className="px-2 py-2 text-right font-medium w-20">搜索量</th>
               <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.streak} col2Label="天" sites={[w.domain]}
-                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '连续上涨词', w.volume)} />
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                  claimed={claimedSet.has(w.keyword)}
+                  onClaim={() => claimKeyword(w.keyword, '连续上涨词', w.volume)}
+                  onView={() => setViewingSites({ keyword: w.keyword, sites: [w.domain] })}>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.streak}天</td>
+                  <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
+                </KwRow>
               ))}
             </tbody>
           </table>
@@ -581,14 +578,19 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-16">次数</th>
+              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
+              <th className="px-2 py-2 text-center font-medium w-16">站点数</th>
               <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.count} col2Label="次" sites={w.sites}
-                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '共新增词', 0)} />
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                  claimed={claimedSet.has(w.keyword)}
+                  onClaim={() => claimKeyword(w.keyword, '共新增词', 0)}
+                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.sites })}>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.count}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-16">{w.siteCount}站</td>
+                </KwRow>
               ))}
             </tbody>
           </table>
@@ -606,14 +608,19 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-16">次数</th>
+              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
+              <th className="px-2 py-2 text-center font-medium w-16">站点数</th>
               <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.count} col2Label="次" sites={w.sites}
-                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '更新词库', 0)} />
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                  claimed={claimedSet.has(w.keyword)}
+                  onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
+                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.sites })}>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.count}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-16">{w.siteCount}站</td>
+                </KwRow>
               ))}
             </tbody>
           </table>
@@ -631,6 +638,11 @@ export default function TaskGroupsPage() {
     ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
     ['streak', '连续上涨词'], ['newWords', '共新增词'], ['wordLib', '更新词库'],
   ]
+
+  function SourceTag({ s }: { s: string }) {
+    const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库' }
+    return <span className="text-[10px] text-gray-300 flex-shrink-0">{map[s] ?? s}</span>
+  }
 
   return (
     <div className="p-6">
@@ -672,35 +684,33 @@ export default function TaskGroupsPage() {
             <div className="flex" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
               {/* Left panel */}
               <div className="w-[280px] flex-shrink-0 border-r border-gray-100 flex flex-col">
+                {/* Member selector for admins */}
                 {canManage && activeGroup.members.length > 0 && (
                   <div className="px-3 pt-3 pb-2 flex flex-wrap gap-1.5 border-b border-gray-50">
                     {activeGroup.members.map(m => (
                       <button key={m.user_id} onClick={() => setViewingMemberId(m.user_id)}
                         className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${effectiveViewingId === m.user_id ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
                         {m.username}
-                        {m.member_type && m.member_type !== 'both' && (
-                          <span className={`ml-1 ${effectiveViewingId === m.user_id ? 'opacity-60' : m.member_type === 'app' ? 'text-blue-400' : 'text-purple-400'}`}>
-                            {m.member_type === 'app' ? '应' : '游'}
-                          </span>
-                        )}
                       </button>
                     ))}
                   </div>
                 )}
-                <div className="flex border-b border-gray-100">
-                  {completionTabs.map(type => (
-                    <button key={type} onClick={() => setActiveCompletionType(type)}
-                      className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${activeCompletionType === type ? type === 'app' ? 'text-blue-600' : 'text-purple-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                      {activeCompletionType === type && (
-                        <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${type === 'app' ? 'bg-blue-500' : 'bg-purple-500'}`} />
-                      )}
-                      {type === 'app' ? '应用' : '游戏'}今日
-                      <span className="ml-1 text-xs text-gray-400">{type === 'app' ? appKeywords.length : gameKeywords.length}</span>
-                    </button>
-                  ))}
+
+                {/* Date selector */}
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100">
+                  <span className="text-sm font-medium text-gray-700">今日任务</span>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    max={today}
+                    onChange={e => setSelectedDate(e.target.value || today)}
+                    className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
+                  />
                 </div>
+
+                {/* Keyword list */}
                 <div className="flex-1 overflow-y-auto">
-                  {claimedLoading ? <Spinner /> : activeCompletionKeywords.length === 0 ? (
+                  {claimedLoading ? <Spinner /> : claimedKeywords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-300 text-sm py-12">
                       <svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -709,7 +719,7 @@ export default function TaskGroupsPage() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-50">
-                      {activeCompletionKeywords.map(k => (
+                      {claimedKeywords.map(k => (
                         <div key={k.id} className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
                           {isViewingOwn && k.status === 'pending' ? (
                             <button onClick={() => dismissClaimed(k.id)} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
@@ -723,11 +733,13 @@ export default function TaskGroupsPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Submit button */}
                 {isViewingOwn && (
                   <div className="p-3 border-t border-gray-100">
-                    <button onClick={submitToday} disabled={submitting || pendingCount === 0}
+                    <button onClick={submitForDate} disabled={submitting || pendingCount === 0}
                       className="w-full py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      {submitting ? '提交中...' : `今日提交${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
+                      {submitting ? '提交中...' : `提交${selectedDate !== today ? ` (${selectedDate.slice(5).replace('-', '/')})` : ''}${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
                     </button>
                   </div>
                 )}
@@ -744,7 +756,7 @@ export default function TaskGroupsPage() {
                   ))}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
-                  {RightContent()}
+                  {renderRightContent()}
                 </div>
               </div>
             </div>

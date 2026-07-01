@@ -46,14 +46,13 @@ export async function POST(
   if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: groupId } = await params
-  const { keyword, keyword_type, source, search_volume } = await req.json() as {
+  const { keyword, source, search_volume } = await req.json() as {
     keyword: string
-    keyword_type: 'app' | 'game'
     source: string
     search_volume?: number
   }
 
-  if (!keyword || !keyword_type) {
+  if (!keyword) {
     return NextResponse.json({ error: '缺少必要参数' }, { status: 400 })
   }
 
@@ -80,7 +79,7 @@ export async function POST(
       group_id: groupId,
       user_id: callerId,
       keyword,
-      keyword_type,
+      keyword_type: null,
       source,
       search_volume: search_volume || 0,
       claimed_date: claimedDate,
@@ -119,7 +118,7 @@ export async function PATCH(
   return NextResponse.json({ success: true })
 }
 
-// Submit all pending for today
+// Submit all pending for a given date
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -128,6 +127,9 @@ export async function PUT(
   if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: groupId } = await params
+  const body = await req.json().catch(() => ({})) as { date?: string }
+  const date = body.date || getMY()
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
 
@@ -136,7 +138,7 @@ export async function PUT(
     .update({ status: 'submitted', submitted_at: new Date().toISOString() })
     .eq('group_id', groupId)
     .eq('user_id', callerId)
-    .eq('claimed_date', getMY())
+    .eq('claimed_date', date)
     .eq('status', 'pending')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
