@@ -485,50 +485,48 @@ export default function TaskGroupsPage() {
                       const isSelected = editSelectedUsers.has(u.id)
                       const mType = editMemberTypes[u.id] || 'app'
                       return (
-                        <div key={u.id} className={`px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={e => {
-                                const next = new Set(editSelectedUsers)
-                                const nextTypes = { ...editMemberTypes }
-                                if (e.target.checked) {
-                                  next.add(u.id)
-                                  nextTypes[u.id] = nextTypes[u.id] || 'app'
-                                } else {
-                                  next.delete(u.id)
-                                  delete nextTypes[u.id]
-                                }
-                                setEditSelectedUsers(next)
-                                setEditMemberTypes(nextTypes)
-                              }}
-                              className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
-                              <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                        <div key={u.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={e => {
+                              const next = new Set(editSelectedUsers)
+                              const nextTypes = { ...editMemberTypes }
+                              if (e.target.checked) {
+                                next.add(u.id)
+                                nextTypes[u.id] = nextTypes[u.id] || 'app'
+                              } else {
+                                next.delete(u.id)
+                                delete nextTypes[u.id]
+                              }
+                              setEditSelectedUsers(next)
+                              setEditMemberTypes(nextTypes)
+                            }}
+                            className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
+                            <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                          </div>
+                          {isSelected && (
+                            <div className="flex gap-1 flex-shrink-0">
+                              {(['app', 'game'] as const).map(t => (
+                                <button
+                                  key={t}
+                                  onClick={() => setEditMemberTypes(prev => ({ ...prev, [u.id]: t }))}
+                                  className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
+                                    mType === t
+                                      ? t === 'app'
+                                        ? 'bg-blue-500 text-white border-blue-500'
+                                        : 'bg-purple-500 text-white border-purple-500'
+                                      : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                                  }`}
+                                >
+                                  {t === 'app' ? '应用' : '游戏'}
+                                </button>
+                              ))}
                             </div>
-                            {isSelected && (
-                              <div className="flex gap-1 flex-shrink-0">
-                                {(['app', 'game'] as const).map(t => (
-                                  <button
-                                    key={t}
-                                    onClick={e => { e.preventDefault(); setEditMemberTypes(prev => ({ ...prev, [u.id]: t })) }}
-                                    className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
-                                      mType === t
-                                        ? t === 'app'
-                                          ? 'bg-blue-500 text-white border-blue-500'
-                                          : 'bg-purple-500 text-white border-purple-500'
-                                        : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                                    }`}
-                                  >
-                                    {t === 'app' ? '应用' : '游戏'}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </label>
+                          )}
                         </div>
                       )
                     })
@@ -603,50 +601,48 @@ export default function TaskGroupsPage() {
                       const isSelected = selectedUsers.has(u.id)
                       const mType = memberTypes[u.id] || 'app'
                       return (
-                        <div key={u.id} className={`px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={e => {
-                                const next = new Set(selectedUsers)
-                                const nextTypes = { ...memberTypes }
-                                if (e.target.checked) {
-                                  next.add(u.id)
-                                  nextTypes[u.id] = 'app'
-                                } else {
-                                  next.delete(u.id)
-                                  delete nextTypes[u.id]
-                                }
-                                setSelectedUsers(next)
-                                setMemberTypes(nextTypes)
-                              }}
-                              className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
-                              <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                        <div key={u.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={e => {
+                              const next = new Set(selectedUsers)
+                              const nextTypes = { ...memberTypes }
+                              if (e.target.checked) {
+                                next.add(u.id)
+                                nextTypes[u.id] = 'app'
+                              } else {
+                                next.delete(u.id)
+                                delete nextTypes[u.id]
+                              }
+                              setSelectedUsers(next)
+                              setMemberTypes(nextTypes)
+                            }}
+                            className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
+                            <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                          </div>
+                          {isSelected && (
+                            <div className="flex gap-1 flex-shrink-0">
+                              {(['app', 'game'] as const).map(t => (
+                                <button
+                                  key={t}
+                                  onClick={() => setMemberTypes(prev => ({ ...prev, [u.id]: t }))}
+                                  className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
+                                    mType === t
+                                      ? t === 'app'
+                                        ? 'bg-blue-500 text-white border-blue-500'
+                                        : 'bg-purple-500 text-white border-purple-500'
+                                      : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                                  }`}
+                                >
+                                  {t === 'app' ? '应用' : '游戏'}
+                                </button>
+                              ))}
                             </div>
-                            {isSelected && (
-                              <div className="flex gap-1 flex-shrink-0">
-                                {(['app', 'game'] as const).map(t => (
-                                  <button
-                                    key={t}
-                                    onClick={e => { e.preventDefault(); setMemberTypes(prev => ({ ...prev, [u.id]: t })) }}
-                                    className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
-                                      mType === t
-                                        ? t === 'app'
-                                          ? 'bg-blue-500 text-white border-blue-500'
-                                          : 'bg-purple-500 text-white border-purple-500'
-                                        : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                                    }`}
-                                  >
-                                    {t === 'app' ? '应用' : '游戏'}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </label>
+                          )}
                         </div>
                       )
                     })
