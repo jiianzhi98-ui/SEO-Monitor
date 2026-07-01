@@ -400,7 +400,7 @@ export default function DashboardPage() {
 
         <AlertCard title="权重变动" count={weightChanges.length} color="red" empty="暂无权重变动">
           {weightChanges.map((w, i) => {
-            const isRecent = w.date >= getMY(-1)
+            const isRecent = w.date === getMY()
             return (
               <button key={i} onClick={() => { setWeightModalSite(w); setWeightModalTab('weight'); setWeightModalKwTab('app'); setWeightModalRankTab('up'); fetchWeightModalExtra(w.site_id) }} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
                 <p className="text-xs truncate">
@@ -439,7 +439,7 @@ export default function DashboardPage() {
           }
         >
           {indexAlerts.map((a, i) => {
-            const isRecent = a.date >= getMY(-1)
+            const isRecent = a.date === getMY()
             return (
             <button key={i} onClick={() => setIndexModalSite(a)} className={`w-full flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 transition-colors text-left ${
               a.status === 'danger' ? 'hover:bg-red-50' :
