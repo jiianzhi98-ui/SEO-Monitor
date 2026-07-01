@@ -111,6 +111,7 @@ export default function TaskGroupsPage() {
   const [editMemberTypes, setEditMemberTypes] = useState<Record<string, 'app' | 'game'>>({})
   const [editSelectedUsers, setEditSelectedUsers] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  const [memberView, setMemberView] = useState<TaskMember | null>(null)
 
   async function loadGroups() {
     setLoading(true)
@@ -333,30 +334,21 @@ export default function TaskGroupsPage() {
           {activeGroup && (
             <div className="p-4">
               {/* Group meta */}
-              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {activeGroup.members.map(m => (
-                    <span key={m.user_id} className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-2.5 py-1">
-                      {m.username || '—'}
-                      {m.member_type && m.member_type !== 'both' && (
-                        <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${m.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
-                          {m.member_type === 'app' ? '应用' : '游戏'}
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-                <div className="ml-auto flex items-center gap-2">
-                  <CopyButton keywords={allKeywords} />
-                  {canManage && (
-                    <button
-                      onClick={() => setDeleteId(activeGroup.id)}
-                      className="text-xs text-red-400 hover:text-red-600 border border-red-100 rounded px-2 py-1 hover:border-red-200 transition-colors"
-                    >
-                      删除分组
-                    </button>
-                  )}
-                </div>
+              <div className="flex items-center gap-2 flex-wrap mb-4 pb-3 border-b border-gray-100">
+                {activeGroup.members.map(m => (
+                  <button
+                    key={m.user_id}
+                    onClick={() => setMemberView(m)}
+                    className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-2.5 py-1 hover:bg-gray-200 transition-colors"
+                  >
+                    {m.username || '—'}
+                    {m.member_type && m.member_type !== 'both' && (
+                      <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${m.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                        {m.member_type === 'app' ? '应用' : '游戏'}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
 
               {/* Keyword sections */}
@@ -520,7 +512,13 @@ export default function TaskGroupsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
+            <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
+              <button
+                onClick={() => { setShowEdit(false); setDeleteId(activeGroup.id) }}
+                className="text-xs text-red-400 hover:text-red-600 border border-red-100 rounded px-3 py-1.5 hover:border-red-200 transition-colors mr-auto"
+              >
+                删除分组
+              </button>
               <button onClick={() => setShowEdit(false)} className="btn-ghost">取消</button>
               <button
                 onClick={handleEdit}
@@ -529,6 +527,28 @@ export default function TaskGroupsPage() {
               >
                 {saving ? '保存中...' : '保存'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Member view modal */}
+      {memberView && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMemberView(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-gray-900">{memberView.username || '—'}</h3>
+                {memberView.member_type && memberView.member_type !== 'both' && (
+                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${memberView.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                    {memberView.member_type === 'app' ? '应用' : '游戏'}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setMemberView(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="flex-1 flex items-center justify-center py-20 text-gray-400 text-sm">
+              暂无资料
             </div>
           </div>
         </div>
