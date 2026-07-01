@@ -13,7 +13,7 @@ async function getCaller() {
 }
 
 interface RawGroup { id: string; name: string; type: string; created_at: string }
-interface RawMember { group_id: string; user_id: string; username: string | null }
+interface RawMember { group_id: string; user_id: string; username: string | null; member_type: string | null }
 
 export async function GET() {
   const caller = await getCaller()
@@ -28,10 +28,10 @@ export async function GET() {
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const membersByGroup = new Map<string, { user_id: string; username: string }[]>()
+  const membersByGroup = new Map<string, { user_id: string; username: string; member_type: string }[]>()
   for (const m of (members || []) as RawMember[]) {
     if (!membersByGroup.has(m.group_id)) membersByGroup.set(m.group_id, [])
-    membersByGroup.get(m.group_id)!.push({ user_id: m.user_id, username: m.username || '' })
+    membersByGroup.get(m.group_id)!.push({ user_id: m.user_id, username: m.username || '', member_type: m.member_type || 'app' })
   }
 
   const allGroups = ((groups || []) as RawGroup[]).map(g => ({
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
   const { type, members, name: nameInput } = await req.json() as {
     type: 'game' | 'app' | 'both'
-    members: { user_id: string; username: string }[]
+    members: { user_id: string; username: string; member_type?: string }[]
     name?: string
   }
 
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await service.from('task_group_members').insert(
-    members.map(m => ({ group_id: group.id, user_id: m.user_id, username: m.username }))
+    members.map(m => ({ group_id: group.id, user_id: m.user_id, username: m.username, member_type: m.member_type || 'app' }))
   )
 
   return NextResponse.json({ group: { ...group, members } })

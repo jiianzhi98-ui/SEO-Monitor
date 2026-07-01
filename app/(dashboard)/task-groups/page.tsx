@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useUser } from '@/lib/user-context'
 
-interface TaskMember { user_id: string; username: string }
+interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
 interface TaskGroup {
   id: string
   name: string
@@ -100,7 +100,7 @@ export default function TaskGroupsPage() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
-  const [createType, setCreateType] = useState<'game' | 'app' | 'both'>('app')
+  const [memberTypes, setMemberTypes] = useState<Record<string, 'app' | 'game'>>({})
   const [userOptions, setUserOptions] = useState<UserOption[]>([])
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
   const [creating, setCreating] = useState(false)
@@ -133,7 +133,7 @@ export default function TaskGroupsPage() {
     setShowCreate(true)
     setCreateName('')
     setSelectedUsers(new Set())
-    setCreateType('app')
+    setMemberTypes({})
     const res = await fetch('/api/admin/users')
     const data = await res.json()
     setUserOptions((data.users || []).filter((u: UserOption) => u.role !== 'super'))
@@ -145,12 +145,12 @@ export default function TaskGroupsPage() {
     try {
       const members = userOptions
         .filter(u => selectedUsers.has(u.id))
-        .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0] }))
+        .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: memberTypes[u.id] || 'app' }))
       const autoName = members.map(m => m.username).join(' · ')
       const res = await fetch('/api/task-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName.trim() || autoName, type: createType, members }),
+        body: JSON.stringify({ name: createName.trim() || autoName, type: 'both', members }),
       })
       if (res.ok) {
         setShowCreate(false)
@@ -287,11 +287,16 @@ export default function TaskGroupsPage() {
               <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
                 <div className="flex items-center gap-2 flex-wrap">
                   {activeGroup.members.map(m => (
-                    <span key={m.user_id} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 rounded-full px-2.5 py-1">
+                    <span key={m.user_id} className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-2.5 py-1">
                       <span className="w-4 h-4 rounded-full bg-gray-300 flex items-center justify-center text-[9px] font-bold text-white uppercase">
                         {(m.username || '?')[0]}
                       </span>
                       {m.username || '—'}
+                      {m.member_type && m.member_type !== 'both' && (
+                        <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${m.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                          {m.member_type === 'app' ? '应用' : '游戏'}
+                        </span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -425,56 +430,67 @@ export default function TaskGroupsPage() {
                 />
               </div>
 
-              {/* Type */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">内容类型</label>
-                <div className="flex gap-2">
-                  {(['app', 'game', 'both'] as const).map(t => (
-                    <button
-                      key={t}
-                      onClick={() => setCreateType(t)}
-                      className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                        createType === t
-                          ? 'border-green-500 bg-green-50 text-green-700'
-                          : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                      }`}
-                    >
-                      {TYPE_LABELS[t]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Members */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   组员
                   {selectedUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {selectedUsers.size} 人）</span>}
                 </label>
-                <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
                   {userOptions.length === 0 ? (
                     <div className="px-3 py-3 text-sm text-gray-400">加载中...</div>
                   ) : (
-                    userOptions.map(u => (
-                      <label key={u.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedUsers.has(u.id)}
-                          onChange={e => {
-                            const next = new Set(selectedUsers)
-                            if (e.target.checked) next.add(u.id)
-                            else next.delete(u.id)
-                            setSelectedUsers(next)
-                          }}
-                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
-                          <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                    userOptions.map(u => {
+                      const isSelected = selectedUsers.has(u.id)
+                      const mType = memberTypes[u.id] || 'app'
+                      return (
+                        <div key={u.id} className={`px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={e => {
+                                const next = new Set(selectedUsers)
+                                const nextTypes = { ...memberTypes }
+                                if (e.target.checked) {
+                                  next.add(u.id)
+                                  nextTypes[u.id] = 'app'
+                                } else {
+                                  next.delete(u.id)
+                                  delete nextTypes[u.id]
+                                }
+                                setSelectedUsers(next)
+                                setMemberTypes(nextTypes)
+                              }}
+                              className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
+                              <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                            </div>
+                          </label>
+                          {isSelected && (
+                            <div className="flex gap-1.5 mt-2 ml-7">
+                              {(['app', 'game'] as const).map(t => (
+                                <button
+                                  key={t}
+                                  onClick={() => setMemberTypes(prev => ({ ...prev, [u.id]: t }))}
+                                  className={`text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
+                                    mType === t
+                                      ? t === 'app'
+                                        ? 'bg-blue-500 text-white border-blue-500'
+                                        : 'bg-purple-500 text-white border-purple-500'
+                                      : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                                  }`}
+                                >
+                                  {t === 'app' ? '应用' : '游戏'}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <span className="text-xs text-gray-300">{u.role}</span>
-                      </label>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               </div>
