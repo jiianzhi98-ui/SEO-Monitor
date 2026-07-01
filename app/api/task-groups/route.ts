@@ -52,16 +52,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { type, members } = await req.json() as {
+  const { type, members, name: nameInput } = await req.json() as {
     type: 'game' | 'app' | 'both'
     members: { user_id: string; username: string }[]
+    name?: string
   }
 
   if (!type || !members || members.length === 0) {
     return NextResponse.json({ error: '请至少选择一个成员' }, { status: 400 })
   }
 
-  const name = members.map(m => m.username || m.user_id.slice(0, 8)).join(' · ')
+  const name = (nameInput || '').trim() || members.map(m => m.username || m.user_id.slice(0, 8)).join(' · ')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any

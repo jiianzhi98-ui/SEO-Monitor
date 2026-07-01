@@ -21,7 +21,7 @@ interface RadarData { newWords: WordEntry[]; rankWords: RankEntry[]; streakWords
 
 interface SiteRow { domain: string; source_types: string | null }
 
-const TYPE_LABELS: Record<string, string> = { game: '游戏', app: '应用', both: '全部' }
+const TYPE_LABELS: Record<string, string> = { game: '游戏', app: '应用', both: '应用/游戏' }
 const TYPE_COLORS: Record<string, string> = {
   game: 'bg-purple-50 text-purple-600',
   app: 'bg-blue-50 text-blue-600',
@@ -99,6 +99,7 @@ export default function TaskGroupsPage() {
   const [siteRows, setSiteRows] = useState<SiteRow[]>([])
 
   const [showCreate, setShowCreate] = useState(false)
+  const [createName, setCreateName] = useState('')
   const [createType, setCreateType] = useState<'game' | 'app' | 'both'>('app')
   const [userOptions, setUserOptions] = useState<UserOption[]>([])
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
@@ -130,6 +131,7 @@ export default function TaskGroupsPage() {
 
   async function openCreateModal() {
     setShowCreate(true)
+    setCreateName('')
     setSelectedUsers(new Set())
     setCreateType('app')
     const res = await fetch('/api/admin/users')
@@ -144,10 +146,11 @@ export default function TaskGroupsPage() {
       const members = userOptions
         .filter(u => selectedUsers.has(u.id))
         .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0] }))
+      const autoName = members.map(m => m.username).join(' · ')
       const res = await fetch('/api/task-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: createType, members }),
+        body: JSON.stringify({ name: createName.trim() || autoName, type: createType, members }),
       })
       if (res.ok) {
         setShowCreate(false)
@@ -406,6 +409,22 @@ export default function TaskGroupsPage() {
               <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
             <div className="overflow-y-auto flex-1 p-5 space-y-5">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">分组名称</label>
+                <input
+                  type="text"
+                  value={createName}
+                  onChange={e => setCreateName(e.target.value)}
+                  placeholder={
+                    selectedUsers.size > 0
+                      ? userOptions.filter(u => selectedUsers.has(u.id)).map(u => u.username || u.email.split('@')[0]).join(' · ')
+                      : '留空则自动使用成员名称'
+                  }
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
               {/* Type */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">内容类型</label>
@@ -459,19 +478,6 @@ export default function TaskGroupsPage() {
                   )}
                 </div>
               </div>
-
-              {/* Preview name */}
-              {selectedUsers.size > 0 && (
-                <div className="bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-500">
-                  分组名称：
-                  <span className="font-medium text-gray-800">
-                    {userOptions.filter(u => selectedUsers.has(u.id)).map(u => u.username || u.email.split('@')[0]).join(' · ')}
-                  </span>
-                  <span className={`ml-2 text-xs px-1.5 py-0.5 rounded font-medium ${TYPE_COLORS[createType]}`}>
-                    {TYPE_LABELS[createType]}
-                  </span>
-                </div>
-              )}
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
               <button onClick={() => setShowCreate(false)} className="btn-ghost">取消</button>
