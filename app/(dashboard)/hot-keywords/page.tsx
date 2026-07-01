@@ -579,8 +579,8 @@ export default function HotRadarPage() {
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">命中维度</th>
                       <th className="table-th text-center whitespace-nowrap">搜索量</th>
-                      <th className="table-th whitespace-nowrap">新增站点</th>
-                      <th className="table-th whitespace-nowrap">涨排站点</th>
+                      <th className="table-th whitespace-nowrap">共新增词</th>
+                      <th className="table-th whitespace-nowrap">竞品涨排名</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
                   </thead>
@@ -810,13 +810,13 @@ export default function HotRadarPage() {
                 /* 交叉词：左右两栏 */
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <p className="text-xs font-semibold text-blue-600 mb-2 pb-1 border-b border-blue-100">新增站点</p>
+                    <p className="text-xs font-semibold text-blue-600 mb-2 pb-1 border-b border-blue-100">共新增词</p>
                     {detailNewByDate.length === 0
                       ? <p className="text-xs text-gray-400">暂无记录</p>
                       : <DetailDateList byDate={detailNewByDate} weightMap={weightMap} colorMap={groupColorMap} />}
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-orange-500 mb-2 pb-1 border-b border-orange-100">涨排站点</p>
+                    <p className="text-xs font-semibold text-orange-500 mb-2 pb-1 border-b border-orange-100">竞品涨排名</p>
                     {detailRankByDate.length === 0
                       ? <p className="text-xs text-gray-400">暂无记录</p>
                       : <DetailDateList byDate={detailRankByDate} weightMap={weightMap} colorMap={groupColorMap} />}
