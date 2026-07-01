@@ -297,12 +297,12 @@ export default function TaskGroupsPage() {
               新增分组
             </button>
             {activeGroup && (
-              <button onClick={openEditModal} className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors">
+              <button onClick={openEditModal} className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors">
                 编辑分组
               </button>
             )}
             {activeGroup && (
-              <button onClick={() => setDeleteId(activeGroup.id)} className="px-4 py-2 text-sm font-medium rounded-lg border border-red-300 text-red-400 hover:bg-red-50 transition-colors">
+              <button onClick={() => setDeleteId(activeGroup.id)} className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border border-red-300 text-red-400 hover:bg-red-50 transition-colors">
                 删除分组
               </button>
             )}
