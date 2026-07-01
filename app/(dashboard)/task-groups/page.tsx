@@ -14,33 +14,16 @@ interface RankWord { keyword: string; siteCount: number; volume: number; sites: 
 interface StreakWord { keyword: string; streak: number; domain: string; volume: number; first_date: string; last_date: string }
 
 interface ClaimedKeyword {
-  id: string
-  keyword: string
-  keyword_type: 'app' | 'game'
-  source: string
-  search_volume: number
-  status: string
-  created_at: string
+  id: string; keyword: string; keyword_type: 'app' | 'game'
+  source: string; search_volume: number; status: string; created_at: string
 }
 
-type RightTab = 'latest' | 'search' | 'competitor' | 'shared'
-type CompetitorSubTab = 'rank' | 'streak'
-type SharedSubTab = 'newWords' | 'wordLib'
+type RightTab = 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
 
-function getMYDate() {
-  return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
-}
+const PAGE_SIZE = 20
 
-function fmtVol(v: number): string {
-  if (!v || v <= 0) return '—'
-  if (v >= 10000) return (v / 10000).toFixed(1) + 'w'
-  return v.toLocaleString()
-}
-
-function SourceTag({ s }: { s: string }) {
-  const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '最新词库': '最新', '更新词库': '词库' }
-  return <span className="text-[10px] text-gray-300">{map[s] ?? s}</span>
-}
+function getMYDate() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10) }
+function fmtVol(v: number) { if (!v || v <= 0) return '—'; if (v >= 10000) return (v / 10000).toFixed(1) + 'w'; return v.toLocaleString() }
 
 function Spinner() {
   return (
@@ -50,6 +33,39 @@ function Spinner() {
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
       加载中...
+    </div>
+  )
+}
+
+function DateBadge({ date, today }: { date: string; today: string }) {
+  if (!date) return null
+  const [, mm, dd] = date.split('-')
+  const isToday = date === today
+  return (
+    <div className="flex items-center gap-1 whitespace-nowrap">
+      <span className="text-xs text-gray-500">{mm}/{dd}</span>
+      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${isToday ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+        {isToday ? '今日' : '更新'}
+      </span>
+    </div>
+  )
+}
+
+function SourceTag({ s }: { s: string }) {
+  const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库' }
+  return <span className="text-[10px] text-gray-300">{map[s] ?? s}</span>
+}
+
+function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
+  const pages = Math.ceil(total / PAGE_SIZE)
+  if (pages <= 1) return null
+  return (
+    <div className="flex items-center justify-center gap-3 py-3 border-t border-gray-50 text-sm">
+      <button onClick={() => onPage(page - 1)} disabled={page === 0}
+        className="px-3 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-30 text-xs">上一页</button>
+      <span className="text-gray-400 text-xs">{page + 1} / {pages}　共 {total} 条</span>
+      <button onClick={() => onPage(page + 1)} disabled={page >= pages - 1}
+        className="px-3 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-30 text-xs">下一页</button>
     </div>
   )
 }
@@ -69,21 +85,22 @@ export default function TaskGroupsPage() {
   const [activeCompletionType, setActiveCompletionType] = useState<'app' | 'game'>('app')
   const [submitting, setSubmitting] = useState(false)
 
-  const [rightTab, setRightTab] = useState<RightTab>('latest')
-  const [competitorSubTab, setCompetitorSubTab] = useState<CompetitorSubTab>('rank')
-  const [sharedSubTab, setSharedSubTab] = useState<SharedSubTab>('newWords')
-  const [sharedTypeFilter, setSharedTypeFilter] = useState<'app' | 'game'>('app')
+  const [rightTab, setRightTab] = useState<RightTab>('search')
+  const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 })
+  const [typeFilter, setTypeFilter] = useState<'app' | 'game'>('app')
+  const [viewingSites, setViewingSites] = useState<{ keyword: string; sites: string[] } | null>(null)
+
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
   const [radarLoaded, setRadarLoaded] = useState(false)
   const [radarLoading, setRadarLoading] = useState(false)
   const [siteRows, setSiteRows] = useState<SiteRow[]>([])
 
+  const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<{ keyword: string; volume: number }[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchTotal, setSearchTotal] = useState(0)
   const [searchPage, setSearchPage] = useState(0)
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
@@ -97,6 +114,8 @@ export default function TaskGroupsPage() {
   const [editMemberTypes, setEditMemberTypes] = useState<Record<string, 'app' | 'game'>>({})
   const [editSelectedUsers, setEditSelectedUsers] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+
+  const claimingRef = useRef<Set<string>>(new Set())
 
   const activeGroup = groups.find(g => g.id === activeGroupId) ?? null
   const effectiveViewingId = viewingMemberId || currentUserId || ''
@@ -113,7 +132,7 @@ export default function TaskGroupsPage() {
     return map
   }, [siteRows])
 
-  function matchesDomainType(domain: string, type: 'app' | 'game'): boolean {
+  function matchesDomain(domain: string, type: 'app' | 'game') {
     const types = domainTypeMap.get(domain)
     return types ? types.has(type) : false
   }
@@ -125,34 +144,9 @@ export default function TaskGroupsPage() {
   const activeCompletionKeywords = activeCompletionType === 'app' ? appKeywords : gameKeywords
   const completionTabs: Array<'app' | 'game'> = viewingMemberType === 'game' ? ['game', 'app'] : ['app', 'game']
 
-  const latestKeywords = useMemo(() => {
-    if (!radarData) return []
-    const seen = new Set<string>()
-    const result: { keyword: string; volume: number; source: string }[] = []
-    for (const w of radarData.rankWords) {
-      if (w.last_date === today && !seen.has(w.keyword)) {
-        seen.add(w.keyword); result.push({ keyword: w.keyword, volume: w.volume, source: '竞品涨排名' })
-      }
-    }
-    for (const w of radarData.streakWords) {
-      if (w.last_date === today && !seen.has(w.keyword)) {
-        seen.add(w.keyword); result.push({ keyword: w.keyword, volume: w.volume, source: '连续上涨词' })
-      }
-    }
-    for (const w of radarData.newWords) {
-      if (w.last_date === today && !seen.has(w.keyword)) {
-        seen.add(w.keyword); result.push({ keyword: w.keyword, volume: 0, source: '共新增词' })
-      }
-    }
-    return result
-  }, [radarData, today])
-
-  const sharedWords = useMemo(() => {
-    if (!radarData) return []
-    return radarData.newWords
-      .filter(w => sharedSubTab === 'wordLib' ? w.last_date !== today : w.last_date === today)
-      .filter(w => w.sites.some(d => matchesDomainType(d, sharedTypeFilter)))
-  }, [radarData, sharedSubTab, sharedTypeFilter, domainTypeMap, today]) // eslint-disable-line react-hooks/exhaustive-deps
+  const crossWords = useMemo(() => (radarData?.newWords ?? []), [radarData])
+  const newWordsFiltered = useMemo(() => (radarData?.newWords ?? []).filter(w => w.sites.some(d => matchesDomain(d, typeFilter))), [radarData, typeFilter, domainTypeMap]) // eslint-disable-line react-hooks/exhaustive-deps
+  const wordLibFiltered = useMemo(() => (radarData?.newWords ?? []).filter(w => w.last_date !== today && w.sites.some(d => matchesDomain(d, typeFilter))), [radarData, typeFilter, domainTypeMap, today]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadGroups() {
     setLoading(true)
@@ -165,7 +159,7 @@ export default function TaskGroupsPage() {
     } finally { setLoading(false) }
   }
 
-  async function loadClaimedKeywords(groupId: string, userId: string) {
+  async function loadClaimed(groupId: string, userId: string) {
     setClaimedLoading(true)
     try {
       const res = await fetch(`/api/task-groups/${groupId}/claimed?userId=${userId}&date=${today}`)
@@ -180,33 +174,33 @@ export default function TaskGroupsPage() {
     try {
       const [radarRes, sitesRes] = await Promise.all([fetch('/api/hot-radar'), fetch('/api/sites')])
       const [rd, sd] = await Promise.all([radarRes.json(), sitesRes.json()])
-      setRadarData(rd)
-      setSiteRows((sd.sites || []) as SiteRow[])
-      setRadarLoaded(true)
+      setRadarData(rd); setSiteRows(sd.sites || []); setRadarLoaded(true)
     } finally { setRadarLoading(false) }
   }
 
   async function claimKeyword(keyword: string, keyword_type: 'app' | 'game', source: string, search_volume = 0) {
-    if (!activeGroupId || claimedSet.has(keyword)) return
-    const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword, keyword_type, source, search_volume }),
-    })
-    if (res.status === 409) return
-    if (res.ok) {
-      const data = await res.json()
-      setClaimedKeywords(prev => [...prev, data.keyword])
-      setActiveCompletionType(keyword_type)
-    }
+    if (!activeGroupId || claimedSet.has(keyword) || claimingRef.current.has(keyword)) return
+    claimingRef.current.add(keyword)
+    try {
+      const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword, keyword_type, source, search_volume }),
+      })
+      if (res.status === 409) return
+      if (res.ok) {
+        const data = await res.json()
+        setClaimedKeywords(prev => [...prev, data.keyword])
+        setActiveCompletionType(keyword_type)
+      }
+    } finally { claimingRef.current.delete(keyword) }
   }
 
   async function dismissClaimed(claimId: string) {
     if (!activeGroupId) return
     setClaimedKeywords(prev => prev.filter(k => k.id !== claimId))
     await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claimId, status: 'dismissed' }),
     })
   }
@@ -216,9 +210,7 @@ export default function TaskGroupsPage() {
     setSubmitting(true)
     try {
       const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, { method: 'PUT' })
-      if (res.ok) {
-        setClaimedKeywords(prev => prev.map(k => k.status === 'pending' ? { ...k, status: 'submitted' } : k))
-      }
+      if (res.ok) setClaimedKeywords(prev => prev.map(k => k.status === 'pending' ? { ...k, status: 'submitted' } : k))
     } finally { setSubmitting(false) }
   }
 
@@ -228,70 +220,42 @@ export default function TaskGroupsPage() {
     try {
       const res = await fetch(`/api/keyword-volume?q=${encodeURIComponent(q)}&page=${page}`)
       const data = await res.json()
-      setSearchResults(data.keywords || [])
-      setSearchTotal(data.total || 0)
-      setSearchPage(page)
+      setSearchResults(data.keywords || []); setSearchTotal(data.total || 0); setSearchPage(page)
     } finally { setSearchLoading(false) }
   }
 
+  function triggerSearch() { setSearchQuery(searchInput); doSearch(searchInput, 0) }
+
   useEffect(() => { loadGroups() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId) }, [activeGroupId, effectiveViewingId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setActiveCompletionType(viewingMemberType) }, [viewingMemberType])
+  useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (rightTab === 'newWords' || rightTab === 'wordLib') setTypeFilter(viewingMemberType) }, [rightTab, viewingMemberType])
 
-  useEffect(() => {
-    if (activeGroupId && effectiveViewingId) loadClaimedKeywords(activeGroupId, effectiveViewingId)
-  }, [activeGroupId, effectiveViewingId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Realtime: subscribe to claimed keyword changes for the active group
   useEffect(() => {
     if (!activeGroupId) return
     const supabase = getBrowserClient()
-    const channelName = `claimed-${activeGroupId}`
-
     const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'member_claimed_keywords', filter: `group_id=eq.${activeGroupId}` },
+      .channel(`claimed-${activeGroupId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_claimed_keywords', filter: `group_id=eq.${activeGroupId}` },
         (payload) => {
-          // Only apply changes that belong to the member we're viewing
           const rec = (payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old) as ClaimedKeyword & { user_id: string; claimed_date: string }
           if (!rec || rec.user_id !== effectiveViewingId || rec.claimed_date !== today) return
-
           if (payload.eventType === 'INSERT') {
-            if (rec.status !== 'dismissed') {
-              setClaimedKeywords(prev => prev.some(k => k.id === rec.id) ? prev : [...prev, rec])
-            }
+            if (rec.status !== 'dismissed') setClaimedKeywords(prev => prev.some(k => k.id === rec.id) ? prev : [...prev, rec])
           } else if (payload.eventType === 'UPDATE') {
-            if (rec.status === 'dismissed') {
-              setClaimedKeywords(prev => prev.filter(k => k.id !== rec.id))
-            } else {
-              setClaimedKeywords(prev => prev.map(k => k.id === rec.id ? { ...k, status: rec.status } : k))
-            }
+            if (rec.status === 'dismissed') setClaimedKeywords(prev => prev.filter(k => k.id !== rec.id))
+            else setClaimedKeywords(prev => prev.map(k => k.id === rec.id ? { ...k, status: rec.status } : k))
           } else if (payload.eventType === 'DELETE') {
-            const old = payload.old as { id: string }
-            setClaimedKeywords(prev => prev.filter(k => k.id !== old.id))
+            setClaimedKeywords(prev => prev.filter(k => k.id !== (payload.old as { id: string }).id))
           }
-        }
-      )
+        })
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [activeGroupId, effectiveViewingId, today]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId)
-  }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    setActiveCompletionType(viewingMemberType)
-  }, [viewingMemberType])
-
-  useEffect(() => {
-    if (rightTab !== 'search') loadRadar()
-  }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (rightTab === 'shared') setSharedTypeFilter(viewingMemberType)
-  }, [rightTab, viewingMemberType])
+  function setPage(tab: RightTab, p: number) { setTabPage(prev => ({ ...prev, [tab]: p })) }
 
   async function openCreateModal() {
     setShowCreate(true); setCreateName(''); setSelectedUsers(new Set()); setMemberTypes({})
@@ -362,7 +326,6 @@ export default function TaskGroupsPage() {
     const setName = isCreate ? setCreateName : setEditName
     const onSubmit = isCreate ? handleCreate : handleEdit
     const busy = isCreate ? creating : saving
-
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
@@ -373,35 +336,28 @@ export default function TaskGroupsPage() {
           <div className="overflow-y-auto flex-1 p-5 space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">分组名称</label>
-              <input
-                type="text" value={name} onChange={e => setName(e.target.value)}
+              <input type="text" value={name} onChange={e => setName(e.target.value)}
                 placeholder={selUsers.size > 0 ? userOptions.filter(u => selUsers.has(u.id)).map(u => u.username || u.email.split('@')[0]).join(' · ') : '留空则自动使用成员名称'}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 组员{selUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {selUsers.size} 人）</span>}
               </label>
               <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                {userOptions.length === 0 ? (
-                  <div className="px-3 py-3 text-sm text-gray-400">加载中...</div>
-                ) : userOptions.map(u => {
+                {userOptions.length === 0 ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div> : userOptions.map(u => {
                   const isSelected = selUsers.has(u.id)
                   const mType = mTypes[u.id] || 'app'
                   return (
                     <div key={u.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
-                      <input
-                        type="checkbox" checked={isSelected}
+                      <input type="checkbox" checked={isSelected}
                         onChange={e => {
-                          const next = new Set(selUsers)
-                          const nextTypes = { ...mTypes }
+                          const next = new Set(selUsers); const nextTypes = { ...mTypes }
                           if (e.target.checked) { next.add(u.id); nextTypes[u.id] = nextTypes[u.id] || 'app' }
                           else { next.delete(u.id); delete nextTypes[u.id] }
                           setSelUsers(next); setMTypes(nextTypes)
                         }}
-                        className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0"
-                      />
+                        className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
                         <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
@@ -409,14 +365,10 @@ export default function TaskGroupsPage() {
                       {isSelected && (
                         <div className="flex gap-1 flex-shrink-0">
                           {(['app', 'game'] as const).map(t => (
-                            <button key={t}
-                              onClick={() => setMTypes(prev => ({ ...prev, [u.id]: t }))}
-                              className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
-                                mType === t
-                                  ? t === 'app' ? 'bg-blue-500 text-white border-blue-500' : 'bg-purple-500 text-white border-purple-500'
-                                  : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                              }`}
-                            >{t === 'app' ? '应用' : '游戏'}</button>
+                            <button key={t} onClick={() => setMTypes(prev => ({ ...prev, [u.id]: t }))}
+                              className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${mType === t ? t === 'app' ? 'bg-blue-500 text-white border-blue-500' : 'bg-purple-500 text-white border-purple-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
+                              {t === 'app' ? '应用' : '游戏'}
+                            </button>
                           ))}
                         </div>
                       )}
@@ -437,63 +389,99 @@ export default function TaskGroupsPage() {
     )
   }
 
-  function KeywordRow({ keyword, volume, source, onDoubleClick }: {
-    keyword: string; volume: number; source: string; onDoubleClick: () => void
+  function KwRow({ date, keyword, col2, col2Label, sites, source, onClaim }: {
+    date: string; keyword: string; col2: string | number; col2Label: string
+    sites: string[]; source: string; onClaim: () => void
   }) {
     const claimed = claimedSet.has(keyword)
     return (
-      <tr
-        onDoubleClick={onDoubleClick}
-        className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/50' : 'hover:bg-gray-50'}`}
+      <tr onDoubleClick={onClaim}
+        className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
         title={claimed ? '已认领' : '双击认领'}
       >
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 w-24"><DateBadge date={date} today={today} /></td>
+        <td className="px-2 py-2">
           <span className="text-sm text-gray-800" title={keyword}>{keyword.length > 22 ? keyword.slice(0, 22) + '…' : keyword}</span>
           {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
         </td>
-        <td className="px-3 py-2 text-right text-xs text-gray-400 w-20">{fmtVol(volume)}</td>
-        <td className="px-2 py-2 text-right w-14"><SourceTag s={source} /></td>
+        <td className="px-2 py-2 text-xs text-gray-400 text-center w-16">{col2}{col2Label}</td>
+        <td className="px-2 py-2 w-12 text-right">
+          <button onClick={e => { e.stopPropagation(); setViewingSites({ keyword, sites }) }}
+            className="text-xs text-blue-400 hover:text-blue-600 px-1">查看</button>
+        </td>
+        <td className="px-2 py-2 w-12 text-right"><SourceTag s={source} /></td>
       </tr>
     )
   }
 
+  function TypeFilter() {
+    return (
+      <div className="flex gap-1">
+        {(['app', 'game'] as const).map(t => (
+          <button key={t} onClick={() => { setTypeFilter(t); setPage(rightTab, 0) }}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors ${typeFilter === t ? t === 'app' ? 'bg-blue-500 text-white border-blue-500' : 'bg-purple-500 text-white border-purple-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
+            {t === 'app' ? '应用' : '游戏'}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
   function RightContent() {
+    const pg = tabPage[rightTab]
+
     if (rightTab === 'search') {
-      const totalPages = Math.ceil(searchTotal / 50)
+      const totalPages = Math.ceil(searchTotal / PAGE_SIZE)
       return (
         <div>
           <div className="flex gap-2 mb-4">
-            <input
-              type="text" value={searchQuery}
-              onChange={e => {
-                const q = e.target.value; setSearchQuery(q)
-                if (searchTimer.current) clearTimeout(searchTimer.current)
-                searchTimer.current = setTimeout(() => doSearch(q, 0), 400)
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') { if (searchTimer.current) clearTimeout(searchTimer.current); doSearch(searchQuery, 0) } }}
-              placeholder="输入关键词搜索..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
+            <input type="text" value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && triggerSearch()}
+              placeholder="输入关键词..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
+            <button onClick={triggerSearch} disabled={searchLoading}
+              className="px-4 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors">
+              {searchLoading ? '查询中...' : '查询'}
+            </button>
           </div>
-          {searchLoading ? <Spinner /> : searchResults.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 text-sm">{searchQuery ? '无结果' : '输入关键词开始搜索'}</div>
+          {!searchQuery ? (
+            <div className="text-center py-10 text-gray-400 text-sm">输入关键词后点击查询</div>
+          ) : searchLoading ? <Spinner /> : searchResults.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 text-sm">无结果</div>
           ) : (
             <>
-              <div className="text-xs text-gray-400 mb-2">共 {searchTotal} 条，双击认领</div>
               <table className="w-full">
+                <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+                  <th className="px-3 py-2 text-left font-medium">关键词</th>
+                  <th className="px-2 py-2 text-right font-medium">搜索量</th>
+                  <th className="w-12" />
+                </tr></thead>
                 <tbody>
-                  {searchResults.map((r, i) => (
-                    <KeywordRow key={`${r.keyword}|${i}`} keyword={r.keyword} volume={r.volume} source="搜索量查询"
-                      onDoubleClick={() => claimKeyword(r.keyword, viewingMemberType, '搜索量查询', r.volume)}
-                    />
-                  ))}
+                  {searchResults.map((r, i) => {
+                    const claimed = claimedSet.has(r.keyword)
+                    return (
+                      <tr key={`${r.keyword}|${i}`} onDoubleClick={() => claimKeyword(r.keyword, viewingMemberType, '搜索量查询', r.volume)}
+                        className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
+                        title={claimed ? '已认领' : '双击认领'}>
+                        <td className="px-3 py-2">
+                          <span className="text-sm text-gray-800" title={r.keyword}>{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
+                          {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
+                        </td>
+                        <td className="px-2 py-2 text-right text-xs text-gray-400">{fmtVol(r.volume)}</td>
+                        <td className="w-12" />
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-3 mt-4 text-sm">
-                  <button onClick={() => doSearch(searchQuery, searchPage - 1)} disabled={searchPage === 0} className="px-3 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-40">上一页</button>
-                  <span className="text-gray-400">{searchPage + 1} / {totalPages}</span>
-                  <button onClick={() => doSearch(searchQuery, searchPage + 1)} disabled={searchPage >= totalPages - 1} className="px-3 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-40">下一页</button>
+                <div className="flex items-center justify-center gap-3 py-3 border-t border-gray-50 text-sm">
+                  <button onClick={() => doSearch(searchQuery, searchPage - 1)} disabled={searchPage === 0}
+                    className="px-3 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-30 text-xs">上一页</button>
+                  <span className="text-gray-400 text-xs">{searchPage + 1} / {totalPages}　共 {searchTotal} 条</span>
+                  <button onClick={() => doSearch(searchQuery, searchPage + 1)} disabled={searchPage >= totalPages - 1}
+                    className="px-3 py-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-30 text-xs">下一页</button>
                 </div>
               )}
             </>
@@ -504,101 +492,135 @@ export default function TaskGroupsPage() {
 
     if (!radarLoaded || radarLoading) return <Spinner />
 
-    if (rightTab === 'latest') {
-      return latestKeywords.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">今日暂无新词</div>
-      ) : (
+    if (rightTab === 'cross') {
+      const slice = crossWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      return (
         <>
-          <div className="text-xs text-gray-400 mb-2">共 {latestKeywords.length} 条今日新词，双击认领</div>
+          <div className="text-xs text-gray-400 mb-3">共 {crossWords.length} 条，双击认领</div>
           <table className="w-full">
+            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-2 py-2 text-left font-medium">关键词</th>
+              <th className="px-2 py-2 text-center font-medium w-16">次数</th>
+              <th className="w-12" /><th className="w-12" />
+            </tr></thead>
             <tbody>
-              {latestKeywords.map((r, i) => (
-                <KeywordRow key={`${r.keyword}|${i}`} keyword={r.keyword} volume={r.volume} source={r.source}
-                  onDoubleClick={() => claimKeyword(r.keyword, viewingMemberType, '最新词库', r.volume)}
-                />
+              {slice.map((w, i) => (
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
+                  col2={w.count} col2Label="次" sites={w.sites} source="交叉词"
+                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '交叉词', 0)} />
               ))}
             </tbody>
           </table>
+          <Pager page={pg} total={crossWords.length} onPage={p => setPage('cross', p)} />
         </>
       )
     }
 
-    if (rightTab === 'competitor') {
-      const rows = competitorSubTab === 'rank'
-        ? (radarData?.rankWords || []).map(w => ({ keyword: w.keyword, volume: w.volume, source: '竞品涨排名' as const }))
-        : (radarData?.streakWords || []).map(w => ({ keyword: w.keyword, volume: w.volume, source: '连续上涨词' as const }))
+    if (rightTab === 'rank') {
+      const rows = radarData?.rankWords ?? []
+      const slice = rows.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="flex gap-1 mb-4">
-            {(['rank', 'streak'] as const).map(t => (
-              <button key={t} onClick={() => setCompetitorSubTab(t)}
-                className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-                  competitorSubTab === t ? 'bg-gray-100 text-gray-800' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >{t === 'rank' ? '竞品涨排名' : '连续上涨词'}</button>
-            ))}
-          </div>
-          {rows.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 text-sm">暂无数据</div>
-          ) : (
-            <>
-              <div className="text-xs text-gray-400 mb-2">共 {rows.length} 条，双击认领</div>
-              <table className="w-full">
-                <tbody>
-                  {rows.map((r, i) => (
-                    <KeywordRow key={`${r.keyword}|${i}`} keyword={r.keyword} volume={r.volume} source={r.source}
-                      onDoubleClick={() => claimKeyword(r.keyword, viewingMemberType, r.source, r.volume)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
+          <div className="text-xs text-gray-400 mb-3">共 {rows.length} 条，双击认领</div>
+          <table className="w-full">
+            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-2 py-2 text-left font-medium">关键词</th>
+              <th className="px-2 py-2 text-center font-medium w-16">站点</th>
+              <th className="w-12" /><th className="w-12" />
+            </tr></thead>
+            <tbody>
+              {slice.map((w, i) => (
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
+                  col2={w.siteCount} col2Label="站" sites={w.sites} source="竞品涨排名"
+                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '竞品涨排名', w.volume)} />
+              ))}
+            </tbody>
+          </table>
+          <Pager page={pg} total={rows.length} onPage={p => setPage('rank', p)} />
         </>
       )
     }
 
-    if (rightTab === 'shared') {
+    if (rightTab === 'streak') {
+      const rows = radarData?.streakWords ?? []
+      const slice = rows.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex gap-1">
-              {(['newWords', 'wordLib'] as const).map(t => (
-                <button key={t} onClick={() => setSharedSubTab(t)}
-                  className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-                    sharedSubTab === t ? 'bg-gray-100 text-gray-800' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >{t === 'newWords' ? '共新增词' : '更新词库'}</button>
+          <div className="text-xs text-gray-400 mb-3">共 {rows.length} 条，双击认领</div>
+          <table className="w-full">
+            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-2 py-2 text-left font-medium">关键词</th>
+              <th className="px-2 py-2 text-center font-medium w-16">连涨</th>
+              <th className="w-12" /><th className="w-12" />
+            </tr></thead>
+            <tbody>
+              {slice.map((w, i) => (
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
+                  col2={w.streak} col2Label="天" sites={[w.domain]} source="连续上涨词"
+                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '连续上涨词', w.volume)} />
               ))}
-            </div>
-            <div className="flex gap-1">
-              {(['app', 'game'] as const).map(t => (
-                <button key={t} onClick={() => setSharedTypeFilter(t)}
-                  className={`px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors ${
-                    sharedTypeFilter === t
-                      ? t === 'app' ? 'bg-blue-500 text-white border-blue-500' : 'bg-purple-500 text-white border-purple-500'
-                      : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                  }`}
-                >{t === 'app' ? '应用' : '游戏'}</button>
-              ))}
-            </div>
+            </tbody>
+          </table>
+          <Pager page={pg} total={rows.length} onPage={p => setPage('streak', p)} />
+        </>
+      )
+    }
+
+    if (rightTab === 'newWords') {
+      const slice = newWordsFiltered.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      return (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-gray-400">共 {newWordsFiltered.length} 条，双击认领</span>
+            <TypeFilter />
           </div>
-          {sharedWords.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 text-sm">暂无数据</div>
-          ) : (
-            <>
-              <div className="text-xs text-gray-400 mb-2">共 {sharedWords.length} 条，双击认领</div>
-              <table className="w-full">
-                <tbody>
-                  {sharedWords.map((w, i) => (
-                    <KeywordRow key={`${w.keyword}|${i}`} keyword={w.keyword} volume={0} source={sharedSubTab === 'newWords' ? '共新增词' : '更新词库'}
-                      onDoubleClick={() => claimKeyword(w.keyword, sharedTypeFilter, sharedSubTab === 'newWords' ? '共新增词' : '更新词库', 0)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
+          <table className="w-full">
+            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-2 py-2 text-left font-medium">关键词</th>
+              <th className="px-2 py-2 text-center font-medium w-16">次数</th>
+              <th className="w-12" /><th className="w-12" />
+            </tr></thead>
+            <tbody>
+              {slice.map((w, i) => (
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
+                  col2={w.count} col2Label="次" sites={w.sites} source="共新增词"
+                  onClaim={() => claimKeyword(w.keyword, typeFilter, '共新增词', 0)} />
+              ))}
+            </tbody>
+          </table>
+          <Pager page={pg} total={newWordsFiltered.length} onPage={p => setPage('newWords', p)} />
+        </>
+      )
+    }
+
+    if (rightTab === 'wordLib') {
+      const slice = wordLibFiltered.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      return (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-gray-400">共 {wordLibFiltered.length} 条，双击认领</span>
+            <TypeFilter />
+          </div>
+          <table className="w-full">
+            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-2 py-2 text-left font-medium">关键词</th>
+              <th className="px-2 py-2 text-center font-medium w-16">次数</th>
+              <th className="w-12" /><th className="w-12" />
+            </tr></thead>
+            <tbody>
+              {slice.map((w, i) => (
+                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
+                  col2={w.count} col2Label="次" sites={w.sites} source="更新词库"
+                  onClaim={() => claimKeyword(w.keyword, typeFilter, '更新词库', 0)} />
+              ))}
+            </tbody>
+          </table>
+          <Pager page={pg} total={wordLibFiltered.length} onPage={p => setPage('wordLib', p)} />
         </>
       )
     }
@@ -606,11 +628,12 @@ export default function TaskGroupsPage() {
     return null
   }
 
-  if (loading) {
-    return (
-      <div className="p-6"><Spinner /></div>
-    )
-  }
+  if (loading) return <div className="p-6"><Spinner /></div>
+
+  const RIGHT_TABS: [RightTab, string][] = [
+    ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
+    ['streak', '连续上涨词'], ['newWords', '共新增词'], ['wordLib', '更新词库'],
+  ]
 
   return (
     <div className="p-6">
@@ -627,12 +650,8 @@ export default function TaskGroupsPage() {
               </svg>
               新增分组
             </button>
-            {activeGroup && (
-              <button onClick={openEditModal} className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors">编辑分组</button>
-            )}
-            {activeGroup && (
-              <button onClick={() => setDeleteId(activeGroup.id)} className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border border-red-300 text-red-400 hover:bg-red-50 transition-colors">删除分组</button>
-            )}
+            {activeGroup && <button onClick={openEditModal} className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors">编辑分组</button>}
+            {activeGroup && <button onClick={() => setDeleteId(activeGroup.id)} className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border border-red-300 text-red-400 hover:bg-red-50 transition-colors">删除分组</button>}
           </div>
         )}
       </div>
@@ -643,31 +662,24 @@ export default function TaskGroupsPage() {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          {/* Group tabs */}
           <div className="flex items-center gap-1.5 px-4 pt-3 pb-0 border-b border-gray-100 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
             {groups.map(g => (
-              <button key={g.id}
-                onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null) }}
-                className={`px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap border-b-2 transition-colors ${
-                  activeGroupId === g.id ? 'border-green-500 text-green-700 bg-green-50/60' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                }`}
-              >{g.name}</button>
+              <button key={g.id} onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null) }}
+                className={`px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap border-b-2 transition-colors ${activeGroupId === g.id ? 'border-green-500 text-green-700 bg-green-50/60' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+                {g.name}
+              </button>
             ))}
           </div>
 
           {activeGroup && (
             <div className="flex" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
               {/* Left panel */}
-              <div className="w-[300px] flex-shrink-0 border-r border-gray-100 flex flex-col">
+              <div className="w-[280px] flex-shrink-0 border-r border-gray-100 flex flex-col">
                 {canManage && activeGroup.members.length > 0 && (
                   <div className="px-3 pt-3 pb-2 flex flex-wrap gap-1.5 border-b border-gray-50">
                     {activeGroup.members.map(m => (
-                      <button key={m.user_id}
-                        onClick={() => setViewingMemberId(m.user_id)}
-                        className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
-                          effectiveViewingId === m.user_id ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                        }`}
-                      >
+                      <button key={m.user_id} onClick={() => setViewingMemberId(m.user_id)}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${effectiveViewingId === m.user_id ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
                         {m.username}
                         {m.member_type && m.member_type !== 'both' && (
                           <span className={`ml-1 ${effectiveViewingId === m.user_id ? 'opacity-60' : m.member_type === 'app' ? 'text-blue-400' : 'text-purple-400'}`}>
@@ -678,27 +690,18 @@ export default function TaskGroupsPage() {
                     ))}
                   </div>
                 )}
-
                 <div className="flex border-b border-gray-100">
                   {completionTabs.map(type => (
                     <button key={type} onClick={() => setActiveCompletionType(type)}
-                      className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
-                        activeCompletionType === type
-                          ? type === 'app' ? 'text-blue-600' : 'text-purple-600'
-                          : 'text-gray-400 hover:text-gray-600'
-                      }`}
-                    >
+                      className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${activeCompletionType === type ? type === 'app' ? 'text-blue-600' : 'text-purple-600' : 'text-gray-400 hover:text-gray-600'}`}>
                       {activeCompletionType === type && (
                         <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${type === 'app' ? 'bg-blue-500' : 'bg-purple-500'}`} />
                       )}
-                      {type === 'app' ? '应用' : '游戏'}今日完成
-                      <span className="ml-1 text-xs text-gray-400">
-                        {type === 'app' ? appKeywords.length : gameKeywords.length}
-                      </span>
+                      {type === 'app' ? '应用' : '游戏'}今日
+                      <span className="ml-1 text-xs text-gray-400">{type === 'app' ? appKeywords.length : gameKeywords.length}</span>
                     </button>
                   ))}
                 </div>
-
                 <div className="flex-1 overflow-y-auto">
                   {claimedLoading ? <Spinner /> : activeCompletionKeywords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-300 text-sm py-12">
@@ -712,13 +715,9 @@ export default function TaskGroupsPage() {
                       {activeCompletionKeywords.map(k => (
                         <div key={k.id} className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
                           {isViewingOwn && k.status === 'pending' ? (
-                            <button onClick={() => dismissClaimed(k.id)}
-                              className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none"
-                            >×</button>
+                            <button onClick={() => dismissClaimed(k.id)} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
                           ) : (
-                            <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs ${k.status !== 'pending' ? 'text-green-400' : ''}`}>
-                              {k.status !== 'pending' ? '✓' : ''}
-                            </span>
+                            <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs ${k.status !== 'pending' ? 'text-green-400' : ''}`}>{k.status !== 'pending' ? '✓' : ''}</span>
                           )}
                           <span className="flex-1 text-sm text-gray-800 truncate" title={k.keyword}>{k.keyword}</span>
                           <SourceTag s={k.source} />
@@ -727,12 +726,10 @@ export default function TaskGroupsPage() {
                     </div>
                   )}
                 </div>
-
                 {isViewingOwn && (
                   <div className="p-3 border-t border-gray-100">
                     <button onClick={submitToday} disabled={submitting || pendingCount === 0}
-                      className="w-full py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
+                      className="w-full py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                       {submitting ? '提交中...' : `今日提交${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
                     </button>
                   </div>
@@ -742,12 +739,11 @@ export default function TaskGroupsPage() {
               {/* Right panel */}
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="flex border-b border-gray-100 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
-                  {([ ['latest', '最新词库'], ['search', '搜索量查询'], ['competitor', '竞品涨排名/连续上涨词'], ['shared', '共新增词/更新词库'] ] as [RightTab, string][]).map(([tab, label]) => (
+                  {RIGHT_TABS.map(([tab, label]) => (
                     <button key={tab} onClick={() => setRightTab(tab)}
-                      className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                        rightTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'
-                      }`}
-                    >{label}</button>
+                      className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${rightTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                      {label}
+                    </button>
                   ))}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
@@ -770,6 +766,22 @@ export default function TaskGroupsPage() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleteId(null)} className="btn-ghost">取消</button>
               <button onClick={() => handleDelete(deleteId)} className="btn-danger">确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingSites && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setViewingSites(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900 text-sm truncate pr-4">{viewingSites.keyword}</h3>
+              <button onClick={() => setViewingSites(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none flex-shrink-0">×</button>
+            </div>
+            <div className="space-y-1.5">
+              {viewingSites.sites.map((s, i) => (
+                <div key={i} className="text-sm text-gray-600 px-2 py-1.5 bg-gray-50 rounded">{s}</div>
+              ))}
             </div>
           </div>
         </div>
