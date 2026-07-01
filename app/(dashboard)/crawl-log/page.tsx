@@ -399,22 +399,35 @@ export default function CrawlLogPage() {
     const mainLogs = allStepLogs.filter(l => l.type === 'cron_task')
     if (mainLogs.length === 0) return { ok: 0, empty: 0, fail: 0, total: 0, latestRun: undefined, runs: 0 }
 
-    const latestTime = new Date(mainLogs[0].logged_at).getTime()
-    const latestBatch = mainLogs.filter(l => latestTime - new Date(l.logged_at).getTime() < 3 * 3600000)
-    let ok = latestBatch.reduce((s, l) => s + l.ok_count, 0)
-    let empty = latestBatch.reduce((s, l) => s + l.empty_count, 0)
-    let fail = latestBatch.reduce((s, l) => s + l.fail_count, 0)
+    // Sort oldest→newest to identify the main batch vs later retry runs
+    const sorted = [...mainLogs].sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime())
+    const firstTime = new Date(sorted[0].logged_at).getTime()
+    const BATCH_WINDOW = 30 * 60 * 1000 // 30 min: parallel sub-jobs are grouped here
 
-    // Adjust for manual retries that succeeded (subtract from empty/fail, add to ok)
-    for (const ml of allStepLogs.filter(l => l.type === 'cron_manual' && l.ok_count > 0)) {
-      const fromEmpty = Math.min(empty, ml.ok_count)
+    // Main batch = parallel jobs that started close together
+    const mainBatch = sorted.filter(l => new Date(l.logged_at).getTime() - firstTime < BATCH_WINDOW)
+    // cronRetries = 第二次跑空值的 cron_task（超过 30 分钟后启动）
+    const cronRetries = sorted.filter(l => new Date(l.logged_at).getTime() - firstTime >= BATCH_WINDOW)
+
+    let ok    = mainBatch.reduce((s, l) => s + l.ok_count,    0)
+    let empty = mainBatch.reduce((s, l) => s + l.empty_count, 0)
+    let fail  = mainBatch.reduce((s, l) => s + l.fail_count,  0)
+    const total = ok + empty + fail  // 总数锁定在第一次主跑
+
+    // 后续重跑（cron_task 重试 + 手动重试）只调整 ok/empty/fail，不改变总数
+    const adjustRuns = [
+      ...cronRetries,
+      ...allStepLogs.filter(l => l.type === 'cron_manual'),
+    ]
+    for (const run of adjustRuns) {
+      const fromEmpty = Math.min(empty, run.ok_count)
       empty = Math.max(0, empty - fromEmpty)
-      fail = Math.max(0, fail - Math.max(0, ml.ok_count - fromEmpty))
-      ok += ml.ok_count
+      fail  = Math.max(0, fail  - Math.max(0, run.ok_count - fromEmpty))
+      ok   += run.ok_count
     }
+    ok = Math.min(ok, total)
 
-    const total = ok + empty + fail
-    return { ok, empty, fail, total, latestRun: mainLogs[0], runs: latestBatch.length }
+    return { ok, empty, fail, total, latestRun: mainLogs[0], runs: mainBatch.length }
   }
 
   const rulesSection = CRAWL_RULES.find(r => r.key === rulesStep)
