@@ -290,17 +290,22 @@ export default function TaskGroupsPage() {
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
-            {activeGroup && (
-              <button onClick={openEditModal} className="btn-ghost">
-                编辑分组
-              </button>
-            )}
             <button onClick={openCreateModal} className="btn-primary">
               <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               新增分组
             </button>
+            {activeGroup && (
+              <button onClick={openEditModal} className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors">
+                编辑分组
+              </button>
+            )}
+            {activeGroup && (
+              <button onClick={() => setDeleteId(activeGroup.id)} className="px-4 py-2 text-sm font-medium rounded-lg border border-red-300 text-red-400 hover:bg-red-50 transition-colors">
+                删除分组
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -531,13 +536,7 @@ export default function TaskGroupsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
-              <button
-                onClick={() => { setShowEdit(false); setDeleteId(activeGroup.id) }}
-                className="text-xs text-red-400 hover:text-red-600 border border-red-100 rounded px-3 py-1.5 hover:border-red-200 transition-colors mr-auto"
-              >
-                删除分组
-              </button>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
               <button onClick={() => setShowEdit(false)} className="btn-ghost">取消</button>
               <button
                 onClick={handleEdit}
