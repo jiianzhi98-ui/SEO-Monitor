@@ -97,10 +97,10 @@ function BadgeChip({ badge }: { badge: Badge }) {
   return <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-400 text-white leading-none">更新</span>
 }
 
-function DateCell({ last_date, today, yesterday, badge }: {
-  last_date: string; today: string; yesterday: string; badge: Badge
+function DateCell({ last_date, today, yesterday, badge, includeYesterday }: {
+  last_date: string; today: string; yesterday: string; badge: Badge; includeYesterday?: boolean
 }) {
-  const isRecent = last_date === today || last_date === yesterday
+  const isRecent = last_date === today || (includeYesterday && last_date === yesterday)
   return (
     <td className="table-td whitespace-nowrap w-24">
       <div className={`flex items-center gap-1 flex-wrap ${isRecent ? 'text-green-600' : 'text-gray-400'}`}>
@@ -653,7 +653,7 @@ export default function HotRadarPage() {
                     ) : (
                       (pagedList as WordEntry[]).map(w => (
                         <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
-                          <DateCell last_date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} />
+                          <DateCell last_date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} includeYesterday />
                           <td className="table-td font-medium text-gray-900 overflow-hidden">
                             <span className="block truncate" title={w.keyword}>{w.keyword}</span>
                           </td>
