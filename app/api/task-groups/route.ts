@@ -24,7 +24,7 @@ export async function GET() {
 
   const [{ data: groups, error }, { data: members }] = await Promise.all([
     service.from('task_groups').select('*').order('created_at'),
-    service.from('task_group_members').select('group_id, user_id, username'),
+    service.from('task_group_members').select('group_id, user_id, username, member_type'),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
