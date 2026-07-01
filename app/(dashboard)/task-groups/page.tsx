@@ -106,6 +106,12 @@ export default function TaskGroupsPage() {
   const [creating, setCreating] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
+  const [showEdit, setShowEdit] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editMemberTypes, setEditMemberTypes] = useState<Record<string, 'app' | 'game'>>({})
+  const [editSelectedUsers, setEditSelectedUsers] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+
   async function loadGroups() {
     setLoading(true)
     try {
@@ -158,6 +164,45 @@ export default function TaskGroupsPage() {
       }
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function openEditModal() {
+    if (!activeGroup) return
+    setEditName(activeGroup.name)
+    setEditSelectedUsers(new Set(activeGroup.members.map(m => m.user_id)))
+    const types: Record<string, 'app' | 'game'> = {}
+    for (const m of activeGroup.members) {
+      types[m.user_id] = (m.member_type === 'game' ? 'game' : 'app')
+    }
+    setEditMemberTypes(types)
+    setShowEdit(true)
+    if (userOptions.length === 0) {
+      const res = await fetch('/api/admin/users')
+      const data = await res.json()
+      setUserOptions((data.users || []).filter((u: UserOption) => u.role !== 'super'))
+    }
+  }
+
+  async function handleEdit() {
+    if (!activeGroup || editSelectedUsers.size === 0) return
+    setSaving(true)
+    try {
+      const members = userOptions
+        .filter(u => editSelectedUsers.has(u.id))
+        .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: editMemberTypes[u.id] || 'app' }))
+      const autoName = members.map(m => m.username).join(' · ')
+      const res = await fetch(`/api/task-groups/${activeGroup.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName.trim() || autoName, members }),
+      })
+      if (res.ok) {
+        setShowEdit(false)
+        await loadGroups()
+      }
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -242,12 +287,19 @@ export default function TaskGroupsPage() {
           <p className="text-gray-400 text-sm mt-0.5">按团队分发热词雷达关键词</p>
         </div>
         {canManage && (
-          <button onClick={openCreateModal} className="btn-primary">
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            新增分组
-          </button>
+          <div className="flex items-center gap-2">
+            {activeGroup && (
+              <button onClick={openEditModal} className="btn-ghost">
+                编辑分组
+              </button>
+            )}
+            <button onClick={openCreateModal} className="btn-primary">
+              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              新增分组
+            </button>
+          </div>
         )}
       </div>
 
@@ -273,9 +325,6 @@ export default function TaskGroupsPage() {
                 }`}
               >
                 <span>{g.name}</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${TYPE_COLORS[g.type]}`}>
-                  {TYPE_LABELS[g.type]}
-                </span>
               </button>
             ))}
           </div>
@@ -288,9 +337,6 @@ export default function TaskGroupsPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   {activeGroup.members.map(m => (
                     <span key={m.user_id} className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-600 rounded-full px-2.5 py-1">
-                      <span className="w-4 h-4 rounded-full bg-gray-300 flex items-center justify-center text-[9px] font-bold text-white uppercase">
-                        {(m.username || '?')[0]}
-                      </span>
                       {m.username || '—'}
                       {m.member_type && m.member_type !== 'both' && (
                         <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${m.member_type === 'app' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
@@ -388,6 +434,103 @@ export default function TaskGroupsPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {showEdit && activeGroup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+              <h3 className="font-semibold text-gray-900">编辑分组</h3>
+              <button onClick={() => setShowEdit(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-5 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">分组名称</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  placeholder="留空则自动使用成员名称"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  组员
+                  {editSelectedUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {editSelectedUsers.size} 人）</span>}
+                </label>
+                <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                  {userOptions.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-gray-400">加载中...</div>
+                  ) : (
+                    userOptions.map(u => {
+                      const isSelected = editSelectedUsers.has(u.id)
+                      const mType = editMemberTypes[u.id] || 'app'
+                      return (
+                        <div key={u.id} className={`px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={e => {
+                                const next = new Set(editSelectedUsers)
+                                const nextTypes = { ...editMemberTypes }
+                                if (e.target.checked) {
+                                  next.add(u.id)
+                                  nextTypes[u.id] = nextTypes[u.id] || 'app'
+                                } else {
+                                  next.delete(u.id)
+                                  delete nextTypes[u.id]
+                                }
+                                setEditSelectedUsers(next)
+                                setEditMemberTypes(nextTypes)
+                              }}
+                              className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
+                              <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                            </div>
+                            {isSelected && (
+                              <div className="flex gap-1 flex-shrink-0">
+                                {(['app', 'game'] as const).map(t => (
+                                  <button
+                                    key={t}
+                                    onClick={e => { e.preventDefault(); setEditMemberTypes(prev => ({ ...prev, [u.id]: t })) }}
+                                    className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
+                                      mType === t
+                                        ? t === 'app'
+                                          ? 'bg-blue-500 text-white border-blue-500'
+                                          : 'bg-purple-500 text-white border-purple-500'
+                                        : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                                    }`}
+                                  >
+                                    {t === 'app' ? '应用' : '游戏'}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
+              <button onClick={() => setShowEdit(false)} className="btn-ghost">取消</button>
+              <button
+                onClick={handleEdit}
+                disabled={saving || editSelectedUsers.size === 0}
+                className="btn-primary disabled:opacity-50"
+              >
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
