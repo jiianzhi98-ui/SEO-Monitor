@@ -87,7 +87,6 @@ export default function TaskGroupsPage() {
 
   const [rightTab, setRightTab] = useState<RightTab>('search')
   const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 })
-  const [typeFilter, setTypeFilter] = useState<'app' | 'game'>('app')
   const [viewingSites, setViewingSites] = useState<{ keyword: string; sites: string[] } | null>(null)
 
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
@@ -117,6 +116,8 @@ export default function TaskGroupsPage() {
 
   const claimingRef = useRef<Set<string>>(new Set())
 
+  interface CrossWord { keyword: string; volume: number; last_date: string; first_date: string; newSites: string[]; rankSites: string[] }
+
   const activeGroup = groups.find(g => g.id === activeGroupId) ?? null
   const effectiveViewingId = viewingMemberId || currentUserId || ''
   const viewingMember = activeGroup?.members.find(m => m.user_id === effectiveViewingId) ?? null
@@ -144,9 +145,26 @@ export default function TaskGroupsPage() {
   const activeCompletionKeywords = activeCompletionType === 'app' ? appKeywords : gameKeywords
   const completionTabs: Array<'app' | 'game'> = viewingMemberType === 'game' ? ['game', 'app'] : ['app', 'game']
 
-  const crossWords = useMemo(() => (radarData?.newWords ?? []), [radarData])
-  const newWordsFiltered = useMemo(() => (radarData?.newWords ?? []).filter(w => w.sites.some(d => matchesDomain(d, typeFilter))), [radarData, typeFilter, domainTypeMap]) // eslint-disable-line react-hooks/exhaustive-deps
-  const wordLibFiltered = useMemo(() => (radarData?.newWords ?? []).filter(w => w.last_date !== today && w.sites.some(d => matchesDomain(d, typeFilter))), [radarData, typeFilter, domainTypeMap, today]) // eslint-disable-line react-hooks/exhaustive-deps
+  const crossWords = useMemo((): CrossWord[] => {
+    if (!radarData) return []
+    const nwMap = new Map(radarData.newWords.map(w => [w.keyword, w]))
+    const rwMap = new Map(radarData.rankWords.map(w => [w.keyword, w]))
+    const allKws = new Set([...Array.from(nwMap.keys()), ...Array.from(rwMap.keys())])
+    return Array.from(allKws)
+      .map(keyword => {
+        const nwe = nwMap.get(keyword)
+        const rwe = rwMap.get(keyword)
+        if (!nwe || !rwe) return null
+        const last_date = [nwe.last_date, rwe.last_date].filter(Boolean).sort().reverse()[0] ?? ''
+        const first_date = [nwe.first_date, rwe.first_date].filter(Boolean).sort()[0] ?? ''
+        return { keyword, volume: rwe.volume ?? 0, last_date, first_date, newSites: nwe.sites, rankSites: rwe.sites }
+      })
+      .filter((w): w is CrossWord => w !== null)
+      .sort((a, b) => b.last_date.localeCompare(a.last_date) || (b.volume - a.volume))
+  }, [radarData])
+
+  const allNewWords = useMemo(() => (radarData?.newWords ?? []), [radarData])
+  const wordLibWords = useMemo(() => (radarData?.newWords ?? []).filter(w => w.last_date !== today), [radarData, today])
 
   async function loadGroups() {
     setLoading(true)
@@ -231,7 +249,6 @@ export default function TaskGroupsPage() {
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setActiveCompletionType(viewingMemberType) }, [viewingMemberType])
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (rightTab === 'newWords' || rightTab === 'wordLib') setTypeFilter(viewingMemberType) }, [rightTab, viewingMemberType])
 
   useEffect(() => {
     if (!activeGroupId) return
@@ -389,9 +406,9 @@ export default function TaskGroupsPage() {
     )
   }
 
-  function KwRow({ date, keyword, col2, col2Label, sites, source, onClaim }: {
+  function KwRow({ date, keyword, col2, col2Label, sites, onClaim }: {
     date: string; keyword: string; col2: string | number; col2Label: string
-    sites: string[]; source: string; onClaim: () => void
+    sites: string[]; onClaim: () => void
   }) {
     const claimed = claimedSet.has(keyword)
     return (
@@ -409,21 +426,7 @@ export default function TaskGroupsPage() {
           <button onClick={e => { e.stopPropagation(); setViewingSites({ keyword, sites }) }}
             className="text-xs text-blue-400 hover:text-blue-600 px-1">查看</button>
         </td>
-        <td className="px-2 py-2 w-12 text-right"><SourceTag s={source} /></td>
       </tr>
-    )
-  }
-
-  function TypeFilter() {
-    return (
-      <div className="flex gap-1">
-        {(['app', 'game'] as const).map(t => (
-          <button key={t} onClick={() => { setTypeFilter(t); setPage(rightTab, 0) }}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors ${typeFilter === t ? t === 'app' ? 'bg-blue-500 text-white border-blue-500' : 'bg-purple-500 text-white border-purple-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
-            {t === 'app' ? '应用' : '游戏'}
-          </button>
-        ))}
-      </div>
     )
   }
 
@@ -501,14 +504,14 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-16">次数</th>
-              <th className="w-12" /><th className="w-12" />
+              <th className="px-2 py-2 text-center font-medium w-20">搜索量</th>
+              <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
                 <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.count} col2Label="次" sites={w.sites} source="交叉词"
-                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '交叉词', 0)} />
+                  col2={fmtVol(w.volume)} col2Label="" sites={[...w.newSites, ...w.rankSites.filter(s => !w.newSites.includes(s))]}
+                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '交叉词', w.volume)} />
               ))}
             </tbody>
           </table>
@@ -528,12 +531,12 @@ export default function TaskGroupsPage() {
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
               <th className="px-2 py-2 text-center font-medium w-16">站点</th>
-              <th className="w-12" /><th className="w-12" />
+              <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
                 <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.siteCount} col2Label="站" sites={w.sites} source="竞品涨排名"
+                  col2={w.siteCount} col2Label="站" sites={w.sites}
                   onClaim={() => claimKeyword(w.keyword, viewingMemberType, '竞品涨排名', w.volume)} />
               ))}
             </tbody>
@@ -554,12 +557,12 @@ export default function TaskGroupsPage() {
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
               <th className="px-2 py-2 text-center font-medium w-16">连涨</th>
-              <th className="w-12" /><th className="w-12" />
+              <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
                 <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.streak} col2Label="天" sites={[w.domain]} source="连续上涨词"
+                  col2={w.streak} col2Label="天" sites={[w.domain]}
                   onClaim={() => claimKeyword(w.keyword, viewingMemberType, '连续上涨词', w.volume)} />
               ))}
             </tbody>
@@ -570,57 +573,51 @@ export default function TaskGroupsPage() {
     }
 
     if (rightTab === 'newWords') {
-      const slice = newWordsFiltered.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      const slice = allNewWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-400">共 {newWordsFiltered.length} 条，双击认领</span>
-            <TypeFilter />
-          </div>
+          <div className="text-xs text-gray-400 mb-3">共 {allNewWords.length} 条，双击认领</div>
           <table className="w-full">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
               <th className="px-2 py-2 text-center font-medium w-16">次数</th>
-              <th className="w-12" /><th className="w-12" />
+              <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
                 <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.count} col2Label="次" sites={w.sites} source="共新增词"
-                  onClaim={() => claimKeyword(w.keyword, typeFilter, '共新增词', 0)} />
+                  col2={w.count} col2Label="次" sites={w.sites}
+                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '共新增词', 0)} />
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={newWordsFiltered.length} onPage={p => setPage('newWords', p)} />
+          <Pager page={pg} total={allNewWords.length} onPage={p => setPage('newWords', p)} />
         </>
       )
     }
 
     if (rightTab === 'wordLib') {
-      const slice = wordLibFiltered.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      const slice = wordLibWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-400">共 {wordLibFiltered.length} 条，双击认领</span>
-            <TypeFilter />
-          </div>
+          <div className="text-xs text-gray-400 mb-3">共 {wordLibWords.length} 条，双击认领</div>
           <table className="w-full">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
               <th className="px-2 py-2 text-center font-medium w-16">次数</th>
-              <th className="w-12" /><th className="w-12" />
+              <th className="w-12" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
                 <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword}
-                  col2={w.count} col2Label="次" sites={w.sites} source="更新词库"
-                  onClaim={() => claimKeyword(w.keyword, typeFilter, '更新词库', 0)} />
+                  col2={w.count} col2Label="次" sites={w.sites}
+                  onClaim={() => claimKeyword(w.keyword, viewingMemberType, '更新词库', 0)} />
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={wordLibFiltered.length} onPage={p => setPage('wordLib', p)} />
+          <Pager page={pg} total={wordLibWords.length} onPage={p => setPage('wordLib', p)} />
         </>
       )
     }
@@ -747,7 +744,7 @@ export default function TaskGroupsPage() {
                   ))}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
-                  <RightContent />
+                  {RightContent()}
                 </div>
               </div>
             </div>
@@ -755,8 +752,8 @@ export default function TaskGroupsPage() {
         </div>
       )}
 
-      {showCreate && <MemberModal mode="create" onClose={() => setShowCreate(false)} />}
-      {showEdit && activeGroup && <MemberModal mode="edit" onClose={() => setShowEdit(false)} />}
+      {showCreate && MemberModal({ mode: 'create', onClose: () => setShowCreate(false) })}
+      {showEdit && activeGroup && MemberModal({ mode: 'edit', onClose: () => setShowEdit(false) })}
 
       {deleteId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
