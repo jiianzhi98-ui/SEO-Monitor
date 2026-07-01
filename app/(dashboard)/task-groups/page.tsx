@@ -468,26 +468,26 @@ export default function TaskGroupsPage() {
                               <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
                               <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
                             </div>
+                            {isSelected && (
+                              <div className="flex gap-1 flex-shrink-0">
+                                {(['app', 'game'] as const).map(t => (
+                                  <button
+                                    key={t}
+                                    onClick={e => { e.preventDefault(); setMemberTypes(prev => ({ ...prev, [u.id]: t })) }}
+                                    className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${
+                                      mType === t
+                                        ? t === 'app'
+                                          ? 'bg-blue-500 text-white border-blue-500'
+                                          : 'bg-purple-500 text-white border-purple-500'
+                                        : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                                    }`}
+                                  >
+                                    {t === 'app' ? '应用' : '游戏'}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </label>
-                          {isSelected && (
-                            <div className="flex gap-1.5 mt-2 ml-7">
-                              {(['app', 'game'] as const).map(t => (
-                                <button
-                                  key={t}
-                                  onClick={() => setMemberTypes(prev => ({ ...prev, [u.id]: t }))}
-                                  className={`text-xs px-3 py-1 rounded-full font-medium border transition-colors ${
-                                    mType === t
-                                      ? t === 'app'
-                                        ? 'bg-blue-500 text-white border-blue-500'
-                                        : 'bg-purple-500 text-white border-purple-500'
-                                      : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                                  }`}
-                                >
-                                  {t === 'app' ? '应用' : '游戏'}
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       )
                     })
