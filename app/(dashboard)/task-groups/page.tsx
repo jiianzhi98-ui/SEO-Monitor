@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useUser } from '@/lib/user-context'
+import { getBrowserClient } from '@/lib/supabase-browser'
 
 interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
 interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[] }
@@ -238,6 +239,43 @@ export default function TaskGroupsPage() {
   useEffect(() => {
     if (activeGroupId && effectiveViewingId) loadClaimedKeywords(activeGroupId, effectiveViewingId)
   }, [activeGroupId, effectiveViewingId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Realtime: subscribe to claimed keyword changes for the active group
+  useEffect(() => {
+    if (!activeGroupId) return
+    const supabase = getBrowserClient()
+    const channelName = `claimed-${activeGroupId}`
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'member_claimed_keywords', filter: `group_id=eq.${activeGroupId}` },
+        (payload) => {
+          // Only apply changes that belong to the member we're viewing
+          const rec = (payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old) as ClaimedKeyword & { user_id: string; claimed_date: string }
+          if (!rec || rec.user_id !== effectiveViewingId || rec.claimed_date !== today) return
+
+          if (payload.eventType === 'INSERT') {
+            if (rec.status !== 'dismissed') {
+              setClaimedKeywords(prev => prev.some(k => k.id === rec.id) ? prev : [...prev, rec])
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            if (rec.status === 'dismissed') {
+              setClaimedKeywords(prev => prev.filter(k => k.id !== rec.id))
+            } else {
+              setClaimedKeywords(prev => prev.map(k => k.id === rec.id ? { ...k, status: rec.status } : k))
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const old = payload.old as { id: string }
+            setClaimedKeywords(prev => prev.filter(k => k.id !== old.id))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [activeGroupId, effectiveViewingId, today]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId)
