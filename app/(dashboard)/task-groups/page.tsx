@@ -9,7 +9,7 @@ interface TaskGroup { id: string; name: string; type: string; created_at: string
 interface UserOption { id: string; email: string; username: string | null; role: string }
 interface NewWord { keyword: string; count: number; siteCount: number; sites: string[]; last_date: string; first_date: string }
 interface RankWord { keyword: string; siteCount: number; volume: number; sites: string[]; last_date: string; first_date: string; rankDays: number }
-interface StreakWord { keyword: string; streak: number; domain: string; volume: number; first_date: string; last_date: string }
+interface StreakWord { keyword: string; streak: number; domain: string; volume: number; first_date: string; last_date: string } // raw API shape
 interface CrossWord { keyword: string; volume: number; last_date: string; first_date: string; newSites: string[]; rankSites: string[] }
 
 interface ClaimedKeyword {
@@ -158,6 +158,27 @@ export default function TaskGroupsPage() {
       })
       .filter((w): w is CrossWord => w !== null)
       .sort((a, b) => b.last_date.localeCompare(a.last_date) || (b.volume - a.volume))
+  }, [radarData])
+
+  // Group streak words by keyword (same as hot-radar page): merge domains, keep streak>=2, single-domain only
+  const streakWords = useMemo(() => {
+    if (!radarData) return []
+    const grouped = new Map<string, { keyword: string; streak: number; domains: string[]; volume: number; first_date: string; last_date: string }>()
+    for (const w of radarData.streakWords) {
+      if (w.streak < 2) continue
+      const g = grouped.get(w.keyword)
+      if (!g) {
+        grouped.set(w.keyword, { keyword: w.keyword, streak: w.streak, domains: [w.domain], volume: w.volume, first_date: w.first_date, last_date: w.last_date })
+      } else {
+        g.domains.push(w.domain)
+        if (w.streak > g.streak) g.streak = w.streak
+        if (w.last_date > g.last_date) g.last_date = w.last_date
+        if (w.first_date < g.first_date) g.first_date = w.first_date
+      }
+    }
+    return Array.from(grouped.values())
+      .filter(g => g.domains.length === 1)
+      .sort((a, b) => b.streak - a.streak || b.volume - a.volume)
   }, [radarData])
 
   const allNewWords = useMemo(() => (radarData?.newWords ?? []), [radarData])
@@ -539,11 +560,10 @@ export default function TaskGroupsPage() {
     }
 
     if (rightTab === 'streak') {
-      const rows = radarData?.streakWords ?? []
-      const slice = rows.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      const slice = streakWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="text-xs text-gray-400 mb-3">共 {rows.length} 条，双击认领</div>
+          <div className="text-xs text-gray-400 mb-3">共 {streakWords.length} 条，双击认领</div>
           <table className="w-full">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
@@ -557,14 +577,14 @@ export default function TaskGroupsPage() {
                 <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '连续上涨词', w.volume)}
-                  onView={() => setViewingSites({ keyword: w.keyword, sites: [w.domain] })}>
+                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.domains })}>
                   <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.streak}天</td>
                   <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
                 </KwRow>
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={rows.length} onPage={p => setPage('streak', p)} />
+          <Pager page={pg} total={streakWords.length} onPage={p => setPage('streak', p)} />
         </>
       )
     }
