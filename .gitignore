@@ -25,3 +25,6 @@ next-env.d.ts
 # misc
 .DS_Store
 *.pem
+
+# MCP config (contains tokens)
+.mcp.json
