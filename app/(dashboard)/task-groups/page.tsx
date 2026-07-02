@@ -7,9 +7,9 @@ import { getBrowserClient } from '@/lib/supabase-browser'
 // ── Interfaces ─────────────────────────────────────────────────────────────────
 
 interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
-interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[]; site_domains: string[] }
+interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[]; rank_domains: string[]; new_domains: string[] }
 interface UserOption { id: string; email: string; username: string | null; role: string }
-interface SiteInfo { id: string; domain: string; name: string; category: 'large' | 'medium' | 'small' }
+interface SiteInfo { id: string; domain: string; name: string; category: 'large' | 'medium' | 'small'; is_enabled: boolean; has_rank_data: boolean }
 
 interface NewWord { keyword: string; count: number; siteCount: number; sites: string[]; last_date: string; first_date: string }
 interface WordLibEntry extends NewWord { longTailCount: number }
@@ -202,8 +202,10 @@ export default function TaskGroupsPage() {
   const [editSelectedUsers, setEditSelectedUsers] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [allSites, setAllSites] = useState<SiteInfo[]>([])
-  const [selectedSiteDomains, setSelectedSiteDomains] = useState<Set<string>>(new Set())
-  const [editSelectedSiteDomains, setEditSelectedSiteDomains] = useState<Set<string>>(new Set())
+  const [selectedRankDomains, setSelectedRankDomains] = useState<Set<string>>(new Set())
+  const [selectedNewDomains, setSelectedNewDomains] = useState<Set<string>>(new Set())
+  const [editSelectedRankDomains, setEditSelectedRankDomains] = useState<Set<string>>(new Set())
+  const [editSelectedNewDomains, setEditSelectedNewDomains] = useState<Set<string>>(new Set())
 
   const claimingRef = useRef<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -215,7 +217,8 @@ export default function TaskGroupsPage() {
   const claimedSet = useMemo(() => new Set(claimedKeywords.map(k => k.keyword)), [claimedKeywords])
   const pendingCount = claimedKeywords.filter(k => k.status === 'pending').length
 
-  const groupSiteDomains = useMemo(() => new Set(activeGroup?.site_domains || []), [activeGroup])
+  const groupRankDomains = useMemo(() => new Set(activeGroup?.rank_domains || []), [activeGroup])
+  const groupNewDomains = useMemo(() => new Set(activeGroup?.new_domains || []), [activeGroup])
 
   // ── Derived radar data ──────────────────────────────────────────────────────
 
@@ -233,16 +236,18 @@ export default function TaskGroupsPage() {
       return { keyword, volume: rwe.volume ?? 0, last_date, first_date, newSites: nwe.sites, rankSites: rwe.sites }
     }).filter((w): w is CrossWord => w !== null)
     const sorted = sortByDate(cw, yesterday, (a, b) => (b.volume ?? 0) - (a.volume ?? 0))
-    if (!groupSiteDomains.size) return sorted
-    return sorted.filter(w => w.newSites.some(s => groupSiteDomains.has(s)) || w.rankSites.some(s => groupSiteDomains.has(s)))
-  }, [radarData, yesterday, groupSiteDomains])
+    return sorted.filter(w =>
+      (!groupRankDomains.size || w.rankSites.some(s => groupRankDomains.has(s))) &&
+      (!groupNewDomains.size || w.newSites.some(s => groupNewDomains.has(s)))
+    )
+  }, [radarData, yesterday, groupRankDomains, groupNewDomains])
 
   const rankWordsSorted = useMemo(() => {
     if (!radarData) return []
     const sorted = sortByDate(radarData.rankWords, yesterday, (a, b) => b.volume - a.volume || b.rankDays - a.rankDays)
-    if (!groupSiteDomains.size) return sorted
-    return sorted.filter(w => w.sites.some(s => groupSiteDomains.has(s)))
-  }, [radarData, yesterday, groupSiteDomains])
+    if (!groupRankDomains.size) return sorted
+    return sorted.filter(w => w.sites.some(s => groupRankDomains.has(s)))
+  }, [radarData, yesterday, groupRankDomains])
 
   // Group streak words by keyword (same as hot-radar): streak>=2, single-domain only
   const streakWords = useMemo(() => {
@@ -262,7 +267,7 @@ export default function TaskGroupsPage() {
       }
     }
     let single = Array.from(grouped.values()).filter(g => g.domains.length === 1)
-    if (groupSiteDomains.size) single = single.filter(g => g.domains.some(d => groupSiteDomains.has(d)))
+    if (groupRankDomains.size) single = single.filter(g => g.domains.some(d => groupRankDomains.has(d)))
     return [...single].sort((a, b) => {
       if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
       const pa = getStreakBadge(a.streak, a.last_date, yesterday) === 'new' ? 0 : getStreakBadge(a.streak, a.last_date, yesterday) === 'updated' ? 1 : 2
@@ -270,19 +275,19 @@ export default function TaskGroupsPage() {
       if (pa !== pb) return pa - pb
       return b.streak - a.streak || b.volume - a.volume
     })
-  }, [radarData, yesterday, groupSiteDomains])
+  }, [radarData, yesterday, groupRankDomains])
 
   const allNewWords = useMemo(() => {
     if (!radarData) return []
     const sorted = sortByDate(radarData.newWords, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount)
-    if (!groupSiteDomains.size) return sorted
-    return sorted.filter(w => w.sites.some(s => groupSiteDomains.has(s)))
-  }, [radarData, yesterday, groupSiteDomains])
+    if (!groupNewDomains.size) return sorted
+    return sorted.filter(w => w.sites.some(s => groupNewDomains.has(s)))
+  }, [radarData, yesterday, groupNewDomains])
 
   const wordLibWords = useMemo((): WordLibEntry[] => {
     if (!radarData || !wordLibRawKwMap) return []
     let words = radarData.newWords.filter(w => w.last_date !== today)
-    if (groupSiteDomains.size) words = words.filter(w => w.sites.some(s => groupSiteDomains.has(s)))
+    if (groupNewDomains.size) words = words.filter(w => w.sites.some(s => groupNewDomains.has(s)))
     return words
       .map(w => {
         const related = new Set<string>()
@@ -299,7 +304,7 @@ export default function TaskGroupsPage() {
         if (bp !== 0) return bp
         return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
       })
-  }, [radarData, today, yesterday, wordLibRawKwMap, groupSiteDomains])
+  }, [radarData, today, yesterday, wordLibRawKwMap, groupNewDomains])
 
   // ── Detail modal data ───────────────────────────────────────────────────────
 
@@ -572,14 +577,14 @@ export default function TaskGroupsPage() {
     if (allSites.length > 0) return
     const supabase = getBrowserClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.from('sites') as any).select('id, domain, name, category').eq('is_enabled', true)
+    const { data } = await (supabase.from('sites') as any).select('id, domain, name, category, is_enabled, has_rank_data')
     const CAT_ORDER: Record<string, number> = { large: 0, medium: 1, small: 2 }
     setAllSites(((data || []) as SiteInfo[]).sort((a, b) => (CAT_ORDER[a.category] ?? 9) - (CAT_ORDER[b.category] ?? 9) || a.domain.localeCompare(b.domain)))
   }
 
   async function openCreateModal() {
     setShowCreate(true); setCreateName(''); setSelectedUsers(new Set()); setMemberTypes({})
-    setSelectedSiteDomains(new Set())
+    setSelectedRankDomains(new Set()); setSelectedNewDomains(new Set())
     const [usersRes] = await Promise.all([fetch('/api/admin/users'), loadAllSites()])
     const data = await usersRes.json()
     setUserOptions((data.users || []).filter((u: UserOption) => u.role !== 'super'))
@@ -593,7 +598,7 @@ export default function TaskGroupsPage() {
         .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: memberTypes[u.id] || 'app' }))
       const res = await fetch('/api/task-groups', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName.trim() || members.map(m => m.username).join(' · '), type: 'both', members, site_domains: Array.from(selectedSiteDomains) }),
+        body: JSON.stringify({ name: createName.trim() || members.map(m => m.username).join(' · '), type: 'both', members, rank_domains: Array.from(selectedRankDomains), new_domains: Array.from(selectedNewDomains) }),
       })
       if (res.ok) { setShowCreate(false); await loadGroups() }
     } finally { setCreating(false) }
@@ -603,7 +608,8 @@ export default function TaskGroupsPage() {
     if (!activeGroup) return
     setEditName(activeGroup.name)
     setEditSelectedUsers(new Set(activeGroup.members.map(m => m.user_id)))
-    setEditSelectedSiteDomains(new Set(activeGroup.site_domains || []))
+    setEditSelectedRankDomains(new Set(activeGroup.rank_domains || []))
+    setEditSelectedNewDomains(new Set(activeGroup.new_domains || []))
     const types: Record<string, 'app' | 'game'> = {}
     for (const m of activeGroup.members) types[m.user_id] = m.member_type === 'game' ? 'game' : 'app'
     setEditMemberTypes(types); setShowEdit(true)
@@ -620,7 +626,7 @@ export default function TaskGroupsPage() {
         .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: editMemberTypes[u.id] || 'app' }))
       const res = await fetch(`/api/task-groups/${activeGroup.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim() || members.map(m => m.username).join(' · '), members, site_domains: Array.from(editSelectedSiteDomains) }),
+        body: JSON.stringify({ name: editName.trim() || members.map(m => m.username).join(' · '), members, rank_domains: Array.from(editSelectedRankDomains), new_domains: Array.from(editSelectedNewDomains) }),
       })
       if (res.ok) { setShowEdit(false); await loadGroups() }
     } finally { setSaving(false) }
@@ -648,26 +654,65 @@ export default function TaskGroupsPage() {
     const setName = isCreate ? setCreateName : setEditName
     const onSubmit = isCreate ? handleCreate : handleEdit
     const busy = isCreate ? creating : saving
-    const curSiteDomains = isCreate ? selectedSiteDomains : editSelectedSiteDomains
-    const setCurSiteDomains = isCreate ? setSelectedSiteDomains : setEditSelectedSiteDomains
+    const curRankDomains = isCreate ? selectedRankDomains : editSelectedRankDomains
+    const setCurRankDomains = isCreate ? setSelectedRankDomains : setEditSelectedRankDomains
+    const curNewDomains = isCreate ? selectedNewDomains : editSelectedNewDomains
+    const setCurNewDomains = isCreate ? setSelectedNewDomains : setEditSelectedNewDomains
     const CAT_LABELS: Record<string, string> = { large: '大站', medium: '中站', small: '小站' }
     const cats = ['large', 'medium', 'small'] as const
 
-    function toggleSite(domain: string) {
-      const next = new Set(curSiteDomains)
+    function toggleRank(domain: string) {
+      const next = new Set(curRankDomains)
       if (next.has(domain)) next.delete(domain); else next.add(domain)
-      setCurSiteDomains(next)
+      setCurRankDomains(next)
     }
-    function toggleCategory(cat: string, catSites: SiteInfo[]) {
-      const next = new Set(curSiteDomains)
-      const allSel = catSites.every(s => next.has(s.domain))
-      if (allSel) catSites.forEach(s => next.delete(s.domain)); else catSites.forEach(s => next.add(s.domain))
-      setCurSiteDomains(next)
+    function toggleNew(domain: string) {
+      const next = new Set(curNewDomains)
+      if (next.has(domain)) next.delete(domain); else next.add(domain)
+      setCurNewDomains(next)
+    }
+    function toggleBoth(domain: string, canRank: boolean, canNew: boolean) {
+      const bothSelected = curRankDomains.has(domain) && curNewDomains.has(domain)
+      const nextR = new Set(curRankDomains)
+      const nextN = new Set(curNewDomains)
+      if (bothSelected) {
+        nextR.delete(domain); nextN.delete(domain)
+      } else {
+        if (canRank) nextR.add(domain)
+        if (canNew) nextN.add(domain)
+      }
+      setCurRankDomains(nextR); setCurNewDomains(nextN)
+    }
+    function toggleCatBoth(catSites: SiteInfo[]) {
+      const rankable = catSites.filter(s => s.has_rank_data)
+      const newable = catSites.filter(s => s.is_enabled)
+      const allRankSel = rankable.every(s => curRankDomains.has(s.domain))
+      const allNewSel = newable.every(s => curNewDomains.has(s.domain))
+      const allSel = allRankSel && allNewSel
+      const nextR = new Set(curRankDomains); const nextN = new Set(curNewDomains)
+      if (allSel) {
+        catSites.forEach(s => { nextR.delete(s.domain); nextN.delete(s.domain) })
+      } else {
+        rankable.forEach(s => nextR.add(s.domain)); newable.forEach(s => nextN.add(s.domain))
+      }
+      setCurRankDomains(nextR); setCurNewDomains(nextN)
+    }
+
+    function CheckBox({ checked, disabled, onClick }: { checked: boolean; disabled?: boolean; onClick?: () => void }) {
+      if (disabled) return (
+        <span className="w-5 h-5 flex items-center justify-center text-gray-300 text-sm select-none" title="该站点未开启此抓取">✕</span>
+      )
+      return (
+        <span className={`w-5 h-5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${checked ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white hover:border-green-400'}`}
+          onClick={onClick}>
+          {checked && <svg viewBox="0 0 10 8" className="w-3 h-2.5"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+        </span>
+      )
     }
 
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
             <h3 className="font-semibold text-gray-900">{isCreate ? '新增分组' : '编辑分组'}</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -683,7 +728,7 @@ export default function TaskGroupsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 组员{selUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {selUsers.size} 人）</span>}
               </label>
-              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
                 {userOptions.length === 0 ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div> : userOptions.map(u => {
                   const isSelected = selUsers.has(u.id)
                   const mType = mTypes[u.id] || 'app'
@@ -720,43 +765,101 @@ export default function TaskGroupsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 站点过滤
                 <span className="ml-1.5 font-normal text-xs text-gray-400">不选则显示全部</span>
-                {curSiteDomains.size > 0 && <span className="ml-1.5 text-green-600">（已选 {curSiteDomains.size} 个站点）</span>}
               </label>
-              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
+              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                {/* Header */}
+                <div className="grid grid-cols-[1fr_48px_48px] items-center px-3 py-1.5 bg-gray-100 border-b border-gray-200 sticky top-0 z-10">
+                  <span className="text-xs text-gray-500">站点</span>
+                  <span className="text-xs text-gray-500 text-center">排名</span>
+                  <span className="text-xs text-gray-500 text-center">新增</span>
+                </div>
                 {allSites.length === 0
                   ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div>
                   : cats.map(cat => {
                     const catSites = allSites.filter(s => s.category === cat)
                     if (catSites.length === 0) return null
-                    const allSel = catSites.every(s => curSiteDomains.has(s.domain))
-                    const someSel = catSites.some(s => curSiteDomains.has(s.domain))
+                    const rankable = catSites.filter(s => s.has_rank_data)
+                    const newable = catSites.filter(s => s.is_enabled)
+                    const allRankSel = rankable.length > 0 && rankable.every(s => curRankDomains.has(s.domain))
+                    const someRankSel = rankable.some(s => curRankDomains.has(s.domain))
+                    const allNewSel = newable.length > 0 && newable.every(s => curNewDomains.has(s.domain))
+                    const someNewSel = newable.some(s => curNewDomains.has(s.domain))
+                    const allBothSel = allRankSel && allNewSel
+                    const someBothSel = someRankSel || someNewSel
                     return (
                       <div key={cat} className="border-b border-gray-100 last:border-0">
-                        <div
-                          className="flex items-center gap-2.5 px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-                          onClick={() => toggleCategory(cat, catSites)}>
-                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${allSel ? 'bg-green-500 border-green-500' : someSel ? 'bg-green-200 border-green-400' : 'border-gray-300 bg-white'}`}>
-                            {allSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2 fill-white"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                            {!allSel && someSel && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
-                          </span>
-                          <span className="text-xs font-semibold text-gray-700">{CAT_LABELS[cat]}</span>
-                          <span className="text-xs text-gray-400">({catSites.length} 个站点)</span>
-                        </div>
-                        {catSites.map(site => (
-                          <div key={site.id}
-                            className={`flex items-center gap-2.5 px-3 py-2 pl-8 cursor-pointer transition-colors ${curSiteDomains.has(site.domain) ? 'bg-green-50/50' : 'hover:bg-gray-50'}`}
-                            onClick={() => toggleSite(site.domain)}>
-                            <input type="checkbox" checked={curSiteDomains.has(site.domain)} onChange={() => {}}
-                              className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0 pointer-events-none" />
-                            <span className="text-sm text-gray-700 truncate">{site.domain}</span>
-                            {site.name && <span className="text-xs text-gray-400 truncate flex-shrink-0">{site.name}</span>}
+                        {/* Category row */}
+                        <div className="grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 bg-gray-50">
+                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleCatBoth(catSites)}>
+                            <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${allBothSel ? 'bg-green-500 border-green-500' : someBothSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
+                              {allBothSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                              {!allBothSel && someBothSel && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
+                            </span>
+                            <span className="text-xs font-semibold text-gray-700">{CAT_LABELS[cat]}</span>
+                            <span className="text-xs text-gray-400">({catSites.length})</span>
                           </div>
-                        ))}
+                          {/* Category-level rank toggle */}
+                          <div className="flex justify-center">
+                            {rankable.length === 0
+                              ? <span className="text-gray-300 text-sm select-none" title="该分类无排名数据">✕</span>
+                              : <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allRankSel ? 'bg-purple-500 border-purple-500' : someRankSel ? 'bg-purple-100 border-purple-400' : 'border-gray-300 bg-white hover:border-purple-400'}`}
+                                onClick={() => {
+                                  const next = new Set(curRankDomains)
+                                  if (allRankSel) rankable.forEach(s => next.delete(s.domain)); else rankable.forEach(s => next.add(s.domain))
+                                  setCurRankDomains(next)
+                                }}>
+                                {allRankSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                {!allRankSel && someRankSel && <span className="w-1.5 h-0.5 bg-purple-600 rounded" />}
+                              </span>
+                            }
+                          </div>
+                          {/* Category-level new toggle */}
+                          <div className="flex justify-center">
+                            <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allNewSel ? 'bg-blue-500 border-blue-500' : someNewSel ? 'bg-blue-100 border-blue-400' : 'border-gray-300 bg-white hover:border-blue-400'}`}
+                              onClick={() => {
+                                const next = new Set(curNewDomains)
+                                if (allNewSel) newable.forEach(s => next.delete(s.domain)); else newable.forEach(s => next.add(s.domain))
+                                setCurNewDomains(next)
+                              }}>
+                              {allNewSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                              {!allNewSel && someNewSel && <span className="w-1.5 h-0.5 bg-blue-600 rounded" />}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Individual sites */}
+                        {catSites.map(site => {
+                          const rankSel = curRankDomains.has(site.domain)
+                          const newSel = curNewDomains.has(site.domain)
+                          const bothSel = rankSel && (site.has_rank_data ? true : true) && newSel
+                          const rowHighlight = rankSel || newSel
+                          return (
+                            <div key={site.id} className={`grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 pl-7 transition-colors ${rowHighlight ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}>
+                              <div className="flex items-center gap-2 cursor-pointer min-w-0"
+                                onClick={() => toggleBoth(site.domain, site.has_rank_data, site.is_enabled)}>
+                                <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${rankSel && newSel ? 'bg-green-500 border-green-500' : rankSel || newSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
+                                  {rankSel && newSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                  {(rankSel || newSel) && !(rankSel && newSel) && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
+                                </span>
+                                <span className="text-sm text-gray-700 truncate">{site.domain}</span>
+                                {site.name && <span className="text-xs text-gray-400 truncate">{site.name}</span>}
+                              </div>
+                              <div className="flex justify-center">
+                                <CheckBox checked={rankSel} disabled={!site.has_rank_data} onClick={site.has_rank_data ? () => toggleRank(site.domain) : undefined} />
+                              </div>
+                              <div className="flex justify-center">
+                                <CheckBox checked={newSel} disabled={!site.is_enabled} onClick={site.is_enabled ? () => toggleNew(site.domain) : undefined} />
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )
                   })
                 }
               </div>
+              {(curRankDomains.size > 0 || curNewDomains.size > 0) && (
+                <p className="text-xs text-gray-400 mt-1">排名过滤 {curRankDomains.size} 站 · 新增过滤 {curNewDomains.size} 站</p>
+              )}
             </div>
           </div>
           <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
@@ -1174,18 +1277,13 @@ export default function TaskGroupsPage() {
 
               {/* Right panel */}
               <div className="flex-1 flex flex-col min-w-0">
-                <div className="flex items-center border-b border-gray-100 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+                <div className="flex border-b border-gray-100 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
                   {RIGHT_TABS.map(([tab, label]) => (
                     <button key={tab} onClick={() => setRightTab(tab)}
                       className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${rightTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
                       {label}
                     </button>
                   ))}
-                  {groupSiteDomains.size > 0 && (
-                    <span className="ml-auto mr-3 flex-shrink-0 text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 whitespace-nowrap">
-                      {groupSiteDomains.size} 站点过滤中
-                    </span>
-                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
                   {renderRightContent()}
