@@ -134,7 +134,8 @@ function KwRow({ keyword, claimed, onClaim, onView, dateCell, children }: KwRowP
       {dateCell}
       <td className="px-2 py-2 max-w-0">
         <div className="flex items-center gap-1 min-w-0">
-          <span className="text-sm text-gray-800 truncate select-text cursor-text" title={keyword}>{keyword}</span>
+          <span className="text-sm text-gray-800 truncate select-text cursor-text" title={keyword}
+            onDoubleClick={e => { e.stopPropagation(); onClaim() }}>{keyword}</span>
           {claimed && <span className="text-[10px] text-green-500 flex-shrink-0">✓</span>}
         </div>
       </td>
@@ -144,6 +145,246 @@ function KwRow({ keyword, claimed, onClaim, onView, dateCell, children }: KwRowP
           className="text-xs text-blue-400 hover:text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-300 transition-colors">查看</button>
       </td>
     </tr>
+  )
+}
+
+// ── MemberModal ─────────────────────────────────────────────────────────────────
+
+interface MemberModalProps {
+  mode: 'create' | 'edit'
+  onClose: () => void
+  userOptions: UserOption[]
+  allSites: SiteInfo[]
+  name: string
+  onNameChange: (v: string) => void
+  selUsers: Set<string>
+  onSelUsersChange: (s: Set<string>) => void
+  mTypes: Record<string, 'app' | 'game'>
+  onMTypesChange: (t: Record<string, 'app' | 'game'>) => void
+  rankDomains: Set<string>
+  onRankDomainsChange: (s: Set<string>) => void
+  newDomains: Set<string>
+  onNewDomainsChange: (s: Set<string>) => void
+  onSubmit: () => void
+  busy: boolean
+}
+
+function MemberModal({
+  mode, onClose, userOptions, allSites,
+  name, onNameChange,
+  selUsers, onSelUsersChange,
+  mTypes, onMTypesChange,
+  rankDomains, onRankDomainsChange,
+  newDomains, onNewDomainsChange,
+  onSubmit, busy,
+}: MemberModalProps) {
+  const isCreate = mode === 'create'
+  const CAT_LABELS: Record<string, string> = { large: '大站', medium: '中站', small: '小站' }
+  const cats = ['large', 'medium', 'small'] as const
+
+  function toggleRank(domain: string) {
+    const next = new Set(rankDomains)
+    if (next.has(domain)) next.delete(domain); else next.add(domain)
+    onRankDomainsChange(next)
+  }
+  function toggleNew(domain: string) {
+    const next = new Set(newDomains)
+    if (next.has(domain)) next.delete(domain); else next.add(domain)
+    onNewDomainsChange(next)
+  }
+  function toggleBoth(domain: string, canRank: boolean, canNew: boolean) {
+    const bothSelected = rankDomains.has(domain) && newDomains.has(domain)
+    const nextR = new Set(rankDomains)
+    const nextN = new Set(newDomains)
+    if (bothSelected) {
+      nextR.delete(domain); nextN.delete(domain)
+    } else {
+      if (canRank) nextR.add(domain)
+      if (canNew) nextN.add(domain)
+    }
+    onRankDomainsChange(nextR); onNewDomainsChange(nextN)
+  }
+  function toggleCatBoth(catSites: SiteInfo[]) {
+    const rankable = catSites.filter(s => s.has_rank_data)
+    const newable = catSites.filter(s => s.is_enabled)
+    const allRankSel = rankable.every(s => rankDomains.has(s.domain))
+    const allNewSel = newable.every(s => newDomains.has(s.domain))
+    const allSel = allRankSel && allNewSel
+    const nextR = new Set(rankDomains); const nextN = new Set(newDomains)
+    if (allSel) {
+      catSites.forEach(s => { nextR.delete(s.domain); nextN.delete(s.domain) })
+    } else {
+      rankable.forEach(s => nextR.add(s.domain)); newable.forEach(s => nextN.add(s.domain))
+    }
+    onRankDomainsChange(nextR); onNewDomainsChange(nextN)
+  }
+
+  function CheckBox({ checked, disabled, onClick }: { checked: boolean; disabled?: boolean; onClick?: () => void }) {
+    if (disabled) return (
+      <span className="w-5 h-5 flex items-center justify-center text-gray-300 text-sm select-none" title="该站点未开启此抓取">✕</span>
+    )
+    return (
+      <span className={`w-5 h-5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${checked ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white hover:border-green-400'}`}
+        onClick={onClick}>
+        {checked && <svg viewBox="0 0 10 8" className="w-3 h-2.5"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+      </span>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+          <h3 className="font-semibold text-gray-900">{isCreate ? '新增分组' : '编辑分组'}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">分组名称</label>
+            <input type="text" value={name} onChange={e => onNameChange(e.target.value)}
+              placeholder="留空则自动使用成员名称"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              组员{selUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {selUsers.size} 人）</span>}
+            </label>
+            <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
+              {userOptions.length === 0 ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div> : userOptions.map(u => {
+                const isSelected = selUsers.has(u.id)
+                const mType = mTypes[u.id] || 'app'
+                return (
+                  <div key={u.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
+                    <input type="checkbox" checked={isSelected}
+                      onChange={e => {
+                        const next = new Set(selUsers); const nextTypes = { ...mTypes }
+                        if (e.target.checked) { next.add(u.id); nextTypes[u.id] = nextTypes[u.id] || 'app' }
+                        else { next.delete(u.id); delete nextTypes[u.id] }
+                        onSelUsersChange(next); onMTypesChange(nextTypes)
+                      }}
+                      className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
+                      <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
+                    </div>
+                    {isSelected && (
+                      <div className="flex gap-1 flex-shrink-0">
+                        {(['app', 'game'] as const).map(t => (
+                          <button key={t} onClick={() => onMTypesChange({ ...mTypes, [u.id]: t })}
+                            className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${mType === t ? t === 'app' ? 'bg-blue-500 text-white border-blue-500' : 'bg-purple-500 text-white border-purple-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
+                            {t === 'app' ? '应用' : '游戏'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              站点过滤
+              <span className="ml-1.5 font-normal text-xs text-gray-400">不选则显示全部</span>
+            </label>
+            <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+              <div className="grid grid-cols-[1fr_48px_48px] items-center px-3 py-1.5 bg-gray-100 border-b border-gray-200 sticky top-0 z-10">
+                <span className="text-xs text-gray-500">站点</span>
+                <span className="text-xs text-gray-500 text-center">排名</span>
+                <span className="text-xs text-gray-500 text-center">新增</span>
+              </div>
+              {allSites.length === 0
+                ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div>
+                : cats.map(cat => {
+                  const catSites = allSites.filter(s => s.category === cat)
+                  if (catSites.length === 0) return null
+                  const rankable = catSites.filter(s => s.has_rank_data)
+                  const newable = catSites.filter(s => s.is_enabled)
+                  const allRankSel = rankable.length > 0 && rankable.every(s => rankDomains.has(s.domain))
+                  const someRankSel = rankable.some(s => rankDomains.has(s.domain))
+                  const allNewSel = newable.length > 0 && newable.every(s => newDomains.has(s.domain))
+                  const someNewSel = newable.some(s => newDomains.has(s.domain))
+                  const allBothSel = allRankSel && allNewSel
+                  const someBothSel = someRankSel || someNewSel
+                  return (
+                    <div key={cat} className="border-b border-gray-100 last:border-0">
+                      <div className="grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 bg-gray-50">
+                        <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleCatBoth(catSites)}>
+                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${allBothSel ? 'bg-green-500 border-green-500' : someBothSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
+                            {allBothSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            {!allBothSel && someBothSel && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-700">{CAT_LABELS[cat]}</span>
+                          <span className="text-xs text-gray-400">({catSites.length})</span>
+                        </div>
+                        <div className="flex justify-center">
+                          {rankable.length === 0
+                            ? <span className="text-gray-300 text-sm select-none" title="该分类无排名数据">✕</span>
+                            : <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allRankSel ? 'bg-purple-500 border-purple-500' : someRankSel ? 'bg-purple-100 border-purple-400' : 'border-gray-300 bg-white hover:border-purple-400'}`}
+                              onClick={() => {
+                                const next = new Set(rankDomains)
+                                if (allRankSel) rankable.forEach(s => next.delete(s.domain)); else rankable.forEach(s => next.add(s.domain))
+                                onRankDomainsChange(next)
+                              }}>
+                              {allRankSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                              {!allRankSel && someRankSel && <span className="w-1.5 h-0.5 bg-purple-600 rounded" />}
+                            </span>
+                          }
+                        </div>
+                        <div className="flex justify-center">
+                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allNewSel ? 'bg-blue-500 border-blue-500' : someNewSel ? 'bg-blue-100 border-blue-400' : 'border-gray-300 bg-white hover:border-blue-400'}`}
+                            onClick={() => {
+                              const next = new Set(newDomains)
+                              if (allNewSel) newable.forEach(s => next.delete(s.domain)); else newable.forEach(s => next.add(s.domain))
+                              onNewDomainsChange(next)
+                            }}>
+                            {allNewSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            {!allNewSel && someNewSel && <span className="w-1.5 h-0.5 bg-blue-600 rounded" />}
+                          </span>
+                        </div>
+                      </div>
+                      {catSites.map(site => {
+                        const rankSel = rankDomains.has(site.domain)
+                        const newSel = newDomains.has(site.domain)
+                        const rowHighlight = rankSel || newSel
+                        return (
+                          <div key={site.id} className={`grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 pl-7 transition-colors ${rowHighlight ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}>
+                            <div className="flex items-center gap-2 cursor-pointer min-w-0"
+                              onClick={() => toggleBoth(site.domain, site.has_rank_data, site.is_enabled)}>
+                              <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${rankSel && newSel ? 'bg-green-500 border-green-500' : rankSel || newSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
+                                {rankSel && newSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                {(rankSel || newSel) && !(rankSel && newSel) && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
+                              </span>
+                              <span className="text-sm text-gray-700 truncate">{site.domain}</span>
+                              {site.name && <span className="text-xs text-gray-400 truncate">{site.name}</span>}
+                            </div>
+                            <div className="flex justify-center">
+                              <CheckBox checked={rankSel} disabled={!site.has_rank_data} onClick={site.has_rank_data ? () => toggleRank(site.domain) : undefined} />
+                            </div>
+                            <div className="flex justify-center">
+                              <CheckBox checked={newSel} disabled={!site.is_enabled} onClick={site.is_enabled ? () => toggleNew(site.domain) : undefined} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })
+              }
+            </div>
+            {(rankDomains.size > 0 || newDomains.size > 0) && (
+              <p className="text-xs text-gray-400 mt-1">排名过滤 {rankDomains.size} 站 · 新增过滤 {newDomains.size} 站</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
+          <button onClick={onClose} className="btn-ghost">取消</button>
+          <button onClick={onSubmit} disabled={busy || selUsers.size === 0} className="btn-primary disabled:opacity-50">
+            {busy ? (isCreate ? '创建中...' : '保存中...') : (isCreate ? '创建分组' : '保存')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -212,6 +453,7 @@ export default function TaskGroupsPage() {
   const claimingRef = useRef<Set<string>>(new Set())
   const claimedKeywordsRef = useRef<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const detailCacheRef = useRef<Map<string, { newRows: DetailRow[]; rankRows: DetailRow[]; wordLibSiteKws: { domain: string; keywords: string[] }[] }>>(new Map())
 
   const activeGroup = groups.find(g => g.id === activeGroupId) ?? null
   const effectiveViewingId = viewingMemberId || currentUserId || ''
@@ -372,7 +614,11 @@ export default function TaskGroupsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword, source, search_volume }),
       })
-      if (res.status === 409) return
+      if (res.status === 409) {
+        // Another session already claimed it — refresh to show updated state
+        if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate)
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         setClaimedKeywords(prev => [...prev, data.keyword])
@@ -410,6 +656,17 @@ export default function TaskGroupsPage() {
   async function openDetail(keyword: string, source: string) {
     setDetailKw(keyword)
     setDetailSource(source)
+
+    const cacheKey = `${keyword}|${source}`
+    const cached = detailCacheRef.current.get(cacheKey)
+    if (cached) {
+      setDetailNewRows(cached.newRows)
+      setDetailRankRows(cached.rankRows)
+      setWordLibSiteKws(cached.wordLibSiteKws)
+      setDetailLoading(false)
+      return
+    }
+
     setDetailLoading(true)
     setDetailNewRows([])
     setDetailRankRows([])
@@ -445,11 +702,11 @@ export default function TaskGroupsPage() {
             if (!bySite.has(domain)) bySite.set(domain, new Set())
             bySite.get(domain)!.add(r.keyword)
           }
-          setWordLibSiteKws(
-            Array.from(bySite.entries())
-              .map(([domain, kws]) => ({ domain, keywords: Array.from(kws).sort() }))
-              .sort((a, b) => b.keywords.length - a.keywords.length)
-          )
+          const wlRows = Array.from(bySite.entries())
+            .map(([domain, kws]) => ({ domain, keywords: Array.from(kws).sort() }))
+            .sort((a, b) => b.keywords.length - a.keywords.length)
+          setWordLibSiteKws(wlRows)
+          detailCacheRef.current.set(cacheKey, { newRows: [], rankRows: [], wordLibSiteKws: wlRows })
         }
       } finally {
         setDetailLoading(false)
@@ -486,8 +743,11 @@ export default function TaskGroupsPage() {
           if (domain) rRows.push({ date: String(r.stat_date).slice(0, 10), domain })
         }
       }
-      setDetailNewRows(dedupDetailRows(nRows))
-      setDetailRankRows(dedupDetailRows(rRows))
+      const dedupedNew = dedupDetailRows(nRows)
+      const dedupedRank = dedupDetailRows(rRows)
+      setDetailNewRows(dedupedNew)
+      setDetailRankRows(dedupedRank)
+      detailCacheRef.current.set(cacheKey, { newRows: dedupedNew, rankRows: dedupedRank, wordLibSiteKws: [] })
     } finally {
       setDetailLoading(false)
     }
@@ -657,237 +917,6 @@ export default function TaskGroupsPage() {
     setDeleteId(null)
   }
 
-  // ── Member modal (called as function) ───────────────────────────────────────
-
-  function MemberModal({ mode, onClose }: { mode: 'create' | 'edit'; onClose: () => void }) {
-    const isCreate = mode === 'create'
-    const selUsers = isCreate ? selectedUsers : editSelectedUsers
-    const setSelUsers = isCreate ? setSelectedUsers : setEditSelectedUsers
-    const mTypes = isCreate ? memberTypes : editMemberTypes
-    const setMTypes = isCreate ? setMemberTypes : setEditMemberTypes
-    const name = isCreate ? createName : editName
-    const setName = isCreate ? setCreateName : setEditName
-    const onSubmit = isCreate ? handleCreate : handleEdit
-    const busy = isCreate ? creating : saving
-    const curRankDomains = isCreate ? selectedRankDomains : editSelectedRankDomains
-    const setCurRankDomains = isCreate ? setSelectedRankDomains : setEditSelectedRankDomains
-    const curNewDomains = isCreate ? selectedNewDomains : editSelectedNewDomains
-    const setCurNewDomains = isCreate ? setSelectedNewDomains : setEditSelectedNewDomains
-    const CAT_LABELS: Record<string, string> = { large: '大站', medium: '中站', small: '小站' }
-    const cats = ['large', 'medium', 'small'] as const
-
-    function toggleRank(domain: string) {
-      const next = new Set(curRankDomains)
-      if (next.has(domain)) next.delete(domain); else next.add(domain)
-      setCurRankDomains(next)
-    }
-    function toggleNew(domain: string) {
-      const next = new Set(curNewDomains)
-      if (next.has(domain)) next.delete(domain); else next.add(domain)
-      setCurNewDomains(next)
-    }
-    function toggleBoth(domain: string, canRank: boolean, canNew: boolean) {
-      const bothSelected = curRankDomains.has(domain) && curNewDomains.has(domain)
-      const nextR = new Set(curRankDomains)
-      const nextN = new Set(curNewDomains)
-      if (bothSelected) {
-        nextR.delete(domain); nextN.delete(domain)
-      } else {
-        if (canRank) nextR.add(domain)
-        if (canNew) nextN.add(domain)
-      }
-      setCurRankDomains(nextR); setCurNewDomains(nextN)
-    }
-    function toggleCatBoth(catSites: SiteInfo[]) {
-      const rankable = catSites.filter(s => s.has_rank_data)
-      const newable = catSites.filter(s => s.is_enabled)
-      const allRankSel = rankable.every(s => curRankDomains.has(s.domain))
-      const allNewSel = newable.every(s => curNewDomains.has(s.domain))
-      const allSel = allRankSel && allNewSel
-      const nextR = new Set(curRankDomains); const nextN = new Set(curNewDomains)
-      if (allSel) {
-        catSites.forEach(s => { nextR.delete(s.domain); nextN.delete(s.domain) })
-      } else {
-        rankable.forEach(s => nextR.add(s.domain)); newable.forEach(s => nextN.add(s.domain))
-      }
-      setCurRankDomains(nextR); setCurNewDomains(nextN)
-    }
-
-    function CheckBox({ checked, disabled, onClick }: { checked: boolean; disabled?: boolean; onClick?: () => void }) {
-      if (disabled) return (
-        <span className="w-5 h-5 flex items-center justify-center text-gray-300 text-sm select-none" title="该站点未开启此抓取">✕</span>
-      )
-      return (
-        <span className={`w-5 h-5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${checked ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white hover:border-green-400'}`}
-          onClick={onClick}>
-          {checked && <svg viewBox="0 0 10 8" className="w-3 h-2.5"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-        </span>
-      )
-    }
-
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-            <h3 className="font-semibold text-gray-900">{isCreate ? '新增分组' : '编辑分组'}</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-          </div>
-          <div className="overflow-y-auto flex-1 p-5 space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">分组名称</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)}
-                placeholder="留空则自动使用成员名称"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                组员{selUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {selUsers.size} 人）</span>}
-              </label>
-              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
-                {userOptions.length === 0 ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div> : userOptions.map(u => {
-                  const isSelected = selUsers.has(u.id)
-                  const mType = mTypes[u.id] || 'app'
-                  return (
-                    <div key={u.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
-                      <input type="checkbox" checked={isSelected}
-                        onChange={e => {
-                          const next = new Set(selUsers); const nextTypes = { ...mTypes }
-                          if (e.target.checked) { next.add(u.id); nextTypes[u.id] = nextTypes[u.id] || 'app' }
-                          else { next.delete(u.id); delete nextTypes[u.id] }
-                          setSelUsers(next); setMTypes(nextTypes)
-                        }}
-                        className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{u.username || u.email.split('@')[0]}</span>
-                        <span className="ml-1.5 text-xs text-gray-400">{u.email}</span>
-                      </div>
-                      {isSelected && (
-                        <div className="flex gap-1 flex-shrink-0">
-                          {(['app', 'game'] as const).map(t => (
-                            <button key={t} onClick={() => setMTypes(prev => ({ ...prev, [u.id]: t }))}
-                              className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${mType === t ? t === 'app' ? 'bg-blue-500 text-white border-blue-500' : 'bg-purple-500 text-white border-purple-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
-                              {t === 'app' ? '应用' : '游戏'}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                站点过滤
-                <span className="ml-1.5 font-normal text-xs text-gray-400">不选则显示全部</span>
-              </label>
-              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
-                {/* Header */}
-                <div className="grid grid-cols-[1fr_48px_48px] items-center px-3 py-1.5 bg-gray-100 border-b border-gray-200 sticky top-0 z-10">
-                  <span className="text-xs text-gray-500">站点</span>
-                  <span className="text-xs text-gray-500 text-center">排名</span>
-                  <span className="text-xs text-gray-500 text-center">新增</span>
-                </div>
-                {allSites.length === 0
-                  ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div>
-                  : cats.map(cat => {
-                    const catSites = allSites.filter(s => s.category === cat)
-                    if (catSites.length === 0) return null
-                    const rankable = catSites.filter(s => s.has_rank_data)
-                    const newable = catSites.filter(s => s.is_enabled)
-                    const allRankSel = rankable.length > 0 && rankable.every(s => curRankDomains.has(s.domain))
-                    const someRankSel = rankable.some(s => curRankDomains.has(s.domain))
-                    const allNewSel = newable.length > 0 && newable.every(s => curNewDomains.has(s.domain))
-                    const someNewSel = newable.some(s => curNewDomains.has(s.domain))
-                    const allBothSel = allRankSel && allNewSel
-                    const someBothSel = someRankSel || someNewSel
-                    return (
-                      <div key={cat} className="border-b border-gray-100 last:border-0">
-                        {/* Category row */}
-                        <div className="grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 bg-gray-50">
-                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleCatBoth(catSites)}>
-                            <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${allBothSel ? 'bg-green-500 border-green-500' : someBothSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
-                              {allBothSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                              {!allBothSel && someBothSel && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
-                            </span>
-                            <span className="text-xs font-semibold text-gray-700">{CAT_LABELS[cat]}</span>
-                            <span className="text-xs text-gray-400">({catSites.length})</span>
-                          </div>
-                          {/* Category-level rank toggle */}
-                          <div className="flex justify-center">
-                            {rankable.length === 0
-                              ? <span className="text-gray-300 text-sm select-none" title="该分类无排名数据">✕</span>
-                              : <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allRankSel ? 'bg-purple-500 border-purple-500' : someRankSel ? 'bg-purple-100 border-purple-400' : 'border-gray-300 bg-white hover:border-purple-400'}`}
-                                onClick={() => {
-                                  const next = new Set(curRankDomains)
-                                  if (allRankSel) rankable.forEach(s => next.delete(s.domain)); else rankable.forEach(s => next.add(s.domain))
-                                  setCurRankDomains(next)
-                                }}>
-                                {allRankSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                {!allRankSel && someRankSel && <span className="w-1.5 h-0.5 bg-purple-600 rounded" />}
-                              </span>
-                            }
-                          </div>
-                          {/* Category-level new toggle */}
-                          <div className="flex justify-center">
-                            <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allNewSel ? 'bg-blue-500 border-blue-500' : someNewSel ? 'bg-blue-100 border-blue-400' : 'border-gray-300 bg-white hover:border-blue-400'}`}
-                              onClick={() => {
-                                const next = new Set(curNewDomains)
-                                if (allNewSel) newable.forEach(s => next.delete(s.domain)); else newable.forEach(s => next.add(s.domain))
-                                setCurNewDomains(next)
-                              }}>
-                              {allNewSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                              {!allNewSel && someNewSel && <span className="w-1.5 h-0.5 bg-blue-600 rounded" />}
-                            </span>
-                          </div>
-                        </div>
-                        {/* Individual sites */}
-                        {catSites.map(site => {
-                          const rankSel = curRankDomains.has(site.domain)
-                          const newSel = curNewDomains.has(site.domain)
-                          const bothSel = rankSel && (site.has_rank_data ? true : true) && newSel
-                          const rowHighlight = rankSel || newSel
-                          return (
-                            <div key={site.id} className={`grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 pl-7 transition-colors ${rowHighlight ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}>
-                              <div className="flex items-center gap-2 cursor-pointer min-w-0"
-                                onClick={() => toggleBoth(site.domain, site.has_rank_data, site.is_enabled)}>
-                                <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${rankSel && newSel ? 'bg-green-500 border-green-500' : rankSel || newSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
-                                  {rankSel && newSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                  {(rankSel || newSel) && !(rankSel && newSel) && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
-                                </span>
-                                <span className="text-sm text-gray-700 truncate">{site.domain}</span>
-                                {site.name && <span className="text-xs text-gray-400 truncate">{site.name}</span>}
-                              </div>
-                              <div className="flex justify-center">
-                                <CheckBox checked={rankSel} disabled={!site.has_rank_data} onClick={site.has_rank_data ? () => toggleRank(site.domain) : undefined} />
-                              </div>
-                              <div className="flex justify-center">
-                                <CheckBox checked={newSel} disabled={!site.is_enabled} onClick={site.is_enabled ? () => toggleNew(site.domain) : undefined} />
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })
-                }
-              </div>
-              {(curRankDomains.size > 0 || curNewDomains.size > 0) && (
-                <p className="text-xs text-gray-400 mt-1">排名过滤 {curRankDomains.size} 站 · 新增过滤 {curNewDomains.size} 站</p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
-            <button onClick={onClose} className="btn-ghost">取消</button>
-            <button onClick={onSubmit} disabled={busy || selUsers.size === 0} className="btn-primary disabled:opacity-50">
-              {busy ? (isCreate ? '创建中...' : '保存中...') : (isCreate ? '创建分组' : '保存')}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   // ── Right panel ─────────────────────────────────────────────────────────────
 
   function renderRightContent() {
@@ -927,7 +956,9 @@ export default function TaskGroupsPage() {
                         className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
                         title={claimed ? '已认领' : '双击认领'}>
                         <td className="px-3 py-2">
-                          <span className="text-sm text-gray-800">{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
+                          <span className="text-sm text-gray-800 select-text cursor-text"
+                            onDoubleClick={e => { e.stopPropagation(); claimKeyword(r.keyword, '搜索量查询', r.volume) }}
+                          >{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
                           {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
                         </td>
                         <td className="px-2 py-2 text-right text-xs text-gray-500 whitespace-nowrap">{r.volume > 0 ? r.volume.toLocaleString() : '—'}</td>
@@ -1309,8 +1340,30 @@ export default function TaskGroupsPage() {
         </div>
       )}
 
-      {showCreate && MemberModal({ mode: 'create', onClose: () => setShowCreate(false) })}
-      {showEdit && activeGroup && MemberModal({ mode: 'edit', onClose: () => setShowEdit(false) })}
+      {showCreate && (
+        <MemberModal
+          mode="create" onClose={() => setShowCreate(false)}
+          userOptions={userOptions} allSites={allSites}
+          name={createName} onNameChange={setCreateName}
+          selUsers={selectedUsers} onSelUsersChange={setSelectedUsers}
+          mTypes={memberTypes} onMTypesChange={setMemberTypes}
+          rankDomains={selectedRankDomains} onRankDomainsChange={setSelectedRankDomains}
+          newDomains={selectedNewDomains} onNewDomainsChange={setSelectedNewDomains}
+          onSubmit={handleCreate} busy={creating}
+        />
+      )}
+      {showEdit && activeGroup && (
+        <MemberModal
+          mode="edit" onClose={() => setShowEdit(false)}
+          userOptions={userOptions} allSites={allSites}
+          name={editName} onNameChange={setEditName}
+          selUsers={editSelectedUsers} onSelUsersChange={setEditSelectedUsers}
+          mTypes={editMemberTypes} onMTypesChange={setEditMemberTypes}
+          rankDomains={editSelectedRankDomains} onRankDomainsChange={setEditSelectedRankDomains}
+          newDomains={editSelectedNewDomains} onNewDomainsChange={setEditSelectedNewDomains}
+          onSubmit={handleEdit} busy={saving}
+        />
+      )}
 
       {deleteId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
