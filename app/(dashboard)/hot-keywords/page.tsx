@@ -212,9 +212,9 @@ function SiteBadges({ sites, weightMap, idMap, colorMap }: {
 
 const TAB_CONFIG: { key: Tab; label: string }[] = [
   { key: 'cross',   label: '交叉词' },
-  { key: 'new',     label: '共新增词' },
   { key: 'rank',    label: '竞品涨排名' },
   { key: 'streak',  label: '连续上涨词' },
+  { key: 'new',     label: '共新增词' },
   { key: 'wordLib', label: '更新词库' },
 ]
 
