@@ -221,12 +221,14 @@ function MemberModal({
 
   function CheckBox({ checked, disabled, onClick }: { checked: boolean; disabled?: boolean; onClick?: () => void }) {
     if (disabled) return (
-      <span className="w-5 h-5 flex items-center justify-center text-gray-300 text-sm select-none" title="该站点未开启此抓取">✕</span>
+      <span className="w-5 h-5 flex items-center justify-center" title="该站点未开启此抓取">
+        <span className="w-3 h-px bg-gray-300 rounded-full block" />
+      </span>
     )
     return (
-      <span className={`w-5 h-5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${checked ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white hover:border-green-400'}`}
+      <span className={`w-5 h-5 flex-shrink-0 rounded-md flex items-center justify-center cursor-pointer transition-all duration-150 ${checked ? 'bg-green-500 border-2 border-green-500 shadow-sm shadow-green-200' : 'border-2 border-gray-200 bg-white hover:border-green-400 hover:bg-green-50'}`}
         onClick={onClick}>
-        {checked && <svg viewBox="0 0 10 8" className="w-3 h-2.5"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+        {checked && <svg viewBox="0 0 10 8" className="w-3 h-2.5"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
       </span>
     )
   }
@@ -310,36 +312,36 @@ function MemberModal({
                     <div key={cat} className="border-b border-gray-100 last:border-0">
                       <div className="grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 bg-gray-50">
                         <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleCatBoth(catSites)}>
-                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${allBothSel ? 'bg-green-500 border-green-500' : someBothSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
-                            {allBothSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                            {!allBothSel && someBothSel && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
+                          <span className={`w-4 h-4 flex-shrink-0 rounded-md flex items-center justify-center transition-all duration-150 ${allBothSel ? 'bg-green-500 border-2 border-green-500 shadow-sm shadow-green-200' : someBothSel ? 'bg-green-100 border-2 border-green-400' : 'border-2 border-gray-200 bg-white'}`}>
+                            {allBothSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            {!allBothSel && someBothSel && <span className="w-1.5 h-px bg-green-600 rounded-full block" />}
                           </span>
                           <span className="text-xs font-semibold text-gray-700">{CAT_LABELS[cat]}</span>
                           <span className="text-xs text-gray-400">({catSites.length})</span>
                         </div>
                         <div className="flex justify-center">
                           {rankable.length === 0
-                            ? <span className="text-gray-300 text-sm select-none" title="该分类无排名数据">✕</span>
-                            : <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allRankSel ? 'bg-purple-500 border-purple-500' : someRankSel ? 'bg-purple-100 border-purple-400' : 'border-gray-300 bg-white hover:border-purple-400'}`}
+                            ? <span className="w-4 h-4 flex items-center justify-center"><span className="w-2.5 h-px bg-gray-300 rounded-full block" /></span>
+                            : <span className={`w-4 h-4 flex-shrink-0 rounded-md flex items-center justify-center cursor-pointer transition-all duration-150 ${allRankSel ? 'bg-purple-500 border-2 border-purple-500 shadow-sm shadow-purple-200' : someRankSel ? 'bg-purple-100 border-2 border-purple-400' : 'border-2 border-gray-200 bg-white hover:border-purple-400 hover:bg-purple-50'}`}
                               onClick={() => {
                                 const next = new Set(rankDomains)
                                 if (allRankSel) rankable.forEach(s => next.delete(s.domain)); else rankable.forEach(s => next.add(s.domain))
                                 onRankDomainsChange(next)
                               }}>
-                              {allRankSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                              {!allRankSel && someRankSel && <span className="w-1.5 h-0.5 bg-purple-600 rounded" />}
+                              {allRankSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                              {!allRankSel && someRankSel && <span className="w-1.5 h-px bg-purple-600 rounded-full block" />}
                             </span>
                           }
                         </div>
                         <div className="flex justify-center">
-                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center cursor-pointer transition-colors ${allNewSel ? 'bg-blue-500 border-blue-500' : someNewSel ? 'bg-blue-100 border-blue-400' : 'border-gray-300 bg-white hover:border-blue-400'}`}
+                          <span className={`w-4 h-4 flex-shrink-0 rounded-md flex items-center justify-center cursor-pointer transition-all duration-150 ${allNewSel ? 'bg-blue-500 border-2 border-blue-500 shadow-sm shadow-blue-200' : someNewSel ? 'bg-blue-100 border-2 border-blue-400' : 'border-2 border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50'}`}
                             onClick={() => {
                               const next = new Set(newDomains)
                               if (allNewSel) newable.forEach(s => next.delete(s.domain)); else newable.forEach(s => next.add(s.domain))
                               onNewDomainsChange(next)
                             }}>
-                            {allNewSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                            {!allNewSel && someNewSel && <span className="w-1.5 h-0.5 bg-blue-600 rounded" />}
+                            {allNewSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            {!allNewSel && someNewSel && <span className="w-1.5 h-px bg-blue-600 rounded-full block" />}
                           </span>
                         </div>
                       </div>
@@ -351,9 +353,9 @@ function MemberModal({
                           <div key={site.id} className={`grid grid-cols-[1fr_48px_48px] items-center px-3 py-2 pl-7 transition-colors ${rowHighlight ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}>
                             <div className="flex items-center gap-2 cursor-pointer min-w-0"
                               onClick={() => toggleBoth(site.domain, site.has_rank_data, site.is_enabled)}>
-                              <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${rankSel && newSel ? 'bg-green-500 border-green-500' : rankSel || newSel ? 'bg-green-100 border-green-400' : 'border-gray-300 bg-white'}`}>
-                                {rankSel && newSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                {(rankSel || newSel) && !(rankSel && newSel) && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
+                              <span className={`w-4 h-4 flex-shrink-0 rounded-md flex items-center justify-center transition-all duration-150 ${rankSel && newSel ? 'bg-green-500 border-2 border-green-500 shadow-sm shadow-green-200' : rankSel || newSel ? 'bg-green-100 border-2 border-green-400' : 'border-2 border-gray-200 bg-white'}`}>
+                                {rankSel && newSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                {(rankSel || newSel) && !(rankSel && newSel) && <span className="w-1.5 h-px bg-green-600 rounded-full block" />}
                               </span>
                               <span className="text-sm text-gray-700 truncate">{site.domain}</span>
                               {site.name && <span className="text-xs text-gray-400 truncate">{site.name}</span>}
@@ -452,6 +454,7 @@ export default function TaskGroupsPage() {
 
   const claimingRef = useRef<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const claimedListRef = useRef<HTMLDivElement>(null)
   const detailCacheRef = useRef<Map<string, { newRows: DetailRow[]; rankRows: DetailRow[]; wordLibSiteKws: { domain: string; keywords: string[] }[] }>>(new Map())
 
   const activeGroup = groups.find(g => g.id === activeGroupId) ?? null
@@ -770,6 +773,10 @@ export default function TaskGroupsPage() {
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Scroll today's task list to bottom when a new claim is added
+  useEffect(() => {
+    if (claimedListRef.current) claimedListRef.current.scrollTop = claimedListRef.current.scrollHeight
+  }, [displayedClaims.length])
 
   useEffect(() => { setWordLibRawKwMap(null) }, [radarData])
 
@@ -884,7 +891,7 @@ export default function TaskGroupsPage() {
     for (const m of activeGroup.members) types[m.user_id] = m.member_type === 'game' ? 'game' : 'app'
     setEditMemberTypes(types); setShowEdit(true)
     const promises: Promise<unknown>[] = [loadAllSites()]
-    if (userOptions.length === 0) promises.push(fetch('/api/admin/users').then(r => r.json()).then(d => setUserOptions((d.users || []).filter((u: UserOption) => u.role !== 'super'))))
+    if (userOptions.length === 0) promises.push(fetch('/api/admin/users').then(r => r.json()).then(d => setUserOptions(d.users || [])))
     await Promise.all(promises)
   }
 
@@ -1282,7 +1289,7 @@ export default function TaskGroupsPage() {
                     onChange={e => setSelectedDate(e.target.value || today)}
                     className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-500 cursor-pointer" />
                 </div>
-                <div className="flex-1 overflow-y-auto">
+                <div ref={claimedListRef} className="flex-1 overflow-y-auto">
                   {claimedLoading ? <Spinner /> : claimedKeywords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-300 text-sm py-12">
                       <svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
