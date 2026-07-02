@@ -132,9 +132,11 @@ function KwRow({ keyword, claimed, onClaim, onView, dateCell, children }: KwRowP
       className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
       title={claimed ? '已认领' : '双击认领'}>
       {dateCell}
-      <td className="px-2 py-2">
-        <span className="text-sm text-gray-800" title={keyword}>{keyword.length > 22 ? keyword.slice(0, 22) + '…' : keyword}</span>
-        {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
+      <td className="px-2 py-2 max-w-0">
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="text-sm text-gray-800 truncate select-text cursor-text" title={keyword}>{keyword}</span>
+          {claimed && <span className="text-[10px] text-green-500 flex-shrink-0">✓</span>}
+        </div>
       </td>
       {children}
       <td className="px-2 py-2 text-right whitespace-nowrap">
@@ -208,6 +210,7 @@ export default function TaskGroupsPage() {
   const [editSelectedNewDomains, setEditSelectedNewDomains] = useState<Set<string>>(new Set())
 
   const claimingRef = useRef<Set<string>>(new Set())
+  const claimedKeywordsRef = useRef<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const activeGroup = groups.find(g => g.id === activeGroupId) ?? null
@@ -359,7 +362,9 @@ export default function TaskGroupsPage() {
   }
 
   async function claimKeyword(keyword: string, source: string, search_volume = 0) {
-    if (!activeGroupId || claimedSet.has(keyword) || claimingRef.current.has(keyword)) return
+    if (!activeGroupId || claimedKeywordsRef.current.has(keyword) || claimingRef.current.has(keyword)) return
+    // Mark immediately (synchronous) before any await — prevents all concurrent duplicates
+    claimedKeywordsRef.current.add(keyword)
     claimingRef.current.add(keyword)
     try {
       const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
@@ -371,7 +376,12 @@ export default function TaskGroupsPage() {
       if (res.ok) {
         const data = await res.json()
         setClaimedKeywords(prev => [...prev, data.keyword])
+      } else {
+        // Undo ref mark on failure so user can retry
+        claimedKeywordsRef.current.delete(keyword)
       }
+    } catch {
+      claimedKeywordsRef.current.delete(keyword)
     } finally { claimingRef.current.delete(keyword) }
   }
 
@@ -495,6 +505,9 @@ export default function TaskGroupsPage() {
   function triggerSearch() { setSearchQuery(searchInput); doSearch(searchInput, 0) }
 
   // ── Effects ─────────────────────────────────────────────────────────────────
+
+  // Keep ref in sync with state for synchronous double-claim guard
+  useEffect(() => { claimedKeywords.forEach(k => claimedKeywordsRef.current.add(k.keyword)) }, [claimedKeywords]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadGroups() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
