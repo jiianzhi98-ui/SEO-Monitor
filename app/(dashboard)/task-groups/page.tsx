@@ -451,7 +451,6 @@ export default function TaskGroupsPage() {
   const [editSelectedNewDomains, setEditSelectedNewDomains] = useState<Set<string>>(new Set())
 
   const claimingRef = useRef<Set<string>>(new Set())
-  const claimedKeywordsRef = useRef<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
   const detailCacheRef = useRef<Map<string, { newRows: DetailRow[]; rankRows: DetailRow[]; wordLibSiteKws: { domain: string; keywords: string[] }[] }>>(new Map())
 
@@ -460,7 +459,12 @@ export default function TaskGroupsPage() {
   const isViewingOwn = effectiveViewingId === currentUserId
 
   const claimedSet = useMemo(() => new Set(claimedKeywords.map(k => k.keyword)), [claimedKeywords])
-  const pendingCount = claimedKeywords.filter(k => k.status === 'pending').length
+  // Dedup by keyword — DB race condition can create duplicates; show only one per keyword
+  const displayedClaims = useMemo(() => {
+    const seen = new Set<string>()
+    return claimedKeywords.filter(k => !seen.has(k.keyword) && !!seen.add(k.keyword))
+  }, [claimedKeywords])
+  const pendingCount = displayedClaims.filter(k => k.status === 'pending').length
 
   const groupRankDomains = useMemo(() => new Set(activeGroup?.rank_domains || []), [activeGroup])
   const groupNewDomains = useMemo(() => new Set(activeGroup?.new_domains || []), [activeGroup])
@@ -604,9 +608,8 @@ export default function TaskGroupsPage() {
   }
 
   async function claimKeyword(keyword: string, source: string, search_volume = 0) {
-    if (!activeGroupId || claimedKeywordsRef.current.has(keyword) || claimingRef.current.has(keyword)) return
-    // Mark immediately (synchronous) before any await — prevents all concurrent duplicates
-    claimedKeywordsRef.current.add(keyword)
+    // claimedSet covers "already in state"; claimingRef covers "in-flight request"
+    if (!activeGroupId || claimedSet.has(keyword) || claimingRef.current.has(keyword)) return
     claimingRef.current.add(keyword)
     try {
       const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
@@ -622,12 +625,9 @@ export default function TaskGroupsPage() {
       if (res.ok) {
         const data = await res.json()
         setClaimedKeywords(prev => [...prev, data.keyword])
-      } else {
-        // Undo ref mark on failure so user can retry
-        claimedKeywordsRef.current.delete(keyword)
       }
     } catch {
-      claimedKeywordsRef.current.delete(keyword)
+      // network error — user can retry
     } finally { claimingRef.current.delete(keyword) }
   }
 
@@ -765,11 +765,6 @@ export default function TaskGroupsPage() {
   function triggerSearch() { setSearchQuery(searchInput); doSearch(searchInput, 0) }
 
   // ── Effects ─────────────────────────────────────────────────────────────────
-
-  // Rebuild ref from state each time — ensures dismissed keywords become claimable again
-  useEffect(() => {
-    claimedKeywordsRef.current = new Set(claimedKeywords.map(k => k.keyword))
-  }, [claimedKeywords])
 
   useEffect(() => { loadGroups() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1297,7 +1292,7 @@ export default function TaskGroupsPage() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-50">
-                      {claimedKeywords.map(k => (
+                      {displayedClaims.map(k => (
                         <div key={k.id} className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
                           {isViewingOwn && k.status === 'pending' ? (
                             <button onClick={() => dismissClaimed(k.id)} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
