@@ -400,7 +400,7 @@ export default function TaskGroupsPage() {
       const siteIds = targetDomains.map(d => domainToId.get(d)).filter((id): id is string => !!id)
       try {
         if (siteIds.length > 0) {
-          const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+          const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: raw } = await (supabase.from('raw_keywords') as any)
             .select('site_id, keyword')

@@ -304,7 +304,7 @@ export default function HotRadarPage() {
       const siteIds = targetDomains.map(d => domainToId.get(d)).filter((id): id is string => !!id)
       try {
         if (siteIds.length > 0) {
-          const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+          const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: raw } = await (db.from('raw_keywords') as any)
             .select('site_id, keyword')
@@ -909,7 +909,7 @@ export default function HotRadarPage() {
               <div>
                 <h3 className="font-semibold text-gray-900">{detailKw}</h3>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {activeTab === 'wordLib' ? '近7天长尾词分布' : '近30天出现记录'}
+                  {activeTab === 'wordLib' ? '近30天长尾词分布' : '近30天出现记录'}
                 </p>
               </div>
               <button onClick={() => setDetailKw(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
