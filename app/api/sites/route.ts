@@ -1,7 +1,19 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
+
+async function getCallerRole(): Promise<string | null> {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const service = createServiceClient() as any
+  const { data } = await service.from('user_profiles').select('role').eq('id', user.id).single()
+  return data?.role ?? 'normal'
+}
 
 export async function GET() {
+  const role = await getCallerRole()
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const supabase = createServiceClient()
     const { data, error } = await supabase
@@ -16,12 +28,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const role = await getCallerRole()
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (role === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   try {
     const body = await request.json()
     const { id, created_at, ...insertData } = body
     void id; void created_at
 
     const supabase = createServiceClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from('sites') as any).insert(insertData)
       .select()
       .single()
@@ -33,6 +49,9 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const role = await getCallerRole()
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (role === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   try {
     const body = await request.json()
     const { id, created_at, ...updateData } = body
@@ -40,6 +59,7 @@ export async function PUT(request: Request) {
     void created_at
 
     const supabase = createServiceClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from('sites') as any).update(updateData).eq('id', id).select().single()
     if (error) throw error
     return NextResponse.json({ site: data })
@@ -49,6 +69,9 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const role = await getCallerRole()
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (role === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   try {
     const { id } = await request.json()
     if (!id) return NextResponse.json({ error: '缺少 id' }, { status: 400 })

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { activityStart, activityEnd } from '@/lib/activity-log'
 
 async function log(supabase: ReturnType<typeof createServiceClient>, step: string, ok: number, summary: string, t0: number) {
@@ -8,6 +8,10 @@ async function log(supabase: ReturnType<typeof createServiceClient>, step: strin
 }
 
 export async function GET(req: Request) {
+  const authCheck = createClient()
+  const { data: { user } } = await authCheck.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q')?.trim() || ''
   const exportParam = searchParams.get('export')

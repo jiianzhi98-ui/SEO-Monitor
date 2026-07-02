@@ -11,6 +11,13 @@ async function getCallerId(): Promise<string | null> {
   return user?.id ?? null
 }
 
+async function getCallerRole(callerId: string): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const service = createServiceClient() as any
+  const { data } = await service.from('user_profiles').select('role').eq('id', callerId).single()
+  return data?.role ?? 'normal'
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -20,8 +27,16 @@ export async function GET(
 
   const { id: groupId } = await params
   const { searchParams } = new URL(req.url)
-  const userId = searchParams.get('userId') || callerId
+  const requestedUserId = searchParams.get('userId')
   const date = searchParams.get('date') || getMY()
+
+  // Only admin/super can query other users' records
+  let userId = callerId
+  if (requestedUserId && requestedUserId !== callerId) {
+    const role = await getCallerRole(callerId)
+    if (role === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    userId = requestedUserId
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any

@@ -431,7 +431,7 @@ export default function TaskGroupsPage() {
       const siteIds = targetDomains.map(d => domainToId.get(d)).filter((id): id is string => !!id)
       try {
         if (siteIds.length > 0) {
-          const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+          const since = getMYDate(-30)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: raw } = await (supabase.from('raw_keywords') as any)
             .select('site_id, keyword')
@@ -457,7 +457,7 @@ export default function TaskGroupsPage() {
       return
     }
 
-    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    const since = getMYDate(-30)
     const needsNew = ['交叉词', '共新增词'].includes(source)
     const needsRank = ['交叉词', '竞品涨排名', '连续上涨词'].includes(source)
 
@@ -506,8 +506,10 @@ export default function TaskGroupsPage() {
 
   // ── Effects ─────────────────────────────────────────────────────────────────
 
-  // Keep ref in sync with state for synchronous double-claim guard
-  useEffect(() => { claimedKeywords.forEach(k => claimedKeywordsRef.current.add(k.keyword)) }, [claimedKeywords]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Rebuild ref from state each time — ensures dismissed keywords become claimable again
+  useEffect(() => {
+    claimedKeywordsRef.current = new Set(claimedKeywords.map(k => k.keyword))
+  }, [claimedKeywords])
 
   useEffect(() => { loadGroups() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -539,7 +541,7 @@ export default function TaskGroupsPage() {
           }
         }
         if (!allSiteIds.size) { setWordLibRawKwMap(new Map()); return }
-        const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+        const since = getMYDate(-30)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: raw } = await (supabase.from('raw_keywords') as any)
           .select('site_id, keyword')
@@ -1227,7 +1229,7 @@ export default function TaskGroupsPage() {
         <div className="card overflow-hidden">
           <div className="flex items-center gap-1.5 px-4 pt-3 pb-0 border-b border-gray-100 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
             {groups.map(g => (
-              <button key={g.id} onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null) }}
+              <button key={g.id} onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null); setTabPage({ search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 }) }}
                 className={`px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap border-b-2 transition-colors ${activeGroupId === g.id ? 'border-green-500 text-green-700 bg-green-50/60' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
                 {g.name}
               </button>

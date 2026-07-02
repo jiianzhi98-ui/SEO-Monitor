@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -13,6 +13,10 @@ interface RankWordRow  { keyword: string; site_count: number; max_volume: number
 interface StreakWordRow { keyword: string; domain: string; streak: number; volume: number; first_seen: string; last_seen: string }
 
 export async function GET() {
+  const authCheck = createClient()
+  const { data: { user } } = await authCheck.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const supabase = createServiceClient()
   const since = getMY(-30)
 
