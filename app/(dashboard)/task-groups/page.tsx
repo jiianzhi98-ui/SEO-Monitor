@@ -135,7 +135,7 @@ function KwRow({ keyword, claimed, onClaim, onView, dateCell, children }: KwRowP
         {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
       </td>
       {children}
-      <td className="px-2 py-2 w-12 text-right">
+      <td className="px-2 py-2 text-right whitespace-nowrap">
         <button onClick={e => { e.stopPropagation(); onView() }}
           className="text-xs text-blue-400 hover:text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-300 transition-colors">查看</button>
       </td>
@@ -631,7 +631,7 @@ export default function TaskGroupsPage() {
                           <span className="text-sm text-gray-800">{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
                           {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
                         </td>
-                        <td className="px-2 py-2 text-right text-xs text-gray-500">{fmtVol(r.volume)}</td>
+                        <td className="px-2 py-2 text-right text-xs text-gray-500 whitespace-nowrap">{r.volume > 0 ? r.volume.toLocaleString() : '—'}</td>
                       </tr>
                     )
                   })}
@@ -663,9 +663,9 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-28">命中维度</th>
-              <th className="px-2 py-2 text-right font-medium w-20">搜索量</th>
-              <th className="w-12" />
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">命中维度</th>
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">搜索量</th>
+              <th className="whitespace-nowrap" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -675,13 +675,13 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '交叉词', w.volume)}
                   onView={() => openDetail(w.keyword, '交叉词')}>
-                  <td className="px-2 py-2 w-28">
+                  <td className="px-2 py-2 whitespace-nowrap">
                     <div className="flex gap-1 justify-center">
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-50 text-blue-600">新增</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-600">涨排</span>
                     </div>
                   </td>
-                  <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{fmtVol(w.volume)}</td>
                 </KwRow>
               ))}
             </tbody>
@@ -700,9 +700,9 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">涨排次数</th>
-              <th className="px-2 py-2 text-right font-medium w-20">搜索量</th>
-              <th className="w-12" />
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">涨排次数</th>
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">搜索量</th>
+              <th className="whitespace-nowrap" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -712,8 +712,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '竞品涨排名', w.volume)}
                   onView={() => openDetail(w.keyword, '竞品涨排名')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.rankDays}次</td>
-                  <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.rankDays}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{fmtVol(w.volume)}</td>
                 </KwRow>
               ))}
             </tbody>
@@ -732,9 +732,9 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">上涨天数</th>
-              <th className="px-2 py-2 text-right font-medium w-20">搜索量</th>
-              <th className="w-12" />
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">上涨天数</th>
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">搜索量</th>
+              <th className="whitespace-nowrap" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -744,8 +744,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '连续上涨词', w.volume)}
                   onView={() => openDetail(w.keyword, '连续上涨词')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.streak}天</td>
-                  <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.streak}天</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{fmtVol(w.volume)}</td>
                 </KwRow>
               ))}
             </tbody>
@@ -764,9 +764,9 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
-              <th className="px-2 py-2 text-center font-medium w-16">站点数</th>
-              <th className="w-12" />
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">新增次数</th>
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">站点数</th>
+              <th className="whitespace-nowrap" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -776,8 +776,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '共新增词', 0)}
                   onView={() => openDetail(w.keyword, '共新增词')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.count}次</td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-16">{w.siteCount}站</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.count}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.siteCount}站</td>
                 </KwRow>
               ))}
             </tbody>
@@ -796,9 +796,9 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
-              <th className="px-2 py-2 text-center font-medium w-16">站点数</th>
-              <th className="w-12" />
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">新增次数</th>
+              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">站点数</th>
+              <th className="whitespace-nowrap" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -808,8 +808,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
                   onView={() => openDetail(w.keyword, '更新词库')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.count}次</td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 w-16">{w.siteCount}站</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.count}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.siteCount}站</td>
                 </KwRow>
               ))}
             </tbody>
