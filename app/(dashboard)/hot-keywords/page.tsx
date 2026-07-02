@@ -239,6 +239,8 @@ export default function HotRadarPage() {
   const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
+  const [wordLibRawKwMap, setWordLibRawKwMap] = useState<Map<string, Set<string>> | null>(null)
+  const [wordLibRawLoading, setWordLibRawLoading] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
 
   const today     = useMemo(() => getMYDate(),    [])
@@ -373,6 +375,48 @@ export default function HotRadarPage() {
     fetchWeights()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { setWordLibRawKwMap(null) }, [data])
+
+  useEffect(() => {
+    if (activeTab !== 'wordLib' || wordLibRawKwMap !== null || wordLibRawLoading || !siteIdMap.size || !data) return
+    setWordLibRawLoading(true)
+    const db = getBrowserClient()
+    const domainToId = new Map(Array.from(siteIdMap.entries()).map(([id, d]) => [d, id]))
+    const allSiteIds = new Set<string>()
+    for (const w of data.newWords) {
+      if (w.last_date === today) continue
+      for (const domain of w.sites) {
+        const id = domainToId.get(domain)
+        if (id) allSiteIds.add(id)
+      }
+    }
+    if (!allSiteIds.size) {
+      setWordLibRawKwMap(new Map())
+      setWordLibRawLoading(false)
+      return
+    }
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(db.from('raw_keywords') as any)
+      .select('site_id, keyword')
+      .in('site_id', Array.from(allSiteIds))
+      .gte('content_date', since)
+      .limit(100000)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data: raw }: { data: Array<{site_id: string; keyword: string}> | null }) => {
+        const domainKwMap = new Map<string, Set<string>>()
+        for (const r of (raw || [])) {
+          const domain = siteIdMap.get(r.site_id)
+          if (!domain) continue
+          if (!domainKwMap.has(domain)) domainKwMap.set(domain, new Set())
+          domainKwMap.get(domain)!.add(r.keyword)
+        }
+        setWordLibRawKwMap(domainKwMap)
+      })
+      .catch(() => { setWordLibRawKwMap(new Map()) })
+      .finally(() => { setWordLibRawLoading(false) })
+  }, [activeTab, siteIdMap, data, today]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
@@ -442,29 +486,29 @@ export default function HotRadarPage() {
   }, [filtered, minStreak, yesterday])
 
   const wordLibWords = useMemo((): (WordEntry & { longTailCount: number })[] => {
-    if (!data) return []
-    const siteKwMap = new Map<string, Set<string>>()
-    for (const w of data.newWords) {
-      for (const site of w.sites) {
-        if (!siteKwMap.has(site)) siteKwMap.set(site, new Set())
-        siteKwMap.get(site)!.add(w.keyword)
-      }
-    }
+    if (!data || !wordLibRawKwMap) return []
     const words = data.newWords.filter(w =>
       w.last_date !== today &&
       (!dateFrom || !w.last_date || w.last_date >= dateFrom) &&
       w.siteCount >= minSites
     )
-    const withCount = words.map(w => {
-      const related = new Set<string>()
-      for (const site of w.sites) {
-        const siteSet = siteKwMap.get(site)
-        if (siteSet) siteSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
-      }
-      return { ...w, longTailCount: related.size || 1 }
-    })
-    return sortByDate(withCount, yesterday, (a, b) => b.longTailCount - a.longTailCount || b.siteCount - a.siteCount)
-  }, [data, today, yesterday, dateFrom, minSites])
+    return words
+      .map(w => {
+        const related = new Set<string>()
+        for (const domain of w.sites) {
+          const kwSet = wordLibRawKwMap.get(domain)
+          if (kwSet) kwSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
+        }
+        return { ...w, longTailCount: related.size }
+      })
+      .filter(w => w.longTailCount > 1)
+      .sort((a, b) => {
+        if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
+        const bp = badgePriority(a.first_date, a.last_date, yesterday) - badgePriority(b.first_date, b.last_date, yesterday)
+        if (bp !== 0) return bp
+        return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
+      })
+  }, [data, today, yesterday, dateFrom, minSites, wordLibRawKwMap])
 
   const baseList = !filtered ? [] :
     activeTab === 'cross'   ? filtered.crossWords  :
@@ -844,7 +888,16 @@ export default function HotRadarPage() {
               )}
 
               {/* 更新词库：6列 */}
-              {activeTab === 'wordLib' && (
+              {activeTab === 'wordLib' && wordLibRawLoading && (
+                <div className="flex items-center justify-center py-16 text-gray-400 gap-3">
+                  <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  加载中...
+                </div>
+              )}
+              {activeTab === 'wordLib' && !wordLibRawLoading && (
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-24" />
