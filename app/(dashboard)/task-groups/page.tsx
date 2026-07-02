@@ -7,8 +7,9 @@ import { getBrowserClient } from '@/lib/supabase-browser'
 // ── Interfaces ─────────────────────────────────────────────────────────────────
 
 interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
-interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[] }
+interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[]; site_domains: string[] }
 interface UserOption { id: string; email: string; username: string | null; role: string }
+interface SiteInfo { id: string; domain: string; name: string; category: 'large' | 'medium' | 'small' }
 
 interface NewWord { keyword: string; count: number; siteCount: number; sites: string[]; last_date: string; first_date: string }
 interface WordLibEntry extends NewWord { longTailCount: number }
@@ -200,6 +201,9 @@ export default function TaskGroupsPage() {
   const [editMemberTypes, setEditMemberTypes] = useState<Record<string, 'app' | 'game'>>({})
   const [editSelectedUsers, setEditSelectedUsers] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  const [allSites, setAllSites] = useState<SiteInfo[]>([])
+  const [selectedSiteDomains, setSelectedSiteDomains] = useState<Set<string>>(new Set())
+  const [editSelectedSiteDomains, setEditSelectedSiteDomains] = useState<Set<string>>(new Set())
 
   const claimingRef = useRef<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -210,6 +214,8 @@ export default function TaskGroupsPage() {
 
   const claimedSet = useMemo(() => new Set(claimedKeywords.map(k => k.keyword)), [claimedKeywords])
   const pendingCount = claimedKeywords.filter(k => k.status === 'pending').length
+
+  const groupSiteDomains = useMemo(() => new Set(activeGroup?.site_domains || []), [activeGroup])
 
   // ── Derived radar data ──────────────────────────────────────────────────────
 
@@ -226,13 +232,17 @@ export default function TaskGroupsPage() {
       const first_date = [nwe.first_date, rwe.first_date].filter(Boolean).sort()[0] ?? ''
       return { keyword, volume: rwe.volume ?? 0, last_date, first_date, newSites: nwe.sites, rankSites: rwe.sites }
     }).filter((w): w is CrossWord => w !== null)
-    return sortByDate(cw, yesterday, (a, b) => (b.volume ?? 0) - (a.volume ?? 0))
-  }, [radarData, yesterday])
+    const sorted = sortByDate(cw, yesterday, (a, b) => (b.volume ?? 0) - (a.volume ?? 0))
+    if (!groupSiteDomains.size) return sorted
+    return sorted.filter(w => w.newSites.some(s => groupSiteDomains.has(s)) || w.rankSites.some(s => groupSiteDomains.has(s)))
+  }, [radarData, yesterday, groupSiteDomains])
 
   const rankWordsSorted = useMemo(() => {
     if (!radarData) return []
-    return sortByDate(radarData.rankWords, yesterday, (a, b) => b.volume - a.volume || b.rankDays - a.rankDays)
-  }, [radarData, yesterday])
+    const sorted = sortByDate(radarData.rankWords, yesterday, (a, b) => b.volume - a.volume || b.rankDays - a.rankDays)
+    if (!groupSiteDomains.size) return sorted
+    return sorted.filter(w => w.sites.some(s => groupSiteDomains.has(s)))
+  }, [radarData, yesterday, groupSiteDomains])
 
   // Group streak words by keyword (same as hot-radar): streak>=2, single-domain only
   const streakWords = useMemo(() => {
@@ -251,7 +261,8 @@ export default function TaskGroupsPage() {
         if (!g.first_date || w.first_date < g.first_date) g.first_date = w.first_date
       }
     }
-    const single = Array.from(grouped.values()).filter(g => g.domains.length === 1)
+    let single = Array.from(grouped.values()).filter(g => g.domains.length === 1)
+    if (groupSiteDomains.size) single = single.filter(g => g.domains.some(d => groupSiteDomains.has(d)))
     return [...single].sort((a, b) => {
       if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
       const pa = getStreakBadge(a.streak, a.last_date, yesterday) === 'new' ? 0 : getStreakBadge(a.streak, a.last_date, yesterday) === 'updated' ? 1 : 2
@@ -259,16 +270,19 @@ export default function TaskGroupsPage() {
       if (pa !== pb) return pa - pb
       return b.streak - a.streak || b.volume - a.volume
     })
-  }, [radarData, yesterday])
+  }, [radarData, yesterday, groupSiteDomains])
 
   const allNewWords = useMemo(() => {
     if (!radarData) return []
-    return sortByDate(radarData.newWords, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount)
-  }, [radarData, yesterday])
+    const sorted = sortByDate(radarData.newWords, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount)
+    if (!groupSiteDomains.size) return sorted
+    return sorted.filter(w => w.sites.some(s => groupSiteDomains.has(s)))
+  }, [radarData, yesterday, groupSiteDomains])
 
   const wordLibWords = useMemo((): WordLibEntry[] => {
     if (!radarData || !wordLibRawKwMap) return []
-    const words = radarData.newWords.filter(w => w.last_date !== today)
+    let words = radarData.newWords.filter(w => w.last_date !== today)
+    if (groupSiteDomains.size) words = words.filter(w => w.sites.some(s => groupSiteDomains.has(s)))
     return words
       .map(w => {
         const related = new Set<string>()
@@ -285,7 +299,7 @@ export default function TaskGroupsPage() {
         if (bp !== 0) return bp
         return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
       })
-  }, [radarData, today, yesterday, wordLibRawKwMap])
+  }, [radarData, today, yesterday, wordLibRawKwMap, groupSiteDomains])
 
   // ── Detail modal data ───────────────────────────────────────────────────────
 
@@ -554,10 +568,20 @@ export default function TaskGroupsPage() {
 
   // ── Group management ────────────────────────────────────────────────────────
 
+  async function loadAllSites() {
+    if (allSites.length > 0) return
+    const supabase = getBrowserClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase.from('sites') as any).select('id, domain, name, category').eq('is_enabled', true)
+    const CAT_ORDER: Record<string, number> = { large: 0, medium: 1, small: 2 }
+    setAllSites(((data || []) as SiteInfo[]).sort((a, b) => (CAT_ORDER[a.category] ?? 9) - (CAT_ORDER[b.category] ?? 9) || a.domain.localeCompare(b.domain)))
+  }
+
   async function openCreateModal() {
     setShowCreate(true); setCreateName(''); setSelectedUsers(new Set()); setMemberTypes({})
-    const res = await fetch('/api/admin/users')
-    const data = await res.json()
+    setSelectedSiteDomains(new Set())
+    const [usersRes] = await Promise.all([fetch('/api/admin/users'), loadAllSites()])
+    const data = await usersRes.json()
     setUserOptions((data.users || []).filter((u: UserOption) => u.role !== 'super'))
   }
 
@@ -569,7 +593,7 @@ export default function TaskGroupsPage() {
         .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: memberTypes[u.id] || 'app' }))
       const res = await fetch('/api/task-groups', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName.trim() || members.map(m => m.username).join(' · '), type: 'both', members }),
+        body: JSON.stringify({ name: createName.trim() || members.map(m => m.username).join(' · '), type: 'both', members, site_domains: Array.from(selectedSiteDomains) }),
       })
       if (res.ok) { setShowCreate(false); await loadGroups() }
     } finally { setCreating(false) }
@@ -579,14 +603,13 @@ export default function TaskGroupsPage() {
     if (!activeGroup) return
     setEditName(activeGroup.name)
     setEditSelectedUsers(new Set(activeGroup.members.map(m => m.user_id)))
+    setEditSelectedSiteDomains(new Set(activeGroup.site_domains || []))
     const types: Record<string, 'app' | 'game'> = {}
     for (const m of activeGroup.members) types[m.user_id] = m.member_type === 'game' ? 'game' : 'app'
     setEditMemberTypes(types); setShowEdit(true)
-    if (userOptions.length === 0) {
-      const res = await fetch('/api/admin/users')
-      const data = await res.json()
-      setUserOptions((data.users || []).filter((u: UserOption) => u.role !== 'super'))
-    }
+    const promises: Promise<unknown>[] = [loadAllSites()]
+    if (userOptions.length === 0) promises.push(fetch('/api/admin/users').then(r => r.json()).then(d => setUserOptions((d.users || []).filter((u: UserOption) => u.role !== 'super'))))
+    await Promise.all(promises)
   }
 
   async function handleEdit() {
@@ -597,7 +620,7 @@ export default function TaskGroupsPage() {
         .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: editMemberTypes[u.id] || 'app' }))
       const res = await fetch(`/api/task-groups/${activeGroup.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim() || members.map(m => m.username).join(' · '), members }),
+        body: JSON.stringify({ name: editName.trim() || members.map(m => m.username).join(' · '), members, site_domains: Array.from(editSelectedSiteDomains) }),
       })
       if (res.ok) { setShowEdit(false); await loadGroups() }
     } finally { setSaving(false) }
@@ -625,9 +648,26 @@ export default function TaskGroupsPage() {
     const setName = isCreate ? setCreateName : setEditName
     const onSubmit = isCreate ? handleCreate : handleEdit
     const busy = isCreate ? creating : saving
+    const curSiteDomains = isCreate ? selectedSiteDomains : editSelectedSiteDomains
+    const setCurSiteDomains = isCreate ? setSelectedSiteDomains : setEditSelectedSiteDomains
+    const CAT_LABELS: Record<string, string> = { large: '大站', medium: '中站', small: '小站' }
+    const cats = ['large', 'medium', 'small'] as const
+
+    function toggleSite(domain: string) {
+      const next = new Set(curSiteDomains)
+      if (next.has(domain)) next.delete(domain); else next.add(domain)
+      setCurSiteDomains(next)
+    }
+    function toggleCategory(cat: string, catSites: SiteInfo[]) {
+      const next = new Set(curSiteDomains)
+      const allSel = catSites.every(s => next.has(s.domain))
+      if (allSel) catSites.forEach(s => next.delete(s.domain)); else catSites.forEach(s => next.add(s.domain))
+      setCurSiteDomains(next)
+    }
+
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
             <h3 className="font-semibold text-gray-900">{isCreate ? '新增分组' : '编辑分组'}</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -643,7 +683,7 @@ export default function TaskGroupsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 组员{selUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {selUsers.size} 人）</span>}
               </label>
-              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
                 {userOptions.length === 0 ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div> : userOptions.map(u => {
                   const isSelected = selUsers.has(u.id)
                   const mType = mTypes[u.id] || 'app'
@@ -674,6 +714,48 @@ export default function TaskGroupsPage() {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                站点过滤
+                <span className="ml-1.5 font-normal text-xs text-gray-400">不选则显示全部</span>
+                {curSiteDomains.size > 0 && <span className="ml-1.5 text-green-600">（已选 {curSiteDomains.size} 个站点）</span>}
+              </label>
+              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
+                {allSites.length === 0
+                  ? <div className="px-3 py-3 text-sm text-gray-400">加载中...</div>
+                  : cats.map(cat => {
+                    const catSites = allSites.filter(s => s.category === cat)
+                    if (catSites.length === 0) return null
+                    const allSel = catSites.every(s => curSiteDomains.has(s.domain))
+                    const someSel = catSites.some(s => curSiteDomains.has(s.domain))
+                    return (
+                      <div key={cat} className="border-b border-gray-100 last:border-0">
+                        <div
+                          className="flex items-center gap-2.5 px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => toggleCategory(cat, catSites)}>
+                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${allSel ? 'bg-green-500 border-green-500' : someSel ? 'bg-green-200 border-green-400' : 'border-gray-300 bg-white'}`}>
+                            {allSel && <svg viewBox="0 0 10 8" className="w-2.5 h-2 fill-white"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            {!allSel && someSel && <span className="w-1.5 h-0.5 bg-green-600 rounded" />}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-700">{CAT_LABELS[cat]}</span>
+                          <span className="text-xs text-gray-400">({catSites.length} 个站点)</span>
+                        </div>
+                        {catSites.map(site => (
+                          <div key={site.id}
+                            className={`flex items-center gap-2.5 px-3 py-2 pl-8 cursor-pointer transition-colors ${curSiteDomains.has(site.domain) ? 'bg-green-50/50' : 'hover:bg-gray-50'}`}
+                            onClick={() => toggleSite(site.domain)}>
+                            <input type="checkbox" checked={curSiteDomains.has(site.domain)} onChange={() => {}}
+                              className="rounded border-gray-300 text-green-600 focus:ring-green-500 flex-shrink-0 pointer-events-none" />
+                            <span className="text-sm text-gray-700 truncate">{site.domain}</span>
+                            {site.name && <span className="text-xs text-gray-400 truncate flex-shrink-0">{site.name}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })
+                }
               </div>
             </div>
           </div>
@@ -1092,13 +1174,18 @@ export default function TaskGroupsPage() {
 
               {/* Right panel */}
               <div className="flex-1 flex flex-col min-w-0">
-                <div className="flex border-b border-gray-100 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+                <div className="flex items-center border-b border-gray-100 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
                   {RIGHT_TABS.map(([tab, label]) => (
                     <button key={tab} onClick={() => setRightTab(tab)}
                       className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${rightTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
                       {label}
                     </button>
                   ))}
+                  {groupSiteDomains.size > 0 && (
+                    <span className="ml-auto mr-3 flex-shrink-0 text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 whitespace-nowrap">
+                      {groupSiteDomains.size} 站点过滤中
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
                   {renderRightContent()}

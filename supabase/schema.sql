@@ -145,10 +145,11 @@ $$;
 
 -- 分组任务 tables
 CREATE TABLE IF NOT EXISTS task_groups (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name       TEXT NOT NULL,
-  type       TEXT NOT NULL DEFAULT 'both' CHECK (type IN ('game', 'app', 'both')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name         TEXT NOT NULL,
+  type         TEXT NOT NULL DEFAULT 'both' CHECK (type IN ('game', 'app', 'both')),
+  site_domains TEXT[] NOT NULL DEFAULT '{}',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS task_group_members (
