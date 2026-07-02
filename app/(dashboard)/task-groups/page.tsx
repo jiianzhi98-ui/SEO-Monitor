@@ -658,14 +658,13 @@ export default function TaskGroupsPage() {
       const slice = crossWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="text-xs text-gray-400 mb-3">共 {crossWords.length} 条，双击认领</div>
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">命中维度</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">搜索量</th>
-              <th className="whitespace-nowrap" />
+              <th className="px-2 py-2 text-center font-medium w-24">命中维度</th>
+              <th className="px-2 py-2 text-center font-medium w-24">搜索量</th>
+              <th className="w-14" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -675,13 +674,13 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '交叉词', w.volume)}
                   onView={() => openDetail(w.keyword, '交叉词')}>
-                  <td className="px-2 py-2 whitespace-nowrap">
+                  <td className="px-2 py-2">
                     <div className="flex gap-1 justify-center">
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-50 text-blue-600">新增</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-600">涨排</span>
                     </div>
                   </td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{fmtVol(w.volume)}</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.volume > 0 ? w.volume.toLocaleString() : '—'}</td>
                 </KwRow>
               ))}
             </tbody>
@@ -695,14 +694,13 @@ export default function TaskGroupsPage() {
       const slice = rankWordsSorted.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="text-xs text-gray-400 mb-3">共 {rankWordsSorted.length} 条，双击认领</div>
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">涨排次数</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">搜索量</th>
-              <th className="whitespace-nowrap" />
+              <th className="px-2 py-2 text-center font-medium w-16">涨排次数</th>
+              <th className="px-2 py-2 text-center font-medium w-24">搜索量</th>
+              <th className="w-14" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -712,8 +710,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '竞品涨排名', w.volume)}
                   onView={() => openDetail(w.keyword, '竞品涨排名')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.rankDays}次</td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{fmtVol(w.volume)}</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.rankDays}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.volume > 0 ? w.volume.toLocaleString() : '—'}</td>
                 </KwRow>
               ))}
             </tbody>
@@ -727,14 +725,13 @@ export default function TaskGroupsPage() {
       const slice = streakWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="text-xs text-gray-400 mb-3">共 {streakWords.length} 条，双击认领</div>
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">上涨天数</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">搜索量</th>
-              <th className="whitespace-nowrap" />
+              <th className="px-2 py-2 text-center font-medium w-16">上涨天数</th>
+              <th className="px-2 py-2 text-center font-medium w-24">搜索量</th>
+              <th className="w-14" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -744,8 +741,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '连续上涨词', w.volume)}
                   onView={() => openDetail(w.keyword, '连续上涨词')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.streak}天</td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{fmtVol(w.volume)}</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.streak}天</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.volume > 0 ? w.volume.toLocaleString() : '—'}</td>
                 </KwRow>
               ))}
             </tbody>
@@ -759,14 +756,13 @@ export default function TaskGroupsPage() {
       const slice = allNewWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="text-xs text-gray-400 mb-3">共 {allNewWords.length} 条，双击认领</div>
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">新增次数</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">站点数</th>
-              <th className="whitespace-nowrap" />
+              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
+              <th className="px-2 py-2 text-center font-medium w-14">站点数</th>
+              <th className="w-14" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -776,8 +772,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '共新增词', 0)}
                   onView={() => openDetail(w.keyword, '共新增词')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.count}次</td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.siteCount}站</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.count}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.siteCount}站</td>
                 </KwRow>
               ))}
             </tbody>
@@ -791,14 +787,13 @@ export default function TaskGroupsPage() {
       const slice = wordLibWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="text-xs text-gray-400 mb-3">共 {wordLibWords.length} 条，双击认领</div>
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">新增次数</th>
-              <th className="px-2 py-2 text-center font-medium whitespace-nowrap">站点数</th>
-              <th className="whitespace-nowrap" />
+              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
+              <th className="px-2 py-2 text-center font-medium w-14">站点数</th>
+              <th className="w-14" />
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
@@ -808,8 +803,8 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
                   onView={() => openDetail(w.keyword, '更新词库')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.count}次</td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500 whitespace-nowrap">{w.siteCount}站</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.count}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.siteCount}站</td>
                 </KwRow>
               ))}
             </tbody>
