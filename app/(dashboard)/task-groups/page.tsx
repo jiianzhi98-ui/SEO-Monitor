@@ -4,12 +4,15 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { useUser } from '@/lib/user-context'
 import { getBrowserClient } from '@/lib/supabase-browser'
 
+// ── Interfaces ─────────────────────────────────────────────────────────────────
+
 interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
 interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[] }
 interface UserOption { id: string; email: string; username: string | null; role: string }
+
 interface NewWord { keyword: string; count: number; siteCount: number; sites: string[]; last_date: string; first_date: string }
 interface RankWord { keyword: string; siteCount: number; volume: number; sites: string[]; last_date: string; first_date: string; rankDays: number }
-interface StreakWord { keyword: string; streak: number; domain: string; volume: number; first_date: string; last_date: string } // raw API shape
+interface StreakWord { keyword: string; streak: number; domain: string; volume: number; first_date: string; last_date: string }
 interface CrossWord { keyword: string; volume: number; last_date: string; first_date: string; newSites: string[]; rankSites: string[] }
 
 interface ClaimedKeyword {
@@ -18,11 +21,55 @@ interface ClaimedKeyword {
 }
 
 type RightTab = 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
+type Badge = 'new' | 'updated' | null
+interface DetailRow { date: string; domain: string }
 
 const PAGE_SIZE = 20
 
-function getMYDate() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10) }
-function fmtVol(v: number) { if (!v || v <= 0) return '—'; if (v >= 10000) return (v / 10000).toFixed(1) + 'w'; return v.toLocaleString() }
+// ── Pure helpers ───────────────────────────────────────────────────────────────
+
+function getMYDate(offsetDays = 0) {
+  return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
+}
+function fmtVol(v: number) {
+  if (!v || v <= 0) return '—'
+  if (v >= 10000) return (v / 10000).toFixed(1) + 'w'
+  return v.toLocaleString()
+}
+function fmtDate(d: string) { return d ? d.slice(5).replace('-', '/') : '—' }
+
+function getBadge(first_date: string, last_date: string, yesterday: string): Badge {
+  if (!last_date || last_date < yesterday) return null
+  if (first_date >= yesterday) return 'new'
+  return 'updated'
+}
+function getStreakBadge(streak: number, last_date: string, yesterday: string): Badge {
+  if (!last_date || last_date < yesterday) return null
+  return streak <= 2 ? 'new' : 'updated'
+}
+function badgePriority(first_date: string, last_date: string, yesterday: string): number {
+  if (!last_date || last_date < yesterday) return 2
+  if (first_date >= yesterday) return 0
+  return 1
+}
+function sortByDate<T extends { last_date: string; first_date: string }>(
+  list: T[], yesterday: string, secondary: (a: T, b: T) => number
+): T[] {
+  return [...list].sort((a, b) => {
+    if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
+    const bp = badgePriority(a.first_date, a.last_date, yesterday) - badgePriority(b.first_date, b.last_date, yesterday)
+    if (bp !== 0) return bp
+    return secondary(a, b)
+  })
+}
+function dedupDetailRows(rows: DetailRow[]): DetailRow[] {
+  const seen = new Set<string>()
+  return rows
+    .filter(r => { const k = `${r.date}|${r.domain}`; if (seen.has(k)) return false; seen.add(k); return true })
+    .sort((a, b) => b.date.localeCompare(a.date) || a.domain.localeCompare(b.domain))
+}
+
+// ── UI components (defined outside to avoid remounting) ────────────────────────
 
 function Spinner() {
   return (
@@ -36,17 +83,24 @@ function Spinner() {
   )
 }
 
-function DateBadge({ date, today }: { date: string; today: string }) {
-  if (!date) return null
-  const [, mm, dd] = date.split('-')
-  const isToday = date === today
+function BadgeChip({ badge }: { badge: Badge }) {
+  if (!badge) return null
+  if (badge === 'new')
+    return <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-green-500 text-white leading-none">今日</span>
+  return <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-400 text-white leading-none">更新</span>
+}
+
+function DateCell({ date, today, yesterday, badge, includeYesterday }: {
+  date: string; today: string; yesterday: string; badge: Badge; includeYesterday?: boolean
+}) {
+  const isRecent = date === today || (!!includeYesterday && date === yesterday)
   return (
-    <div className="flex items-center gap-1 whitespace-nowrap">
-      <span className="text-xs text-gray-500">{mm}/{dd}</span>
-      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${isToday ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-        {isToday ? '今日' : '更新'}
-      </span>
-    </div>
+    <td className="px-3 py-2 w-24 whitespace-nowrap">
+      <div className={`flex items-center gap-1 flex-wrap ${isRecent ? 'text-green-600' : 'text-gray-400'}`}>
+        <span className={`text-xs ${isRecent ? 'font-semibold' : ''}`}>{fmtDate(date)}</span>
+        <BadgeChip badge={badge} />
+      </div>
+    </td>
   )
 }
 
@@ -64,35 +118,38 @@ function Pager({ page, total, onPage }: { page: number; total: number; onPage: (
   )
 }
 
-// Defined outside component to avoid remounting issues
 interface KwRowProps {
-  date: string; keyword: string; today: string; claimed: boolean
+  keyword: string; today: string; yesterday: string; badge: Badge
+  dateCell: React.ReactNode; claimed: boolean
   onClaim: () => void; onView: () => void
-  children: React.ReactNode // metric columns
+  children: React.ReactNode
 }
-function KwRow({ date, keyword, today, claimed, onClaim, onView, children }: KwRowProps) {
+function KwRow({ keyword, claimed, onClaim, onView, dateCell, children }: KwRowProps) {
   return (
     <tr onDoubleClick={onClaim}
       className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
       title={claimed ? '已认领' : '双击认领'}>
-      <td className="px-3 py-2 w-24"><DateBadge date={date} today={today} /></td>
+      {dateCell}
       <td className="px-2 py-2">
-        <span className="text-sm text-gray-800" title={keyword}>{keyword.length > 20 ? keyword.slice(0, 20) + '…' : keyword}</span>
+        <span className="text-sm text-gray-800" title={keyword}>{keyword.length > 22 ? keyword.slice(0, 22) + '…' : keyword}</span>
         {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
       </td>
       {children}
       <td className="px-2 py-2 w-12 text-right">
         <button onClick={e => { e.stopPropagation(); onView() }}
-          className="text-xs text-blue-400 hover:text-blue-600 px-1">查看</button>
+          className="text-xs text-blue-400 hover:text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-300 transition-colors">查看</button>
       </td>
     </tr>
   )
 }
 
+// ── Page ───────────────────────────────────────────────────────────────────────
+
 export default function TaskGroupsPage() {
   const { role, id: currentUserId } = useUser()
   const canManage = role === 'super' || role === 'admin'
-  const today = getMYDate()
+  const today = useMemo(() => getMYDate(), [])
+  const yesterday = useMemo(() => getMYDate(-1), [])
 
   const [groups, setGroups] = useState<TaskGroup[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,7 +163,6 @@ export default function TaskGroupsPage() {
 
   const [rightTab, setRightTab] = useState<RightTab>('search')
   const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 })
-  const [viewingSites, setViewingSites] = useState<{ keyword: string; sites: string[] } | null>(null)
 
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
   const [radarLoaded, setRadarLoaded] = useState(false)
@@ -119,6 +175,15 @@ export default function TaskGroupsPage() {
   const [searchTotal, setSearchTotal] = useState(0)
   const [searchPage, setSearchPage] = useState(0)
 
+  // Detail modal
+  const [siteIdMap, setSiteIdMap] = useState<Map<string, string>>(new Map())
+  const [detailKw, setDetailKw] = useState<string | null>(null)
+  const [detailSource, setDetailSource] = useState<string>('')
+  const [detailNewRows, setDetailNewRows] = useState<DetailRow[]>([])
+  const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  // Group management
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
   const [memberTypes, setMemberTypes] = useState<Record<string, 'app' | 'game'>>({})
@@ -142,25 +207,30 @@ export default function TaskGroupsPage() {
   const claimedSet = useMemo(() => new Set(claimedKeywords.map(k => k.keyword)), [claimedKeywords])
   const pendingCount = claimedKeywords.filter(k => k.status === 'pending').length
 
+  // ── Derived radar data ──────────────────────────────────────────────────────
+
   const crossWords = useMemo((): CrossWord[] => {
     if (!radarData) return []
     const nwMap = new Map(radarData.newWords.map(w => [w.keyword, w]))
     const rwMap = new Map(radarData.rankWords.map(w => [w.keyword, w]))
     const allKws = new Set([...Array.from(nwMap.keys()), ...Array.from(rwMap.keys())])
-    return Array.from(allKws)
-      .map(keyword => {
-        const nwe = nwMap.get(keyword)
-        const rwe = rwMap.get(keyword)
-        if (!nwe || !rwe) return null
-        const last_date = [nwe.last_date, rwe.last_date].filter(Boolean).sort().reverse()[0] ?? ''
-        const first_date = [nwe.first_date, rwe.first_date].filter(Boolean).sort()[0] ?? ''
-        return { keyword, volume: rwe.volume ?? 0, last_date, first_date, newSites: nwe.sites, rankSites: rwe.sites }
-      })
-      .filter((w): w is CrossWord => w !== null)
-      .sort((a, b) => b.last_date.localeCompare(a.last_date) || (b.volume - a.volume))
-  }, [radarData])
+    const cw = Array.from(allKws).map(keyword => {
+      const nwe = nwMap.get(keyword)
+      const rwe = rwMap.get(keyword)
+      if (!nwe || !rwe) return null
+      const last_date = [nwe.last_date, rwe.last_date].filter(Boolean).sort().reverse()[0] ?? ''
+      const first_date = [nwe.first_date, rwe.first_date].filter(Boolean).sort()[0] ?? ''
+      return { keyword, volume: rwe.volume ?? 0, last_date, first_date, newSites: nwe.sites, rankSites: rwe.sites }
+    }).filter((w): w is CrossWord => w !== null)
+    return sortByDate(cw, yesterday, (a, b) => (b.volume ?? 0) - (a.volume ?? 0))
+  }, [radarData, yesterday])
 
-  // Group streak words by keyword (same as hot-radar page): merge domains, keep streak>=2, single-domain only
+  const rankWordsSorted = useMemo(() => {
+    if (!radarData) return []
+    return sortByDate(radarData.rankWords, yesterday, (a, b) => b.volume - a.volume || b.rankDays - a.rankDays)
+  }, [radarData, yesterday])
+
+  // Group streak words by keyword (same as hot-radar): streak>=2, single-domain only
   const streakWords = useMemo(() => {
     if (!radarData) return []
     const grouped = new Map<string, { keyword: string; streak: number; domains: string[]; volume: number; first_date: string; last_date: string }>()
@@ -170,19 +240,55 @@ export default function TaskGroupsPage() {
       if (!g) {
         grouped.set(w.keyword, { keyword: w.keyword, streak: w.streak, domains: [w.domain], volume: w.volume, first_date: w.first_date, last_date: w.last_date })
       } else {
-        g.domains.push(w.domain)
+        if (!g.domains.includes(w.domain)) g.domains.push(w.domain)
         if (w.streak > g.streak) g.streak = w.streak
+        if (w.volume > g.volume) g.volume = w.volume
         if (w.last_date > g.last_date) g.last_date = w.last_date
-        if (w.first_date < g.first_date) g.first_date = w.first_date
+        if (!g.first_date || w.first_date < g.first_date) g.first_date = w.first_date
       }
     }
-    return Array.from(grouped.values())
-      .filter(g => g.domains.length === 1)
-      .sort((a, b) => b.streak - a.streak || b.volume - a.volume)
-  }, [radarData])
+    const single = Array.from(grouped.values()).filter(g => g.domains.length === 1)
+    return [...single].sort((a, b) => {
+      if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
+      const pa = getStreakBadge(a.streak, a.last_date, yesterday) === 'new' ? 0 : getStreakBadge(a.streak, a.last_date, yesterday) === 'updated' ? 1 : 2
+      const pb = getStreakBadge(b.streak, b.last_date, yesterday) === 'new' ? 0 : getStreakBadge(b.streak, b.last_date, yesterday) === 'updated' ? 1 : 2
+      if (pa !== pb) return pa - pb
+      return b.streak - a.streak || b.volume - a.volume
+    })
+  }, [radarData, yesterday])
 
-  const allNewWords = useMemo(() => (radarData?.newWords ?? []), [radarData])
-  const wordLibWords = useMemo(() => (radarData?.newWords ?? []).filter(w => w.last_date !== today), [radarData, today])
+  const allNewWords = useMemo(() => {
+    if (!radarData) return []
+    return sortByDate(radarData.newWords, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount)
+  }, [radarData, yesterday])
+
+  const wordLibWords = useMemo(() => {
+    if (!radarData) return []
+    const words = radarData.newWords.filter(w => w.last_date !== today)
+    return sortByDate(words, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount)
+  }, [radarData, today, yesterday])
+
+  // ── Detail modal data ───────────────────────────────────────────────────────
+
+  const detailNewByDate = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const r of detailNewRows) {
+      if (!map.has(r.date)) map.set(r.date, [])
+      if (!map.get(r.date)!.includes(r.domain)) map.get(r.date)!.push(r.domain)
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+  }, [detailNewRows])
+
+  const detailRankByDate = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const r of detailRankRows) {
+      if (!map.has(r.date)) map.set(r.date, [])
+      if (!map.get(r.date)!.includes(r.domain)) map.get(r.date)!.push(r.domain)
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+  }, [detailRankRows])
+
+  // ── API calls ───────────────────────────────────────────────────────────────
 
   async function loadGroups() {
     setLoading(true)
@@ -208,8 +314,8 @@ export default function TaskGroupsPage() {
     if (radarLoaded || radarLoading) return
     setRadarLoading(true)
     try {
-      const radarRes = await fetch('/api/hot-radar')
-      const rd = await radarRes.json()
+      const res = await fetch('/api/hot-radar')
+      const rd = await res.json()
       setRadarData(rd); setRadarLoaded(true)
     } finally { setRadarLoading(false) }
   }
@@ -253,6 +359,58 @@ export default function TaskGroupsPage() {
     } finally { setSubmitting(false) }
   }
 
+  async function openDetail(keyword: string, source: string) {
+    setDetailKw(keyword)
+    setDetailSource(source)
+    setDetailLoading(true)
+    setDetailNewRows([])
+    setDetailRankRows([])
+
+    const supabase = getBrowserClient()
+    let idMap = siteIdMap
+    if (idMap.size === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: siteData } = await (supabase.from('sites') as any).select('id, domain')
+      idMap = new Map((siteData || []).map((s: { id: string; domain: string }) => [s.id, s.domain]))
+      setSiteIdMap(idMap)
+    }
+
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    const needsNew = ['交叉词', '共新增词', '更新词库'].includes(source)
+    const needsRank = ['交叉词', '竞品涨排名', '连续上涨词'].includes(source)
+
+    try {
+      const nRows: DetailRow[] = []
+      const rRows: DetailRow[] = []
+      if (needsNew) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: raw } = await (supabase.from('raw_keywords') as any)
+          .select('site_id, content_date')
+          .eq('keyword', keyword).gte('content_date', since)
+          .order('content_date', { ascending: false })
+        for (const r of (raw || [])) {
+          const domain = idMap.get(r.site_id)
+          if (domain) nRows.push({ date: String(r.content_date).slice(0, 10), domain })
+        }
+      }
+      if (needsRank) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: raw } = await (supabase.from('rank_changes') as any)
+          .select('site_id, stat_date')
+          .eq('keyword', keyword).eq('type', 'rankup').gte('stat_date', since)
+          .order('stat_date', { ascending: false })
+        for (const r of (raw || [])) {
+          const domain = idMap.get(r.site_id)
+          if (domain) rRows.push({ date: String(r.stat_date).slice(0, 10), domain })
+        }
+      }
+      setDetailNewRows(dedupDetailRows(nRows))
+      setDetailRankRows(dedupDetailRows(rRows))
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
   async function doSearch(q: string, page = 0) {
     if (!q.trim()) { setSearchResults([]); setSearchTotal(0); return }
     setSearchLoading(true)
@@ -262,15 +420,15 @@ export default function TaskGroupsPage() {
       setSearchResults(data.keywords || []); setSearchTotal(data.total || 0); setSearchPage(page)
     } finally { setSearchLoading(false) }
   }
-
   function triggerSearch() { setSearchQuery(searchInput); doSearch(searchInput, 0) }
+
+  // ── Effects ─────────────────────────────────────────────────────────────────
 
   useEffect(() => { loadGroups() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Realtime: only subscribe when viewing today's data
   useEffect(() => {
     if (!activeGroupId || selectedDate !== today) return
     const supabase = getBrowserClient()
@@ -294,6 +452,8 @@ export default function TaskGroupsPage() {
   }, [activeGroupId, effectiveViewingId, selectedDate, today]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function setPage(tab: RightTab, p: number) { setTabPage(prev => ({ ...prev, [tab]: p })) }
+
+  // ── Group management ────────────────────────────────────────────────────────
 
   async function openCreateModal() {
     setShowCreate(true); setCreateName(''); setSelectedUsers(new Set()); setMemberTypes({})
@@ -354,6 +514,8 @@ export default function TaskGroupsPage() {
     setDeleteId(null)
   }
 
+  // ── Member modal (called as function) ───────────────────────────────────────
+
   function MemberModal({ mode, onClose }: { mode: 'create' | 'edit'; onClose: () => void }) {
     const isCreate = mode === 'create'
     const selUsers = isCreate ? selectedUsers : editSelectedUsers
@@ -375,7 +537,7 @@ export default function TaskGroupsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">分组名称</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)}
-                placeholder={selUsers.size > 0 ? userOptions.filter(u => selUsers.has(u.id)).map(u => u.username || u.email.split('@')[0]).join(' · ') : '留空则自动使用成员名称'}
+                placeholder="留空则自动使用成员名称"
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             <div>
@@ -427,7 +589,8 @@ export default function TaskGroupsPage() {
     )
   }
 
-  // Right panel content
+  // ── Right panel ─────────────────────────────────────────────────────────────
+
   function renderRightContent() {
     const pg = tabPage[rightTab]
 
@@ -456,7 +619,6 @@ export default function TaskGroupsPage() {
                 <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
                   <th className="px-3 py-2 text-left font-medium">关键词</th>
                   <th className="px-2 py-2 text-right font-medium w-24">搜索量</th>
-                  <th className="w-12" />
                 </tr></thead>
                 <tbody>
                   {searchResults.map((r, i) => {
@@ -466,11 +628,10 @@ export default function TaskGroupsPage() {
                         className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
                         title={claimed ? '已认领' : '双击认领'}>
                         <td className="px-3 py-2">
-                          <span className="text-sm text-gray-800" title={r.keyword}>{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
+                          <span className="text-sm text-gray-800">{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
                           {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
                         </td>
                         <td className="px-2 py-2 text-right text-xs text-gray-500">{fmtVol(r.volume)}</td>
-                        <td className="w-12" />
                       </tr>
                     )
                   })}
@@ -508,14 +669,16 @@ export default function TaskGroupsPage() {
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
+                  badge={getBadge(w.first_date, w.last_date, yesterday)}
+                  dateCell={<DateCell date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} />}
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '交叉词', w.volume)}
-                  onView={() => setViewingSites({ keyword: w.keyword, sites: [...w.newSites, ...w.rankSites.filter(s => !w.newSites.includes(s))] })}>
+                  onView={() => openDetail(w.keyword, '交叉词')}>
                   <td className="px-2 py-2 w-28">
                     <div className="flex gap-1 justify-center">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-green-100 text-green-700">新增</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-100 text-orange-700">涨排</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-50 text-blue-600">新增</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-600">涨排</span>
                     </div>
                   </td>
                   <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
@@ -529,11 +692,10 @@ export default function TaskGroupsPage() {
     }
 
     if (rightTab === 'rank') {
-      const rows = radarData?.rankWords ?? []
-      const slice = rows.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      const slice = rankWordsSorted.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
-          <div className="text-xs text-gray-400 mb-3">共 {rows.length} 条，双击认领</div>
+          <div className="text-xs text-gray-400 mb-3">共 {rankWordsSorted.length} 条，双击认领</div>
           <table className="w-full">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
@@ -544,17 +706,19 @@ export default function TaskGroupsPage() {
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
+                  badge={getBadge(w.first_date, w.last_date, yesterday)}
+                  dateCell={<DateCell date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} />}
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '竞品涨排名', w.volume)}
-                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.sites })}>
+                  onView={() => openDetail(w.keyword, '竞品涨排名')}>
                   <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.rankDays}次</td>
                   <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
                 </KwRow>
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={rows.length} onPage={p => setPage('rank', p)} />
+          <Pager page={pg} total={rankWordsSorted.length} onPage={p => setPage('rank', p)} />
         </>
       )
     }
@@ -574,10 +738,12 @@ export default function TaskGroupsPage() {
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
+                  badge={getStreakBadge(w.streak, w.last_date, yesterday)}
+                  dateCell={<DateCell date={w.last_date} today={today} yesterday={yesterday} badge={getStreakBadge(w.streak, w.last_date, yesterday)} />}
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '连续上涨词', w.volume)}
-                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.domains })}>
+                  onView={() => openDetail(w.keyword, '连续上涨词')}>
                   <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.streak}天</td>
                   <td className="px-2 py-2 text-right text-xs text-gray-500 w-20">{fmtVol(w.volume)}</td>
                 </KwRow>
@@ -604,10 +770,12 @@ export default function TaskGroupsPage() {
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
+                  badge={getBadge(w.first_date, w.last_date, yesterday)}
+                  dateCell={<DateCell date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} includeYesterday />}
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '共新增词', 0)}
-                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.sites })}>
+                  onView={() => openDetail(w.keyword, '共新增词')}>
                   <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.count}次</td>
                   <td className="px-2 py-2 text-center text-xs text-gray-500 w-16">{w.siteCount}站</td>
                 </KwRow>
@@ -634,10 +802,12 @@ export default function TaskGroupsPage() {
             </tr></thead>
             <tbody>
               {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} date={w.last_date} keyword={w.keyword} today={today}
+                <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
+                  badge={getBadge(w.first_date, w.last_date, yesterday)}
+                  dateCell={<DateCell date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} includeYesterday />}
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
-                  onView={() => setViewingSites({ keyword: w.keyword, sites: w.sites })}>
+                  onView={() => openDetail(w.keyword, '更新词库')}>
                   <td className="px-2 py-2 text-center text-xs text-gray-500 w-20">{w.count}次</td>
                   <td className="px-2 py-2 text-center text-xs text-gray-500 w-16">{w.siteCount}站</td>
                 </KwRow>
@@ -652,6 +822,8 @@ export default function TaskGroupsPage() {
     return null
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   if (loading) return <div className="p-6"><Spinner /></div>
 
   const RIGHT_TABS: [RightTab, string][] = [
@@ -662,6 +834,58 @@ export default function TaskGroupsPage() {
   function SourceTag({ s }: { s: string }) {
     const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库' }
     return <span className="text-[10px] text-gray-300 flex-shrink-0">{map[s] ?? s}</span>
+  }
+
+  // Detail modal inner content
+  function DetailBody() {
+    if (detailLoading) return <Spinner />
+    const isCross = detailSource === '交叉词'
+    if (isCross) {
+      return (
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <p className="text-xs font-semibold text-blue-600 mb-2 pb-1 border-b border-blue-100">共新增词</p>
+            {detailNewByDate.length === 0
+              ? <p className="text-xs text-gray-400">暂无记录</p>
+              : detailNewByDate.map(([date, domains]) => (
+                <div key={date} className="flex items-start gap-2 mb-2">
+                  <span className="text-xs text-gray-400 w-10 flex-shrink-0 pt-1">{date.slice(5)}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {domains.map(d => <span key={d} className="text-xs bg-gray-100 rounded px-1.5 py-1 text-gray-700">{d}</span>)}
+                  </div>
+                </div>
+              ))}
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-orange-500 mb-2 pb-1 border-b border-orange-100">竞品涨排名</p>
+            {detailRankByDate.length === 0
+              ? <p className="text-xs text-gray-400">暂无记录</p>
+              : detailRankByDate.map(([date, domains]) => (
+                <div key={date} className="flex items-start gap-2 mb-2">
+                  <span className="text-xs text-gray-400 w-10 flex-shrink-0 pt-1">{date.slice(5)}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {domains.map(d => <span key={d} className="text-xs bg-gray-100 rounded px-1.5 py-1 text-gray-700">{d}</span>)}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )
+    }
+    const byDate = ['共新增词', '更新词库'].includes(detailSource) ? detailNewByDate : detailRankByDate
+    if (byDate.length === 0) return <p className="text-sm text-gray-400 text-center py-10">暂无记录</p>
+    return (
+      <div className="space-y-2">
+        {byDate.map(([date, domains]) => (
+          <div key={date} className="flex items-start gap-2">
+            <span className="text-xs text-gray-400 w-10 flex-shrink-0 pt-1">{date.slice(5)}</span>
+            <div className="flex flex-wrap gap-1">
+              {domains.map(d => <span key={d} className="text-xs bg-gray-100 rounded px-1.5 py-1 text-gray-700">{d}</span>)}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -704,7 +928,6 @@ export default function TaskGroupsPage() {
             <div className="flex" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
               {/* Left panel */}
               <div className="w-[280px] flex-shrink-0 border-r border-gray-100 flex flex-col">
-                {/* Member selector for admins */}
                 {canManage && activeGroup.members.length > 0 && (
                   <div className="px-3 pt-3 pb-2 flex flex-wrap gap-1.5 border-b border-gray-50">
                     {activeGroup.members.map(m => (
@@ -715,20 +938,12 @@ export default function TaskGroupsPage() {
                     ))}
                   </div>
                 )}
-
-                {/* Date selector */}
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100">
                   <span className="text-sm font-medium text-gray-700">今日任务</span>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    max={today}
+                  <input type="date" value={selectedDate} max={today}
                     onChange={e => setSelectedDate(e.target.value || today)}
-                    className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
-                  />
+                    className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-500 cursor-pointer" />
                 </div>
-
-                {/* Keyword list */}
                 <div className="flex-1 overflow-y-auto">
                   {claimedLoading ? <Spinner /> : claimedKeywords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-300 text-sm py-12">
@@ -753,8 +968,6 @@ export default function TaskGroupsPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Submit button */}
                 {isViewingOwn && (
                   <div className="p-3 border-t border-gray-100">
                     <button onClick={submitForDate} disabled={submitting || pendingCount === 0}
@@ -800,17 +1013,20 @@ export default function TaskGroupsPage() {
         </div>
       )}
 
-      {viewingSites && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setViewingSites(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-900 text-sm truncate pr-4">{viewingSites.keyword}</h3>
-              <button onClick={() => setViewingSites(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none flex-shrink-0">×</button>
+      {/* Detail modal */}
+      {detailKw && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setDetailKw(null)}>
+          <div className={`bg-white rounded-xl shadow-2xl w-full max-h-[80vh] flex flex-col ${detailSource === '交叉词' ? 'max-w-3xl' : 'max-w-lg'}`}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h3 className="font-semibold text-gray-900">{detailKw}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">近30天出现记录</p>
+              </div>
+              <button onClick={() => setDetailKw(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
-            <div className="space-y-1.5">
-              {viewingSites.sites.map((s, i) => (
-                <div key={i} className="text-sm text-gray-600 px-2 py-1.5 bg-gray-50 rounded">{s}</div>
-              ))}
+            <div className="overflow-y-auto flex-1 p-4">
+              {DetailBody()}
             </div>
           </div>
         </div>
