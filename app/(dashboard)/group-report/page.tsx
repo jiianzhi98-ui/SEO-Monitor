@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useUser } from '@/lib/user-context'
 
+const ACCORDION_PAGE_SIZE = 20
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface Group { id: string; name: string; members: { user_id: string; username: string; member_type: string }[] }
@@ -125,6 +127,7 @@ export default function GroupReportPage() {
   const [report, setReport] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const [accordionPage, setAccordionPage] = useState(0)
   const [groupsLoading, setGroupsLoading] = useState(true)
 
   const today = useMemo(() => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), [])
@@ -148,6 +151,7 @@ export default function GroupReportPage() {
     setLoading(true)
     setReport(null)
     setExpandedKeys(new Set())
+    setAccordionPage(0)
     const url = period === 'custom'
       ? `/api/task-groups/${activeGroupId}/report?period=custom&startDate=${customStart}&endDate=${customEnd}`
       : `/api/task-groups/${activeGroupId}/report?period=${period}`
@@ -196,6 +200,10 @@ export default function GroupReportPage() {
     entries.sort((a, b) => b.date !== a.date ? b.date.localeCompare(a.date) : a.username.localeCompare(b.username))
     return entries
   }, [report])
+
+  const accordionTotal = accordionEntries.length
+  const accordionPages = Math.ceil(accordionTotal / ACCORDION_PAGE_SIZE)
+  const pagedEntries = accordionEntries.slice(accordionPage * ACCORDION_PAGE_SIZE, (accordionPage + 1) * ACCORDION_PAGE_SIZE)
 
   const activeGroup = groups.find(g => g.id === activeGroupId)
   const hasData = report && (report.groupTotal?.total.count ?? report.members.reduce((s, m) => s + m.total.count, 0)) > 0
@@ -297,7 +305,7 @@ export default function GroupReportPage() {
                     <span className="text-xs text-gray-400 ml-2">仅显示已提交关键词</span>
                   </div>
                   <div className="divide-y divide-gray-50">
-                    {accordionEntries.map(entry => {
+                    {pagedEntries.map(entry => {
                       const isOpen = expandedKeys.has(entry.key)
                       return (
                         <div key={entry.key}>
@@ -340,6 +348,28 @@ export default function GroupReportPage() {
                       )
                     })}
                   </div>
+                  {/* Pager */}
+                  {accordionPages > 1 && (
+                    <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/40">
+                      <span className="text-xs text-gray-400">
+                        共 {accordionTotal} 条 · 第 {accordionPage + 1} / {accordionPages} 页
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          disabled={accordionPage === 0}
+                          onClick={() => { setAccordionPage(p => p - 1); setExpandedKeys(new Set()) }}
+                          className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                          上一页
+                        </button>
+                        <button
+                          disabled={accordionPage >= accordionPages - 1}
+                          onClick={() => { setAccordionPage(p => p + 1); setExpandedKeys(new Set()) }}
+                          className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                          下一页
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
