@@ -128,6 +128,7 @@ export default function GroupReportPage() {
   const [loading, setLoading] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
   const [accordionPage, setAccordionPage] = useState(0)
+  const [filterUserId, setFilterUserId] = useState('all')
   const [groupsLoading, setGroupsLoading] = useState(true)
 
   const today = useMemo(() => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), [])
@@ -152,6 +153,7 @@ export default function GroupReportPage() {
     setReport(null)
     setExpandedKeys(new Set())
     setAccordionPage(0)
+    setFilterUserId('all')
     const url = period === 'custom'
       ? `/api/task-groups/${activeGroupId}/report?period=custom&startDate=${customStart}&endDate=${customEnd}`
       : `/api/task-groups/${activeGroupId}/report?period=${period}`
@@ -201,9 +203,12 @@ export default function GroupReportPage() {
     return entries
   }, [report])
 
-  const accordionTotal = accordionEntries.length
+  const filteredEntries = filterUserId === 'all'
+    ? accordionEntries
+    : accordionEntries.filter(e => e.userId === filterUserId)
+  const accordionTotal = filteredEntries.length
   const accordionPages = Math.ceil(accordionTotal / ACCORDION_PAGE_SIZE)
-  const pagedEntries = accordionEntries.slice(accordionPage * ACCORDION_PAGE_SIZE, (accordionPage + 1) * ACCORDION_PAGE_SIZE)
+  const pagedEntries = filteredEntries.slice(accordionPage * ACCORDION_PAGE_SIZE, (accordionPage + 1) * ACCORDION_PAGE_SIZE)
 
   const activeGroup = groups.find(g => g.id === activeGroupId)
   const hasData = report && (report.groupTotal?.total.count ?? report.members.reduce((s, m) => s + m.total.count, 0)) > 0
@@ -300,9 +305,23 @@ export default function GroupReportPage() {
                 </div>
               ) : (
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-                    <span className="text-sm font-semibold text-gray-700">日期明细</span>
-                    <span className="text-xs text-gray-400 ml-2">仅显示已提交关键词</span>
+                  <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center gap-3">
+                    <div>
+                      <span className="text-sm font-semibold text-gray-700">日期明细</span>
+                      <span className="text-xs text-gray-400 ml-2">仅显示已提交关键词</span>
+                    </div>
+                    {canSeeAll && report.members.length > 1 && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-gray-400">筛选：</span>
+                        {[{ userId: 'all', username: '全部' }, ...report.members].map(m => (
+                          <button key={m.userId}
+                            onClick={() => { setFilterUserId(m.userId); setAccordionPage(0); setExpandedKeys(new Set()) }}
+                            className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors ${filterUserId === m.userId ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700'}`}>
+                            {m.username}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="divide-y divide-gray-50">
                     {pagedEntries.map(entry => {
