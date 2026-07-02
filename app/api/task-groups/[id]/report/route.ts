@@ -32,6 +32,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id: groupId } = await params
   const { searchParams } = new URL(req.url)
   const period = searchParams.get('period') || 'today'
+  const customStart = searchParams.get('startDate')
+  const customEnd = searchParams.get('endDate')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
@@ -58,7 +60,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!isMember) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { startDate, endDate } = getDateRange(period)
+  const { startDate, endDate } = (customStart && customEnd && customStart <= customEnd)
+    ? { startDate: customStart, endDate: customEnd }
+    : getDateRange(period)
 
   let query = service
     .from('member_claimed_keywords')

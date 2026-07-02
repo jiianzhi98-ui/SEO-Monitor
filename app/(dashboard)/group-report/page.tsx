@@ -24,11 +24,11 @@ interface ReportData {
   members: MemberReport[]
 }
 
-type Period = 'today' | 'week' | 'month'
+type Period = 'today' | 'week' | 'month' | 'custom'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const PERIOD_LABELS: Record<Period, string> = { today: '今日', week: '本周', month: '本月' }
+const PERIOD_LABELS: Record<Period, string> = { today: '今日', week: '本周', month: '本月', custom: '自定义' }
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
   '竞品涨排名':  { bg: 'bg-purple-50',  text: 'text-purple-700' },
@@ -120,10 +120,14 @@ export default function GroupReportPage() {
   const [groups, setGroups] = useState<Group[]>([])
   const [activeGroupId, setActiveGroupId] = useState('')
   const [period, setPeriod] = useState<Period>('today')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
   const [groupsLoading, setGroupsLoading] = useState(true)
+
+  const today = useMemo(() => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), [])
 
   // Load groups
   useEffect(() => {
@@ -137,10 +141,17 @@ export default function GroupReportPage() {
   // Load report
   useEffect(() => {
     if (!activeGroupId) return
+    // For custom period, require both dates to be set and valid
+    if (period === 'custom') {
+      if (!customStart || !customEnd || customStart > customEnd) return
+    }
     setLoading(true)
     setReport(null)
     setExpandedKeys(new Set())
-    fetch(`/api/task-groups/${activeGroupId}/report?period=${period}`)
+    const url = period === 'custom'
+      ? `/api/task-groups/${activeGroupId}/report?period=custom&startDate=${customStart}&endDate=${customEnd}`
+      : `/api/task-groups/${activeGroupId}/report?period=${period}`
+    fetch(url)
       .then(r => r.json())
       .then((d: ReportData) => {
         setReport(d)
@@ -154,7 +165,7 @@ export default function GroupReportPage() {
         }
       })
       .finally(() => setLoading(false))
-  }, [activeGroupId, period])
+  }, [activeGroupId, period, customStart, customEnd])
 
   function toggleKey(key: string) {
     setExpandedKeys(prev => {
@@ -215,10 +226,10 @@ export default function GroupReportPage() {
           </div>
 
           {/* Period tabs */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-gray-500 mr-1">时间范围：</span>
             <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden">
-              {(['today', 'week', 'month'] as Period[]).map(p => (
+              {(['today', 'week', 'month', 'custom'] as Period[]).map(p => (
                 <button key={p}
                   onClick={() => setPeriod(p)}
                   className={`px-4 py-1.5 text-sm font-medium transition-colors ${period === p ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -226,8 +237,21 @@ export default function GroupReportPage() {
                 </button>
               ))}
             </div>
-            {report && (
-              <span className="text-xs text-gray-400 ml-2">
+            {period === 'custom' ? (
+              <div className="flex items-center gap-2">
+                <input type="date" value={customStart} max={customEnd || today}
+                  onChange={e => setCustomStart(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-700" />
+                <span className="text-gray-400 text-sm">~</span>
+                <input type="date" value={customEnd} min={customStart} max={today}
+                  onChange={e => setCustomEnd(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-700" />
+                {customStart && customEnd && customStart > customEnd && (
+                  <span className="text-xs text-red-400">开始日期不能晚于结束日期</span>
+                )}
+              </div>
+            ) : report && (
+              <span className="text-xs text-gray-400">
                 {report.startDate === report.endDate ? report.startDate : `${report.startDate} ~ ${report.endDate}`}
               </span>
             )}
