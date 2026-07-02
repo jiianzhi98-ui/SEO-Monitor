@@ -11,6 +11,7 @@ interface TaskGroup { id: string; name: string; type: string; created_at: string
 interface UserOption { id: string; email: string; username: string | null; role: string }
 
 interface NewWord { keyword: string; count: number; siteCount: number; sites: string[]; last_date: string; first_date: string }
+interface WordLibEntry extends NewWord { longTailCount: number }
 interface RankWord { keyword: string; siteCount: number; volume: number; sites: string[]; last_date: string; first_date: string; rankDays: number }
 interface StreakWord { keyword: string; streak: number; domain: string; volume: number; first_date: string; last_date: string }
 interface CrossWord { keyword: string; volume: number; last_date: string; first_date: string; newSites: string[]; rankSites: string[] }
@@ -182,6 +183,7 @@ export default function TaskGroupsPage() {
   const [detailNewRows, setDetailNewRows] = useState<DetailRow[]>([])
   const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+  const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
 
   // Group management
   const [showCreate, setShowCreate] = useState(false)
@@ -262,10 +264,25 @@ export default function TaskGroupsPage() {
     return sortByDate(radarData.newWords, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount)
   }, [radarData, yesterday])
 
-  const wordLibWords = useMemo(() => {
+  const wordLibWords = useMemo((): WordLibEntry[] => {
     if (!radarData) return []
+    const siteKwMap = new Map<string, Set<string>>()
+    for (const w of radarData.newWords) {
+      for (const site of w.sites) {
+        if (!siteKwMap.has(site)) siteKwMap.set(site, new Set())
+        siteKwMap.get(site)!.add(w.keyword)
+      }
+    }
     const words = radarData.newWords.filter(w => w.last_date !== today)
-    return sortByDate(words, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount)
+    const withCount = words.map(w => {
+      const related = new Set<string>()
+      for (const site of w.sites) {
+        const siteSet = siteKwMap.get(site)
+        if (siteSet) siteSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
+      }
+      return { ...w, longTailCount: related.size || 1 }
+    })
+    return sortByDate(withCount, yesterday, (a, b) => b.longTailCount - a.longTailCount || b.siteCount - a.siteCount)
   }, [radarData, today, yesterday])
 
   // ── Detail modal data ───────────────────────────────────────────────────────
@@ -365,6 +382,7 @@ export default function TaskGroupsPage() {
     setDetailLoading(true)
     setDetailNewRows([])
     setDetailRankRows([])
+    setWordLibSiteKws([])
 
     const supabase = getBrowserClient()
     let idMap = siteIdMap
@@ -375,8 +393,41 @@ export default function TaskGroupsPage() {
       setSiteIdMap(idMap)
     }
 
+    if (source === '更新词库') {
+      const wordEntry = radarData?.newWords.find(w => w.keyword === keyword)
+      const targetDomains = wordEntry?.sites || []
+      const domainToId = new Map(Array.from(idMap.entries()).map(([id, d]) => [d, id]))
+      const siteIds = targetDomains.map(d => domainToId.get(d)).filter((id): id is string => !!id)
+      try {
+        if (siteIds.length > 0) {
+          const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: raw } = await (supabase.from('raw_keywords') as any)
+            .select('site_id, keyword')
+            .in('site_id', siteIds)
+            .ilike('keyword', `%${keyword}%`)
+            .gte('content_date', since)
+          const bySite = new Map<string, Set<string>>()
+          for (const r of (raw || [])) {
+            const domain = idMap.get(r.site_id)
+            if (!domain) continue
+            if (!bySite.has(domain)) bySite.set(domain, new Set())
+            bySite.get(domain)!.add(r.keyword)
+          }
+          setWordLibSiteKws(
+            Array.from(bySite.entries())
+              .map(([domain, kws]) => ({ domain, keywords: Array.from(kws).sort() }))
+              .sort((a, b) => b.keywords.length - a.keywords.length)
+          )
+        }
+      } finally {
+        setDetailLoading(false)
+      }
+      return
+    }
+
     const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
-    const needsNew = ['交叉词', '共新增词', '更新词库'].includes(source)
+    const needsNew = ['交叉词', '共新增词'].includes(source)
     const needsRank = ['交叉词', '竞品涨排名', '连续上涨词'].includes(source)
 
     try {
@@ -791,7 +842,7 @@ export default function TaskGroupsPage() {
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24">日期</th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
+              <th className="px-2 py-2 text-center font-medium w-20">长尾词数</th>
               <th className="px-2 py-2 text-center font-medium w-14">站点数</th>
               <th className="w-14" />
             </tr></thead>
@@ -803,7 +854,7 @@ export default function TaskGroupsPage() {
                   claimed={claimedSet.has(w.keyword)}
                   onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
                   onView={() => openDetail(w.keyword, '更新词库')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.count}次</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.longTailCount}词</td>
                   <td className="px-2 py-2 text-center text-xs text-gray-500">{w.siteCount}站</td>
                 </KwRow>
               ))}
@@ -834,6 +885,23 @@ export default function TaskGroupsPage() {
   // Detail modal inner content
   function DetailBody() {
     if (detailLoading) return <Spinner />
+    if (detailSource === '更新词库') {
+      if (wordLibSiteKws.length === 0) return <p className="text-sm text-gray-400 text-center py-10">暂无记录</p>
+      return (
+        <div className="space-y-3">
+          {wordLibSiteKws.map(({ domain, keywords }) => (
+            <div key={domain} className="border border-gray-100 rounded-lg p-3">
+              <div className="font-medium text-sm text-gray-800 mb-2">{domain}</div>
+              <div className="flex flex-wrap gap-1">
+                {keywords.map(kw => (
+                  <span key={kw} className="text-xs bg-blue-50 text-blue-700 rounded px-2 py-0.5">{kw}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
     const isCross = detailSource === '交叉词'
     if (isCross) {
       return (
@@ -867,7 +935,7 @@ export default function TaskGroupsPage() {
         </div>
       )
     }
-    const byDate = ['共新增词', '更新词库'].includes(detailSource) ? detailNewByDate : detailRankByDate
+    const byDate = detailSource === '共新增词' ? detailNewByDate : detailRankByDate
     if (byDate.length === 0) return <p className="text-sm text-gray-400 text-center py-10">暂无记录</p>
     return (
       <div className="space-y-2">

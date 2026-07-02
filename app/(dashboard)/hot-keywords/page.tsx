@@ -31,7 +31,7 @@ interface RadarData { newWords: WordEntry[]; rankWords: RankEntry[]; streakWords
 interface WeightInfo { pc: number; mobile: number; pcChg: number; mobileChg: number }
 interface DetailRow  { date: string; domain: string }
 
-type Tab      = 'cross' | 'new' | 'rank' | 'streak'
+type Tab      = 'cross' | 'new' | 'rank' | 'streak' | 'wordLib'
 type PageSize = 50 | 100 | 500
 const PAGE_SIZES: PageSize[] = [50, 100, 500]
 
@@ -211,10 +211,11 @@ function SiteBadges({ sites, weightMap, idMap, colorMap }: {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const TAB_CONFIG: { key: Tab; label: string }[] = [
-  { key: 'cross',  label: '交叉词' },
-  { key: 'new',    label: '共新增词' },
-  { key: 'rank',   label: '竞品涨排名' },
-  { key: 'streak', label: '连续上涨词' },
+  { key: 'cross',   label: '交叉词' },
+  { key: 'new',     label: '共新增词' },
+  { key: 'rank',    label: '竞品涨排名' },
+  { key: 'streak',  label: '连续上涨词' },
+  { key: 'wordLib', label: '更新词库' },
 ]
 
 export default function HotRadarPage() {
@@ -237,6 +238,7 @@ export default function HotRadarPage() {
   const [detailNewRows, setDetailNewRows]   = useState<DetailRow[]>([])
   const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+  const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
   const [dateFrom, setDateFrom] = useState('')
 
   const today     = useMemo(() => getMYDate(),    [])
@@ -292,7 +294,42 @@ export default function HotRadarPage() {
     setDetailLoading(true)
     setDetailNewRows([])
     setDetailRankRows([])
+    setWordLibSiteKws([])
     const db = getBrowserClient()
+
+    if (activeTab === 'wordLib') {
+      const wordEntry = wordLibWords.find(w => w.keyword === keyword)
+      const targetDomains = wordEntry?.sites || []
+      const domainToId = new Map(Array.from(siteIdMap.entries()).map(([id, d]) => [d, id]))
+      const siteIds = targetDomains.map(d => domainToId.get(d)).filter((id): id is string => !!id)
+      try {
+        if (siteIds.length > 0) {
+          const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: raw } = await (db.from('raw_keywords') as any)
+            .select('site_id, keyword')
+            .in('site_id', siteIds)
+            .ilike('keyword', `%${keyword}%`)
+            .gte('content_date', since)
+          const bySite = new Map<string, Set<string>>()
+          for (const r of (raw || [])) {
+            const domain = siteIdMap.get(r.site_id)
+            if (!domain) continue
+            if (!bySite.has(domain)) bySite.set(domain, new Set())
+            bySite.get(domain)!.add(r.keyword)
+          }
+          setWordLibSiteKws(
+            Array.from(bySite.entries())
+              .map(([domain, kws]) => ({ domain, keywords: Array.from(kws).sort() }))
+              .sort((a, b) => b.keywords.length - a.keywords.length)
+          )
+        }
+      } finally {
+        setDetailLoading(false)
+      }
+      return
+    }
+
     const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
     try {
       const nRows: DetailRow[] = []
@@ -404,10 +441,36 @@ export default function HotRadarPage() {
     })
   }, [filtered, minStreak, yesterday])
 
+  const wordLibWords = useMemo((): (WordEntry & { longTailCount: number })[] => {
+    if (!data) return []
+    const siteKwMap = new Map<string, Set<string>>()
+    for (const w of data.newWords) {
+      for (const site of w.sites) {
+        if (!siteKwMap.has(site)) siteKwMap.set(site, new Set())
+        siteKwMap.get(site)!.add(w.keyword)
+      }
+    }
+    const words = data.newWords.filter(w =>
+      w.last_date !== today &&
+      (!dateFrom || !w.last_date || w.last_date >= dateFrom) &&
+      w.siteCount >= minSites
+    )
+    const withCount = words.map(w => {
+      const related = new Set<string>()
+      for (const site of w.sites) {
+        const siteSet = siteKwMap.get(site)
+        if (siteSet) siteSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
+      }
+      return { ...w, longTailCount: related.size || 1 }
+    })
+    return sortByDate(withCount, yesterday, (a, b) => b.longTailCount - a.longTailCount || b.siteCount - a.siteCount)
+  }, [data, today, yesterday, dateFrom, minSites])
+
   const baseList = !filtered ? [] :
-    activeTab === 'cross'  ? filtered.crossWords  :
-    activeTab === 'new'    ? filtered.newWords     :
-    activeTab === 'rank'   ? filtered.rankWords    :
+    activeTab === 'cross'   ? filtered.crossWords  :
+    activeTab === 'new'     ? filtered.newWords     :
+    activeTab === 'rank'    ? filtered.rankWords    :
+    activeTab === 'wordLib' ? wordLibWords           :
     filteredStreakWords
 
   const activeList = useMemo(() => {
@@ -780,6 +843,58 @@ export default function HotRadarPage() {
                 </table>
               )}
 
+              {/* 更新词库：6列 */}
+              {activeTab === 'wordLib' && (
+                <table className="w-full table-fixed">
+                  <colgroup>
+                    <col className="w-24" />
+                    <col className="w-64" />
+                    <col className="w-24" />
+                    <col className="w-24" />
+                    <col />
+                    <col className="w-16" />
+                  </colgroup>
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="table-th">日期</th>
+                      <th className="table-th">关键词</th>
+                      <th className="table-th text-center whitespace-nowrap">长尾词数</th>
+                      <th className="table-th text-center whitespace-nowrap">站点数</th>
+                      <th className="table-th">出现站点</th>
+                      <th className="table-th text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pagedList.length === 0 ? (
+                      <tr><td colSpan={6} className="table-td text-center text-gray-400 py-10">暂无数据</td></tr>
+                    ) : (
+                      (pagedList as (WordEntry & { longTailCount: number })[]).map(w => (
+                        <tr key={w.keyword} className="hover:bg-gray-50 transition-colors">
+                          <DateCell last_date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} includeYesterday />
+                          <td className="table-td font-medium text-gray-900 overflow-hidden">
+                            <span className="block truncate" title={w.keyword}>{w.keyword}</span>
+                          </td>
+                          <td className="table-td text-center">
+                            <span className="font-semibold text-gray-900">{w.longTailCount}</span>
+                            <span className="text-gray-400 text-xs">词</span>
+                          </td>
+                          <td className="table-td text-center">
+                            <span className="font-semibold text-gray-900">{w.siteCount}</span>
+                            <span className="text-gray-400 text-xs">站</span>
+                          </td>
+                          <td className="table-td">
+                            <SiteBadges sites={w.sites} weightMap={weightMap} idMap={groupIdMap} colorMap={groupColorMap} />
+                          </td>
+                          <td className="table-td text-center">
+                            <button onClick={() => openDetail(w.keyword)} className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 hover:border-blue-200 transition-colors">查看</button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+
             </div>
             <PaginationBar page={page} total={activeList.length} pageSize={pageSize} onPageChange={setPage} />
           </>
@@ -793,7 +908,9 @@ export default function HotRadarPage() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h3 className="font-semibold text-gray-900">{detailKw}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">近30天出现记录</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {activeTab === 'wordLib' ? '近7天长尾词分布' : '近30天出现记录'}
+                </p>
               </div>
               <button onClick={() => setDetailKw(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
@@ -806,6 +923,26 @@ export default function HotRadarPage() {
                   </svg>
                   加载中...
                 </div>
+              ) : activeTab === 'wordLib' ? (
+                /* 更新词库：按站点分组显示长尾词 */
+                wordLibSiteKws.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-10">暂无记录</p>
+                ) : (
+                  <div className="space-y-4">
+                    {wordLibSiteKws.map(({ domain, keywords }) => (
+                      <div key={domain}>
+                        <div className="mb-2">
+                          <SiteBadge domain={domain} weight={weightMap.get(domain)} borderColor={groupColorMap.get(domain)} />
+                        </div>
+                        <div className="flex flex-wrap gap-1 ml-1">
+                          {keywords.map(kw => (
+                            <span key={kw} className="text-xs bg-gray-100 rounded px-1.5 py-1 text-gray-700">{kw}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : activeTab === 'cross' ? (
                 /* 交叉词：左右两栏 */
                 <div className="grid grid-cols-2 gap-6">
