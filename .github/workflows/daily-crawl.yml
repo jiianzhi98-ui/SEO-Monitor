@@ -8,6 +8,10 @@ on:
         type: choice
         options: [all, keywords, rank, weight, index-pages]
         default: all
+      site:
+        description: '单站域名（留空=全部站点，例如 y8l.com）'
+        required: false
+        default: ''
   schedule:
     - cron: '0 13 * * *'   # 21:00 MYT (target ~02:00 MYT after ~5h queue) — keywords
     - cron: '0 15 * * *'   # 23:00 MYT (target ~04:00 MYT after ~5h queue) — weight
@@ -54,7 +58,12 @@ jobs:
           echo "Running step: $STEP"
 
       - name: Run crawl
-        run: npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=5
+        run: |
+          SITE_ARG=""
+          if [ -n "${{ github.event.inputs.site }}" ]; then
+            SITE_ARG="--site=${{ github.event.inputs.site }}"
+          fi
+          npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=5 $SITE_ARG
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
