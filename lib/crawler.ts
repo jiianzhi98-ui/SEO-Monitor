@@ -538,6 +538,107 @@ export async function fetchRankupWithTitle(
     .sort((a, b) => b.volume - a.volume)
 }
 
+// Parse rank position text like "第11名" → 11; "50名外" / unknown → null
+function parseRankPosition(text: string): number | null {
+  const m = text.match(/第(\d+)名/)
+  return m ? parseInt(m[1], 10) : null
+}
+
+async function fetchRankPositionPage(
+  domain: string,
+  type: 'rankup' | 'rankdown',
+  platform: 'mobile' | 'pc',
+  rankPos: number,
+  date: string,
+  page: number,
+  cookie = '',
+  ua: string,
+  isToday = false
+): Promise<{ keyword: string; volume: number; rank_position: number | null; prev_rank: number | null }[] | null> {
+  const pageSuffix = page === 1 ? '' : `${page}/`
+  const prefix = platform === 'pc' ? 'baidu' : 'mobile'
+  const url = isToday
+    ? `https://baidurank.aizhan.com/${prefix}/${domain}/${type}/${rankPos}/${pageSuffix}`
+    : `https://baidurank.aizhan.com/${prefix}/${domain}/${type}/${rankPos}/${date}/${pageSuffix}`
+  try {
+    const headers: Record<string, string> = { ...getRankHeaders(ua) }
+    if (cookie) headers['Cookie'] = cookie
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000), next: { revalidate: 0 } })
+    if (!res.ok) return []
+    const html = await res.text()
+    const cookieMatch = html.match(/\.cookie\s*=\s*"([^"]+)"/)
+    if (cookieMatch) {
+      const challengeCookie = cookieMatch[1].split(';')[0]
+      if (challengeCookie === cookie) return []
+      return fetchRankPositionPage(domain, type, platform, rankPos, date, page, challengeCookie, ua, isToday)
+    }
+    if (!html.includes('<tbody') && (html.includes('login_fixedt') || html.includes('wic_login') || html.includes('请登录'))) {
+      return null
+    }
+    const $ = cheerio.load(html)
+    const results: { keyword: string; volume: number; rank_position: number | null; prev_rank: number | null }[] = []
+    $('tbody tr').each((_, tr) => {
+      const keyword = $(tr).find('td.title a').first().text().trim()
+      const newRankText = $(tr).find('td.ip').eq(0).text().trim()
+      const prevRankText = $(tr).find('td.ip').eq(1).text().trim()
+      const volume = parseInt($(tr).find('td.ip').eq(2).text().trim(), 10) || 0
+      if (keyword) results.push({
+        keyword,
+        volume,
+        rank_position: parseRankPosition(newRankText),
+        prev_rank: parseRankPosition(prevRankText),
+      })
+    })
+    return results
+  } catch {
+    return []
+  }
+}
+
+// Fetch all rank position entries (涨入 or 跌出) for a domain, including volume=0.
+// Supports both mobile (/mobile/) and PC (/baidu/) platforms.
+// Returns rank_position (新排名) and prev_rank (原排名) parsed from the table.
+export async function fetchRankPositions(
+  domain: string,
+  date: string,
+  type: 'rankup' | 'rankdown',
+  platform: 'mobile' | 'pc'
+): Promise<{ keyword: string; volume: number; rank_position: number | null; prev_rank: number | null }[]> {
+  const ua = randomUA()
+  const prefix = platform === 'pc' ? 'baidu' : 'mobile'
+  const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
+  const isToday = date === todayMY
+  const prefetchUrl = isToday
+    ? `https://baidurank.aizhan.com/${prefix}/${domain}/${type}/1/`
+    : `https://baidurank.aizhan.com/${prefix}/${domain}/${type}/1/${date}/`
+  const sharedCookie = await prefetchRankCookie(domain, type, date, ua, prefetchUrl)
+
+  const allResults = await Promise.all(
+    [1, 2, 3, 4, 5].map(async (rankPos) => {
+      const entries: { keyword: string; volume: number; rank_position: number | null; prev_rank: number | null }[] = []
+      for (let page = 1; page <= 15; page++) {
+        const pageEntries = await fetchRankPositionPage(domain, type, platform, rankPos, date, page, sharedCookie, ua, isToday)
+        if (pageEntries === null) throw new Error('AIZHAN_LOGIN_WALL')
+        if (pageEntries.length === 0) break
+        entries.push(...pageEntries)
+        if (page < 15) await new Promise((r) => setTimeout(r, 300))
+      }
+      return entries
+    })
+  )
+
+  // Dedup by keyword — keep highest volume; ties prefer lower (better) rank_position
+  const seen = new Map<string, { volume: number; rank_position: number | null; prev_rank: number | null }>()
+  for (const e of allResults.flat()) {
+    const cur = seen.get(e.keyword)
+    const betterRank = e.rank_position !== null && (cur?.rank_position === null || (cur?.rank_position ?? Infinity) > e.rank_position)
+    if (!cur || e.volume > cur.volume || (e.volume === cur.volume && betterRank)) {
+      seen.set(e.keyword, { volume: e.volume, rank_position: e.rank_position, prev_rank: e.prev_rank })
+    }
+  }
+  return Array.from(seen.entries()).map(([keyword, v]) => ({ keyword, ...v }))
+}
+
 // @deprecated use fetchAizhanData instead
 export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; mobile: number }> {
   const { pc, mobile } = await fetchAizhanData(domain)

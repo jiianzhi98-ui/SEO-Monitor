@@ -82,6 +82,22 @@ export const CRAWL_RULES: RuleSection[] = [
     ],
   },
   {
+    key: 'rank-positions',
+    title: '自有站点排名位置',
+    badge: 'step=rank-positions · GitHub Actions · 目标 07:00 MYT（cron 23:00 UTC）',
+    items: [
+      { label: '触发方式', text: 'GitHub Actions rank-positions.yml (cron 0 23 * * * UTC = 07:00 MYT)，单 job，无 matrix 分组；脚本：scripts/crawl-rank-positions.ts' },
+      { label: '抓取对象', text: '分组任务（task_groups）中 associated_domains 字段关联的域名；动态读取，无需手动配置' },
+      { label: '数据来源', text: '爱站 baidurank.aizhan.com，移动端（/mobile/）+ PC端（/baidu/），各抓涨入和跌出，共 4 个组合' },
+      { label: '并行策略', text: '排名段 1-5 同时并行，段内按页顺序，每页间隔 300ms；4 个组合顺序执行，组合间隔 3 秒；域名间隔 60 秒' },
+      { label: '翻页上限', text: '每段最多 15 页，无搜索量过滤（volume=0 的词也收录）' },
+      { label: '排名字段', text: '新排名（rank_position）= "第11名" → 11；原排名（prev_rank）= "50名外" → NULL' },
+      { label: '写入表', text: 'site_keyword_ranks（永久保留，按 site_id+keyword+stat_date+platform+type 唯一）/ keyword_volume（仅 volume>0 的词，upsert，补充首页快报和分组任务的搜索量查询）' },
+      { label: '数据保留', text: 'site_keyword_ranks 永久保留，不自动删除' },
+      { label: '限流风险', text: '爱站返回空时标记为"无数据（疑似限流）"，不写入；域名间 60s 间隔降低限流概率' },
+    ],
+  },
+  {
     key: 'search',
     title: '站点情报查询',
     badge: '类型：search · 触发方式：页面搜索',
@@ -101,6 +117,7 @@ export const RETENTION = {
   weight_history: '永久保留',
   index_snapshots: '永久保留',
   keyword_volume: '永久保留',
+  site_keyword_ranks: '永久保留',
   activity_log: '7天（按 logged_at）',
   activity_site_log: '7天（随 activity_log 级联删除）',
 }
