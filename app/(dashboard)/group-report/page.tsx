@@ -27,10 +27,38 @@ interface ReportData {
 }
 
 type Period = 'today' | 'week' | 'month' | 'custom'
+type ReportTab = 'submissions' | 'outcomes' | 'rules'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const PERIOD_LABELS: Record<Period, string> = { today: '今日', week: '本周', month: '本月', custom: '自定义' }
+
+const SUGGESTED_RULES = [
+  {
+    name: '掉排名 30 天未更新',
+    condition: '同一关键词排名下滑 ≥ 5，且距上次提交更新操作 > 30 天',
+    action: '建议重新更新该页面内容',
+    metric: '通过 rank_changes + member_claimed_keywords 对比',
+  },
+  {
+    name: '新增页面 7 天未收录',
+    condition: '提交"新增"操作后 7 天内，该 URL 未见于 site_indexed_pages',
+    action: '检查页面可抓取性、内链、sitemap',
+    metric: '通过 page_url 匹配 site_indexed_pages',
+  },
+  {
+    name: '高搜量词 3 天无人认领',
+    condition: '搜索量 > 5000 的关键词连续出现在竞品涨排名，超过 3 天无人认领',
+    action: '优先分配给对应组员处理',
+    metric: '通过 rank_changes + member_claimed_keywords 对比',
+  },
+  {
+    name: '更新效果无提升',
+    condition: '提交"更新"操作后 30 天，对应关键词排名无上升记录',
+    action: '重新评估内容策略，可能需要增加词或调整结构',
+    metric: '通过 submitted_at + rank_changes 时间窗口对比',
+  },
+]
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
   '竞品涨排名':  { bg: 'bg-purple-50',  text: 'text-purple-700' },
@@ -121,6 +149,7 @@ export default function GroupReportPage() {
 
   const [groups, setGroups] = useState<Group[]>([])
   const [activeGroupId, setActiveGroupId] = useState('')
+  const [reportTab, setReportTab] = useState<ReportTab>('submissions')
   const [period, setPeriod] = useState<Period>('today')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -238,6 +267,87 @@ export default function GroupReportPage() {
             ))}
           </div>
 
+          {/* Report type tabs */}
+          <div className="flex gap-0 border-b border-gray-100">
+            {([
+              ['submissions', '提交记录'],
+              ['outcomes', '成效追踪'],
+              ['rules', '规则中心'],
+            ] as [ReportTab, string][]).map(([tab, label]) => (
+              <button key={tab} onClick={() => setReportTab(tab)}
+                className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${reportTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                {label}
+                {tab === 'outcomes' && <span className="ml-1.5 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">建设中</span>}
+                {tab === 'rules' && <span className="ml-1.5 text-[10px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-full">建议</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* ── 规则中心 tab ── */}
+          {reportTab === 'rules' && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-5 py-3 text-sm text-amber-700">
+                以下为系统建议规则，基于现有数据表可实现。<br />
+                规则激活后将每日自动运行，生成待跟进信号并推送至今日任务中心。
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-2.5 bg-gray-50 text-[11px] font-medium text-gray-400 border-b border-gray-100">
+                  <span>规则名称</span>
+                  <span>触发条件</span>
+                  <span>建议动作</span>
+                  <span>数据来源</span>
+                </div>
+                {SUGGESTED_RULES.map((rule, i) => (
+                  <div key={i} className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors items-start">
+                    <div>
+                      <span className="text-sm font-medium text-gray-800">{rule.name}</span>
+                      <span className="ml-2 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">待激活</span>
+                    </div>
+                    <span className="text-xs text-gray-500 leading-relaxed">{rule.condition}</span>
+                    <span className="text-xs text-gray-600 leading-relaxed">{rule.action}</span>
+                    <span className="text-[11px] text-gray-400 leading-relaxed font-mono">{rule.metric}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 text-center">规则激活需要：① Action History 积累足够数据 ② 管理员确认规则逻辑后手动开启</p>
+            </div>
+          )}
+
+          {/* ── 成效追踪 tab ── */}
+          {reportTab === 'outcomes' && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-800">成效追踪</h3>
+                <p className="text-xs text-gray-400 mt-0.5">追踪每条提交动作的实际效果，自动与排名和收录数据对比</p>
+              </div>
+              <div className="px-6 py-10 flex flex-col items-center text-center text-gray-400 space-y-4">
+                <svg className="w-12 h-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">待追踪项目</p>
+                  <div className="mt-3 grid grid-cols-3 gap-4 text-left">
+                    {[
+                      { icon: '📈', title: '排名成效', desc: '提交词 30 天内是否出现在排名上涨记录' },
+                      { icon: '🔍', title: '收录成效', desc: '新增页面 URL 是否在 7 天内被百度收录' },
+                      { icon: '⚖️', title: '新增 vs 更新', desc: '两种操作类型的平均成效对比' },
+                    ].map(item => (
+                      <div key={item.title} className="bg-gray-50 rounded-lg p-3">
+                        <div className="text-lg mb-1">{item.icon}</div>
+                        <div className="text-xs font-medium text-gray-600">{item.title}</div>
+                        <div className="text-[11px] text-gray-400 mt-1 leading-relaxed">{item.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-300 mt-2">组员开始填写 URL + 最终词后自动统计 · 当前暂无数据</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── 提交记录 tab ── */}
+          {reportTab === 'submissions' && (
+          <>
           {/* Period tabs */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-gray-500 mr-1">时间范围：</span>
@@ -411,6 +521,8 @@ export default function GroupReportPage() {
                 </div>
               )}
             </>
+          )}
+          </>
           )}
         </div>
       )}
