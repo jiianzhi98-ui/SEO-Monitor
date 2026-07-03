@@ -33,6 +33,16 @@ type ReportTab = 'submissions' | 'outcomes' | 'rules'
 
 const PERIOD_LABELS: Record<Period, string> = { today: '今日', week: '本周', month: '本月', custom: '自定义' }
 
+// ── MOCK DATA (remove when real outcome tracking is built) ──────────────────
+const MOCK_OUTCOMES = [
+  { member: 'Joanne',  date: '2026-06-10', keyword: '葫芦侠',          final_keyword: '葫芦侠官方下载',      op: '新增', url: 'https://www.sjwyx.com/ruanjian/1001.html', rank: '上涨 +14',  indexed: '3天',  outcome: 'success' },
+  { member: 'Jackson', date: '2026-06-12', keyword: 'MT管理器',         final_keyword: 'MT管理器最新版',       op: '新增', url: 'https://www.sjwyx.com/ruanjian/1002.html', rank: '上涨 +6',   indexed: '5天',  outcome: 'success' },
+  { member: 'Joanne',  date: '2026-06-18', keyword: '好游快爆 下载安装', final_keyword: '好游快爆下载2024',     op: '更新', url: 'https://www.sjwyx.com/ruanjian/1003.html', rank: '无变化',    indexed: '已收录', outcome: 'fail' },
+  { member: 'Yanling', date: '2026-06-20', keyword: '蛋仔派对官服',      final_keyword: '蛋仔派对官方版下载',   op: '新增', url: 'https://www.sjwyx.com/ruanjian/1004.html', rank: '追踪中',    indexed: '2天',  outcome: 'pending' },
+  { member: 'Jackson', date: '2026-06-22', keyword: 'CAPCUT',            final_keyword: 'CapCut剪映国际版',   op: '更新', url: 'https://www.sjwyx.com/ruanjian/1005.html', rank: '上涨 +9',   indexed: '已收录', outcome: 'success' },
+  { member: 'Joanne',  date: '2026-06-25', keyword: '氪金兽',            final_keyword: '氪金兽手游下载',      op: '新增', url: 'https://www.sjwyx.com/ruanjian/1006.html', rank: '追踪中',    indexed: '未收录', outcome: 'pending' },
+]
+
 const SUGGESTED_RULES = [
   {
     name: '掉排名 30 天未更新',
@@ -315,32 +325,62 @@ export default function GroupReportPage() {
 
           {/* ── 成效追踪 tab ── */}
           {reportTab === 'outcomes' && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-6 py-5 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-800">成效追踪</h3>
-                <p className="text-xs text-gray-400 mt-0.5">追踪每条提交动作的实际效果，自动与排名和收录数据对比</p>
+            <div className="space-y-4">
+              {/* MOCK banner — remove this div when real data is connected */}
+              <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2.5 text-xs text-yellow-700">
+                <span className="font-bold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded text-[10px]">MOCK</span>
+                以下为演示数据，展示成效追踪上线后的页面样式。真实数据需组员填写 URL + 最终词后自动统计。
               </div>
-              <div className="px-6 py-10 flex flex-col items-center text-center text-gray-400 space-y-4">
-                <svg className="w-12 h-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">待追踪项目</p>
-                  <div className="mt-3 grid grid-cols-3 gap-4 text-left">
-                    {[
-                      { icon: '📈', title: '排名成效', desc: '提交词 30 天内是否出现在排名上涨记录' },
-                      { icon: '🔍', title: '收录成效', desc: '新增页面 URL 是否在 7 天内被百度收录' },
-                      { icon: '⚖️', title: '新增 vs 更新', desc: '两种操作类型的平均成效对比' },
-                    ].map(item => (
-                      <div key={item.title} className="bg-gray-50 rounded-lg p-3">
-                        <div className="text-lg mb-1">{item.icon}</div>
-                        <div className="text-xs font-medium text-gray-600">{item.title}</div>
-                        <div className="text-[11px] text-gray-400 mt-1 leading-relaxed">{item.desc}</div>
-                      </div>
-                    ))}
+
+              {/* Summary stats */}
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  { label: '已追踪动作', value: '6', sub: '近30天提交' },
+                  { label: '排名上涨', value: '3', sub: '成效率 50%', color: 'text-green-600' },
+                  { label: '成功收录', value: '5', sub: '收录率 83%', color: 'text-blue-600' },
+                  { label: '追踪中', value: '2', sub: '未满30天' },
+                ].map(s => (
+                  <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+                    <div className={`text-2xl font-bold ${s.color ?? 'text-gray-800'}`}>{s.value}</div>
+                    <div className="text-xs font-medium text-gray-600 mt-0.5">{s.label}</div>
+                    <div className="text-[11px] text-gray-400">{s.sub}</div>
                   </div>
+                ))}
+              </div>
+
+              {/* Outcome table */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+                  <span className="text-sm font-semibold text-gray-700">动作成效明细</span>
+                  <span className="text-xs text-gray-400 ml-2">每条提交动作的排名与收录结果</span>
                 </div>
-                <p className="text-xs text-gray-300 mt-2">组员开始填写 URL + 最终词后自动统计 · 当前暂无数据</p>
+                <div className="grid grid-cols-[80px_100px_1fr_100px_80px_70px_70px] gap-x-3 px-5 py-2 bg-gray-50/40 text-[11px] font-medium text-gray-400 border-b border-gray-100">
+                  <span>日期</span>
+                  <span>成员</span>
+                  <span>关键词 → 最终词</span>
+                  <span>操作</span>
+                  <span>排名变化</span>
+                  <span>收录</span>
+                  <span className="text-center">成效</span>
+                </div>
+                {MOCK_OUTCOMES.map((row, i) => (
+                  <div key={i} className="grid grid-cols-[80px_100px_1fr_100px_80px_70px_70px] gap-x-3 px-5 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors items-center">
+                    <span className="text-xs text-gray-400">{row.date.slice(5)}</span>
+                    <span className="text-xs text-gray-600 font-medium">{row.member}</span>
+                    <div className="min-w-0">
+                      <span className="text-xs text-gray-700 truncate block">{row.keyword}</span>
+                      <span className="text-[11px] text-green-600 truncate block">→ {row.final_keyword}</span>
+                    </div>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full w-fit ${row.op === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{row.op}</span>
+                    <span className={`text-xs font-medium ${row.rank.startsWith('上涨') ? 'text-green-600' : row.rank === '追踪中' ? 'text-gray-400' : 'text-red-400'}`}>{row.rank}</span>
+                    <span className={`text-xs ${row.indexed === '未收录' ? 'text-red-400' : 'text-gray-500'}`}>{row.indexed}</span>
+                    <div className="flex justify-center">
+                      {row.outcome === 'success' && <span className="text-[11px] bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
+                      {row.outcome === 'fail'    && <span className="text-[11px] bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">无效</span>}
+                      {row.outcome === 'pending' && <span className="text-[11px] bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
