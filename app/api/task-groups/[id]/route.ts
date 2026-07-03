@@ -22,11 +22,12 @@ export async function PUT(
   }
 
   const { id } = await params
-  const { name, members, rank_domains, new_domains } = await req.json() as {
+  const { name, members, rank_domains, new_domains, associated_domains } = await req.json() as {
     name: string
     members: { user_id: string; username: string; member_type?: string }[]
     rank_domains?: string[]
     new_domains?: string[]
+    associated_domains?: string[]
   }
 
   if (!members || members.length === 0) {
@@ -38,7 +39,7 @@ export async function PUT(
 
   const { error: updateErr } = await service
     .from('task_groups')
-    .update({ name, rank_domains: rank_domains || [], new_domains: new_domains || [] })
+    .update({ name, rank_domains: rank_domains || [], new_domains: new_domains || [], associated_domains: associated_domains || [] })
     .eq('id', id)
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 

@@ -7,7 +7,7 @@ import { getBrowserClient } from '@/lib/supabase-browser'
 // ── Interfaces ─────────────────────────────────────────────────────────────────
 
 interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
-interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[]; rank_domains: string[]; new_domains: string[] }
+interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[]; rank_domains: string[]; new_domains: string[]; associated_domains: string[] }
 interface UserOption { id: string; email: string; username: string | null; role: string }
 interface SiteInfo { id: string; domain: string; name: string; category: 'large' | 'medium' | 'small'; is_enabled: boolean; has_rank_data: boolean }
 
@@ -158,6 +158,8 @@ interface MemberModalProps {
   allSites: SiteInfo[]
   name: string
   onNameChange: (v: string) => void
+  assocDomains: Set<string>
+  onAssocDomainsChange: (s: Set<string>) => void
   selUsers: Set<string>
   onSelUsersChange: (s: Set<string>) => void
   mTypes: Record<string, 'app' | 'game'>
@@ -173,6 +175,7 @@ interface MemberModalProps {
 function MemberModal({
   mode, onClose, userOptions, allSites,
   name, onNameChange,
+  assocDomains, onAssocDomainsChange,
   selUsers, onSelUsersChange,
   mTypes, onMTypesChange,
   rankDomains, onRankDomainsChange,
@@ -183,6 +186,11 @@ function MemberModal({
   const CAT_LABELS: Record<string, string> = { large: '大站', medium: '中站', small: '小站' }
   const cats = ['large', 'medium', 'small'] as const
 
+  function toggleAssoc(domain: string) {
+    const next = new Set(assocDomains)
+    if (next.has(domain)) next.delete(domain); else next.add(domain)
+    onAssocDomainsChange(next)
+  }
   function toggleRank(domain: string) {
     const next = new Set(rankDomains)
     if (next.has(domain)) next.delete(domain); else next.add(domain)
@@ -248,6 +256,36 @@ function MemberModal({
               placeholder="留空则自动使用成员名称"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              网站关联
+              <span className="ml-2 text-xs text-gray-400 font-normal">不选则不关联</span>
+            </label>
+            {assocDomains.size > 0 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {Array.from(assocDomains).map(d => (
+                  <span key={d} className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5">
+                    {d}
+                    <button type="button" onClick={() => toggleAssoc(d)} className="text-green-400 hover:text-green-600 leading-none">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="border border-gray-200 rounded-lg overflow-y-auto max-h-28">
+              {allSites.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-gray-400">加载中…</div>
+              ) : allSites.map(s => (
+                <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" checked={assocDomains.has(s.domain)} onChange={() => toggleAssoc(s.domain)}
+                    className="w-3.5 h-3.5 accent-green-500 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">{s.domain}</span>
+                  {s.name && <span className="text-xs text-gray-400 truncate">{s.name}</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               组员{selUsers.size > 0 && <span className="ml-1.5 text-green-600">（已选 {selUsers.size} 人）</span>}
@@ -450,8 +488,10 @@ export default function TaskGroupsPage() {
   const [allSites, setAllSites] = useState<SiteInfo[]>([])
   const [selectedRankDomains, setSelectedRankDomains] = useState<Set<string>>(new Set())
   const [selectedNewDomains, setSelectedNewDomains] = useState<Set<string>>(new Set())
+  const [selectedAssocDomains, setSelectedAssocDomains] = useState<Set<string>>(new Set())
   const [editSelectedRankDomains, setEditSelectedRankDomains] = useState<Set<string>>(new Set())
   const [editSelectedNewDomains, setEditSelectedNewDomains] = useState<Set<string>>(new Set())
+  const [editSelectedAssocDomains, setEditSelectedAssocDomains] = useState<Set<string>>(new Set())
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [addKw, setAddKw] = useState('')
@@ -903,7 +943,7 @@ export default function TaskGroupsPage() {
 
   async function openCreateModal() {
     setShowCreate(true); setCreateName(''); setSelectedUsers(new Set()); setMemberTypes({})
-    setSelectedRankDomains(new Set()); setSelectedNewDomains(new Set())
+    setSelectedRankDomains(new Set()); setSelectedNewDomains(new Set()); setSelectedAssocDomains(new Set())
     const [usersRes] = await Promise.all([fetch('/api/admin/users'), loadAllSites()])
     const data = await usersRes.json()
     setUserOptions((data.users || []).filter((u: UserOption) => u.role !== 'super'))
@@ -917,7 +957,7 @@ export default function TaskGroupsPage() {
         .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: memberTypes[u.id] || 'app' }))
       const res = await fetch('/api/task-groups', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName.trim() || members.map(m => m.username).join(' · '), type: 'both', members, rank_domains: Array.from(selectedRankDomains), new_domains: Array.from(selectedNewDomains) }),
+        body: JSON.stringify({ name: createName.trim() || members.map(m => m.username).join(' · '), type: 'both', members, rank_domains: Array.from(selectedRankDomains), new_domains: Array.from(selectedNewDomains), associated_domains: Array.from(selectedAssocDomains) }),
       })
       if (res.ok) { setShowCreate(false); await loadGroups() }
     } finally { setCreating(false) }
@@ -929,6 +969,7 @@ export default function TaskGroupsPage() {
     setEditSelectedUsers(new Set(activeGroup.members.map(m => m.user_id)))
     setEditSelectedRankDomains(new Set(activeGroup.rank_domains || []))
     setEditSelectedNewDomains(new Set(activeGroup.new_domains || []))
+    setEditSelectedAssocDomains(new Set(activeGroup.associated_domains || []))
     const types: Record<string, 'app' | 'game'> = {}
     for (const m of activeGroup.members) types[m.user_id] = m.member_type === 'game' ? 'game' : 'app'
     setEditMemberTypes(types); setShowEdit(true)
@@ -945,7 +986,7 @@ export default function TaskGroupsPage() {
         .map(u => ({ user_id: u.id, username: u.username || u.email.split('@')[0], member_type: editMemberTypes[u.id] || 'app' }))
       const res = await fetch(`/api/task-groups/${activeGroup.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim() || members.map(m => m.username).join(' · '), members, rank_domains: Array.from(editSelectedRankDomains), new_domains: Array.from(editSelectedNewDomains) }),
+        body: JSON.stringify({ name: editName.trim() || members.map(m => m.username).join(' · '), members, rank_domains: Array.from(editSelectedRankDomains), new_domains: Array.from(editSelectedNewDomains), associated_domains: Array.from(editSelectedAssocDomains) }),
       })
       if (res.ok) { setShowEdit(false); await loadGroups() }
     } finally { setSaving(false) }
@@ -1471,6 +1512,7 @@ export default function TaskGroupsPage() {
           mode="create" onClose={() => setShowCreate(false)}
           userOptions={userOptions} allSites={allSites}
           name={createName} onNameChange={setCreateName}
+          assocDomains={selectedAssocDomains} onAssocDomainsChange={setSelectedAssocDomains}
           selUsers={selectedUsers} onSelUsersChange={setSelectedUsers}
           mTypes={memberTypes} onMTypesChange={setMemberTypes}
           rankDomains={selectedRankDomains} onRankDomainsChange={setSelectedRankDomains}
@@ -1483,6 +1525,7 @@ export default function TaskGroupsPage() {
           mode="edit" onClose={() => setShowEdit(false)}
           userOptions={userOptions} allSites={allSites}
           name={editName} onNameChange={setEditName}
+          assocDomains={editSelectedAssocDomains} onAssocDomainsChange={setEditSelectedAssocDomains}
           selUsers={editSelectedUsers} onSelUsersChange={setEditSelectedUsers}
           mTypes={editMemberTypes} onMTypesChange={setEditMemberTypes}
           rankDomains={editSelectedRankDomains} onRankDomainsChange={setEditSelectedRankDomains}
