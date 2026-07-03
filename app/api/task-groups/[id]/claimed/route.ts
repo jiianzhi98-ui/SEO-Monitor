@@ -42,7 +42,7 @@ export async function GET(
   const service = createServiceClient() as any
   const { data, error } = await service
     .from('member_claimed_keywords')
-    .select('id, keyword, keyword_type, source, search_volume, status, created_at')
+    .select('id, keyword, keyword_type, source, search_volume, status, final_keyword, page_url, created_at')
     .eq('group_id', groupId)
     .eq('user_id', userId)
     .eq('claimed_date', date)
@@ -115,12 +115,22 @@ export async function PATCH(
   if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: groupId } = await params
-  const { claimId, status } = await req.json() as { claimId: string; status: string }
+  const { claimId, status, final_keyword, page_url } = await req.json() as {
+    claimId: string
+    status?: string
+    final_keyword?: string
+    page_url?: string
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
-  const updateData: Record<string, unknown> = { status }
-  if (status === 'submitted') updateData.submitted_at = new Date().toISOString()
+  const updateData: Record<string, unknown> = {}
+  if (status !== undefined) {
+    updateData.status = status
+    if (status === 'submitted') updateData.submitted_at = new Date().toISOString()
+  }
+  if (final_keyword !== undefined) updateData.final_keyword = final_keyword || null
+  if (page_url !== undefined) updateData.page_url = page_url || null
 
   const { error } = await service
     .from('member_claimed_keywords')

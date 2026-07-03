@@ -20,6 +20,7 @@ interface CrossWord { keyword: string; volume: number; last_date: string; first_
 interface ClaimedKeyword {
   id: string; keyword: string; source: string
   search_volume: number; status: string; created_at: string
+  final_keyword: string | null; page_url: string | null
 }
 
 type RightTab = 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
@@ -643,6 +644,15 @@ export default function TaskGroupsPage() {
     })
   }
 
+  async function saveClaim(claimId: string, field: 'final_keyword' | 'page_url', value: string) {
+    if (!activeGroupId) return
+    setClaimedKeywords(prev => prev.map(k => k.id === claimId ? { ...k, [field]: value || null } : k))
+    await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ claimId, [field]: value }),
+    })
+  }
+
   async function submitForDate() {
     if (!activeGroupId || submitting || pendingCount === 0) return
     setSubmitting(true)
@@ -837,7 +847,7 @@ export default function TaskGroupsPage() {
             if (rec.status !== 'dismissed') setClaimedKeywords(prev => prev.some(k => k.id === rec.id) ? prev : [...prev, rec])
           } else if (payload.eventType === 'UPDATE') {
             if (rec.status === 'dismissed') setClaimedKeywords(prev => prev.filter(k => k.id !== rec.id))
-            else setClaimedKeywords(prev => prev.map(k => k.id === rec.id ? { ...k, status: rec.status } : k))
+            else setClaimedKeywords(prev => prev.map(k => k.id === rec.id ? { ...k, status: rec.status, final_keyword: rec.final_keyword, page_url: rec.page_url } : k))
           } else if (payload.eventType === 'DELETE') {
             setClaimedKeywords(prev => prev.filter(k => k.id !== (payload.old as { id: string }).id))
           }
@@ -1300,14 +1310,34 @@ export default function TaskGroupsPage() {
                   ) : (
                     <div className="divide-y divide-gray-50">
                       {displayedClaims.map(k => (
-                        <div key={k.id} className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
-                          {isViewingOwn && k.status === 'pending' ? (
-                            <button onClick={() => dismissClaimed(k.id)} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
-                          ) : (
-                            <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs ${k.status !== 'pending' ? 'text-green-400' : ''}`}>{k.status !== 'pending' ? '✓' : ''}</span>
+                        <div key={k.id} className={`px-3 py-2 hover:bg-gray-50 transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
+                          <div className="flex items-center gap-2">
+                            {isViewingOwn && k.status === 'pending' ? (
+                              <button onClick={() => dismissClaimed(k.id)} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
+                            ) : (
+                              <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs ${k.status !== 'pending' ? 'text-green-400' : ''}`}>{k.status !== 'pending' ? '✓' : ''}</span>
+                            )}
+                            <span className="flex-1 text-sm text-gray-800 truncate" title={k.keyword}>{k.keyword}</span>
+                            <SourceTag s={k.source} />
+                          </div>
+                          {isViewingOwn && (
+                            <div className="mt-1.5 ml-7 space-y-1">
+                              <input
+                                type="text"
+                                defaultValue={k.final_keyword ?? ''}
+                                placeholder="最终做的词"
+                                className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
+                                onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
+                              />
+                              <input
+                                type="url"
+                                defaultValue={k.page_url ?? ''}
+                                placeholder="https://..."
+                                className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300 font-mono"
+                                onBlur={e => { if (e.target.value !== (k.page_url ?? '')) saveClaim(k.id, 'page_url', e.target.value) }}
+                              />
+                            </div>
                           )}
-                          <span className="flex-1 text-sm text-gray-800 truncate" title={k.keyword}>{k.keyword}</span>
-                          <SourceTag s={k.source} />
                         </div>
                       ))}
                     </div>

@@ -12,7 +12,7 @@ interface Group { id: string; name: string; members: { user_id: string; username
 interface BySourceItem { source: string; count: number; volume: number }
 interface DayEntry {
   date: string; count: number; volume: number
-  keywords: { keyword: string; search_volume: number; source: string }[]
+  keywords: { keyword: string; search_volume: number; source: string; final_keyword: string | null; page_url: string | null }[]
 }
 interface MemberReport {
   userId: string; username: string; memberType: string
@@ -187,7 +187,7 @@ export default function GroupReportPage() {
     const entries: {
       key: string; date: string; userId: string; username: string
       count: number; volume: number
-      keywords: { keyword: string; search_volume: number; source: string }[]
+      keywords: { keyword: string; search_volume: number; source: string; final_keyword: string | null; page_url: string | null }[]
     }[] = []
     for (const member of report.members) {
       for (const day of member.byDate) {
@@ -347,14 +347,28 @@ export default function GroupReportPage() {
                           {/* Keyword list */}
                           {isOpen && (
                             <div className="border-t border-gray-50">
-                              <div className="grid grid-cols-[1fr_80px_auto] gap-x-4 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
-                                <span>关键词</span>
+                              <div className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
+                                <span>关键词 / 最终词</span>
+                                <span>页面URL</span>
                                 <span className="text-right">搜索量</span>
                                 <span className="text-right">来源</span>
                               </div>
                               {entry.keywords.map((kw, i) => (
-                                <div key={i} className="grid grid-cols-[1fr_80px_auto] gap-x-4 items-center px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
-                                  <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
+                                <div key={i} className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 items-start px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
+                                  <div className="min-w-0">
+                                    <span className="text-sm text-gray-800 truncate block" title={kw.keyword}>{kw.keyword}</span>
+                                    {kw.final_keyword && (
+                                      <span className="text-xs text-green-600 truncate block" title={kw.final_keyword}>→ {kw.final_keyword}</span>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    {kw.page_url ? (
+                                      <a href={kw.page_url} target="_blank" rel="noopener noreferrer"
+                                        className="text-xs text-blue-500 hover:underline font-mono truncate block" title={kw.page_url}>
+                                        {kw.page_url.replace(/^https?:\/\//, '').slice(0, 28)}{kw.page_url.replace(/^https?:\/\//, '').length > 28 ? '…' : ''}
+                                      </a>
+                                    ) : <span className="text-xs text-gray-300">—</span>}
+                                  </div>
                                   <span className="text-sm text-gray-500 text-right tabular-nums">{fmtVol(kw.search_volume)}</span>
                                   <div className="flex justify-end">
                                     <SourceTag source={kw.source} />

@@ -21,7 +21,7 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
   return { startDate: today, endDate: today }
 }
 
-interface RawRow { user_id: string; keyword: string; source: string; search_volume: number; claimed_date: string }
+interface RawRow { user_id: string; keyword: string; source: string; search_volume: number; claimed_date: string; final_keyword: string | null; page_url: string | null }
 interface RawMember { user_id: string; username: string | null; member_type: string | null }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +66,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   let query = service
     .from('member_claimed_keywords')
-    .select('user_id, keyword, source, search_volume, claimed_date')
+    .select('user_id, keyword, source, search_volume, claimed_date, final_keyword, page_url')
     .eq('group_id', groupId)
     .eq('status', 'submitted')
     .gte('claimed_date', startDate)
@@ -109,7 +109,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // Date
     const day = entry.dateMap.get(row.claimed_date) ?? { count: 0, volume: 0, keywords: [] }
     day.count += 1; day.volume += vol
-    day.keywords.push({ keyword: row.keyword, search_volume: vol, source: row.source })
+    day.keywords.push({ keyword: row.keyword, search_volume: vol, source: row.source, final_keyword: row.final_keyword || null, page_url: row.page_url || null })
     entry.dateMap.set(row.claimed_date, day)
 
     // Total
