@@ -510,6 +510,7 @@ export default function TaskGroupsPage() {
   const [editSelectedNewDomains, setEditSelectedNewDomains] = useState<Set<string>>(new Set())
   const [editSelectedAssocDomains, setEditSelectedAssocDomains] = useState<Set<string>>(new Set())
 
+  const [expandedClaimIds, setExpandedClaimIds] = useState<Set<string>>(new Set())
   const [showAddForm, setShowAddForm] = useState(false)
   const [addKw, setAddKw] = useState('')
   const [addOpType, setAddOpType] = useState<'新增' | '更新'>('新增')
@@ -658,6 +659,7 @@ export default function TaskGroupsPage() {
 
   async function loadClaimed(groupId: string, userId: string, date: string) {
     setClaimedLoading(true)
+    setExpandedClaimIds(new Set())
     try {
       const res = await fetch(`/api/task-groups/${groupId}/claimed?userId=${userId}&date=${date}`)
       const data = await res.json()
@@ -1399,46 +1401,61 @@ export default function TaskGroupsPage() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-50">
-                      {displayedClaims.map(k => (
-                        <div key={k.id} className={`px-3 py-2 hover:bg-gray-50 transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
-                          <div className="flex items-center gap-2">
-                            {isViewingOwn && k.status === 'pending' ? (
-                              <button onClick={() => dismissClaimed(k.id)} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
-                            ) : (
-                              <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs ${k.status !== 'pending' ? 'text-green-400' : ''}`}>{k.status !== 'pending' ? '✓' : ''}</span>
-                            )}
-                            <span className="flex-1 text-sm text-gray-800 truncate" title={k.keyword}>{k.keyword}</span>
-                            <SourceTag s={k.source} />
-                          </div>
-                          {isViewingOwn && (
-                            <div className="mt-1.5 ml-7 space-y-1">
-                              <div className="flex items-center gap-1.5">
-                                {(['新增', '更新'] as const).map(op => (
-                                  <button key={op}
-                                    onClick={() => saveClaim(k.id, 'operation_type', k.operation_type === op ? '' : op)}
-                                    className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${k.operation_type === op ? (op === '新增' ? 'bg-green-500 border-green-500 text-white' : 'bg-blue-500 border-blue-500 text-white') : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
-                                    {op}
-                                  </button>
-                                ))}
-                              </div>
-                              <input
-                                type="text"
-                                defaultValue={k.final_keyword ?? ''}
-                                placeholder="最终做的词"
-                                className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
-                                onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
-                              />
-                              <input
-                                type="url"
-                                defaultValue={k.page_url ?? ''}
-                                placeholder="https://..."
-                                className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300 font-mono"
-                                onBlur={e => { if (e.target.value !== (k.page_url ?? '')) saveClaim(k.id, 'page_url', e.target.value) }}
-                              />
+                      {displayedClaims.map(k => {
+                        const isExpanded = expandedClaimIds.has(k.id)
+                        const hasDetail = !!(k.operation_type || k.final_keyword || k.page_url)
+                        return (
+                          <div key={k.id} className={`transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
+                            <div
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer select-none"
+                              onClick={() => setExpandedClaimIds(prev => {
+                                const next = new Set(prev)
+                                if (next.has(k.id)) next.delete(k.id); else next.add(k.id)
+                                return next
+                              })}
+                            >
+                              {isViewingOwn && k.status === 'pending' ? (
+                                <button onClick={e => { e.stopPropagation(); dismissClaimed(k.id) }} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
+                              ) : (
+                                <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs ${k.status !== 'pending' ? 'text-green-400' : ''}`}>{k.status !== 'pending' ? '✓' : ''}</span>
+                              )}
+                              <span className="flex-1 text-sm text-gray-800 truncate" title={k.keyword}>{k.keyword}</span>
+                              {hasDetail && !isExpanded && k.operation_type && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${k.operation_type === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{k.operation_type}</span>
+                              )}
+                              <SourceTag s={k.source} />
+                              <span className="text-gray-300 text-xs flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            {isExpanded && isViewingOwn && (
+                              <div className="px-3 pb-2.5 ml-7 space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  {(['新增', '更新'] as const).map(op => (
+                                    <button key={op}
+                                      onClick={() => saveClaim(k.id, 'operation_type', k.operation_type === op ? '' : op)}
+                                      className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${k.operation_type === op ? (op === '新增' ? 'bg-green-500 border-green-500 text-white' : 'bg-blue-500 border-blue-500 text-white') : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
+                                      {op}
+                                    </button>
+                                  ))}
+                                </div>
+                                <input
+                                  type="text"
+                                  defaultValue={k.final_keyword ?? ''}
+                                  placeholder="最终做的词"
+                                  className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
+                                  onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
+                                />
+                                <input
+                                  type="url"
+                                  defaultValue={k.page_url ?? ''}
+                                  placeholder="https://..."
+                                  className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300 font-mono"
+                                  onBlur={e => { if (e.target.value !== (k.page_url ?? '')) saveClaim(k.id, 'page_url', e.target.value) }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
