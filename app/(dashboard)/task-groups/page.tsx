@@ -183,6 +183,7 @@ function MemberModal({
   onSubmit, busy,
 }: MemberModalProps) {
   const isCreate = mode === 'create'
+  const [assocSearch, setAssocSearch] = useState('')
   const CAT_LABELS: Record<string, string> = { large: '大站', medium: '中站', small: '小站' }
   const cats = ['large', 'medium', 'small'] as const
 
@@ -272,17 +273,33 @@ function MemberModal({
                 ))}
               </div>
             )}
-            <div className="border border-gray-200 rounded-lg overflow-y-auto max-h-28">
-              {allSites.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-gray-400">加载中…</div>
-              ) : allSites.map(s => (
-                <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
-                  <input type="checkbox" checked={assocDomains.has(s.domain)} onChange={() => toggleAssoc(s.domain)}
-                    className="w-3.5 h-3.5 accent-green-500 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">{s.domain}</span>
-                  {s.name && <span className="text-xs text-gray-400 truncate">{s.name}</span>}
-                </label>
-              ))}
+            <div className="relative">
+              <input
+                type="text"
+                value={assocSearch}
+                onChange={e => setAssocSearch(e.target.value)}
+                placeholder="搜索网站…"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              {assocSearch && (
+                <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-y-auto max-h-40">
+                  {allSites.filter(s =>
+                    s.domain.includes(assocSearch) || (s.name || '').includes(assocSearch)
+                  ).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-gray-400">无匹配站点</div>
+                  ) : allSites.filter(s =>
+                    s.domain.includes(assocSearch) || (s.name || '').includes(assocSearch)
+                  ).map(s => (
+                    <button key={s.id} type="button"
+                      onClick={() => { toggleAssoc(s.domain); setAssocSearch('') }}
+                      className={`w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition-colors ${assocDomains.has(s.domain) ? 'text-green-600' : 'text-gray-700'}`}>
+                      <span className="text-sm">{s.domain}</span>
+                      {s.name && <span className="text-xs text-gray-400">{s.name}</span>}
+                      {assocDomains.has(s.domain) && <span className="ml-auto text-green-500 text-xs">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
