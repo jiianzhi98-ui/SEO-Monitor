@@ -24,6 +24,21 @@ export async function GET(req: Request) {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
   }
 
+  // Convert legacy relative date strings still in DB to YYYY-MM-DD
+  function normalizeBaiduDate(text: string | null): string | null {
+    if (!text) return null
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text  // already converted
+    const nowMYT = Date.now() + 8 * 3600000
+    const toDate = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+    const daysAgo = text.match(/^(\d+)天前$/)
+    if (daysAgo) return toDate(nowMYT - parseInt(daysAgo[1]) * 86400000)
+    if (/^\d+(?:小时|分钟)前$/.test(text)) return toDate(nowMYT)
+    if (text === '昨天') return toDate(nowMYT - 86400000)
+    const m1 = text.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)
+    if (m1) return `${m1[1]}-${m1[2].padStart(2, '0')}-${m1[3].padStart(2, '0')}`
+    return text
+  }
+
   let query = service
     .from('site_indexed_pages')
     .select('id, url, title, snippet, baidu_date_str, first_seen_date', { count: 'exact' })
@@ -42,6 +57,7 @@ export async function GET(req: Request) {
   const today = getMY()
   const rows = (data || []).map((r: { id: string; url: string; title: string; snippet: string; baidu_date_str: string | null; first_seen_date: string }) => ({
     ...r,
+    baidu_date_str: normalizeBaiduDate(r.baidu_date_str),
     is_new: r.first_seen_date === today,
   }))
 
