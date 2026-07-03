@@ -14,9 +14,9 @@ on:
         default: ''
   schedule:
     - cron: '0 13 * * *'   # 21:00 MYT (target ~02:00 MYT after ~5h queue) — keywords
-    - cron: '0 15 * * *'   # 23:00 MYT (target ~04:00 MYT after ~5h queue) — weight
-    - cron: '0 16 * * *'   # 00:00 MYT (target ~05:00 MYT after ~5h queue) — rank
-    - cron: '0 18 * * *'   # 02:00 MYT (target ~07:00 MYT after ~5h queue) — index-pages
+    - cron: '0 14 * * *'   # 22:00 MYT (target ~03:00 MYT after ~5h queue) — weight
+    - cron: '0 15 * * *'   # 23:00 MYT (target ~04:00 MYT after ~5h queue) — rank
+    - cron: '0 17 * * *'   # 01:00 MYT (target ~06:00 MYT after ~5h queue) — index-pages
 
 jobs:
   crawl:
@@ -45,11 +45,11 @@ jobs:
             STEP="${{ github.event.inputs.step }}"
           elif [ "${{ github.event.schedule }}" = "0 13 * * *" ]; then
             STEP="keywords"
-          elif [ "${{ github.event.schedule }}" = "0 15 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 14 * * *" ]; then
             STEP="weight"
-          elif [ "${{ github.event.schedule }}" = "0 16 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 15 * * *" ]; then
             STEP="rank"
-          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 17 * * *" ]; then
             STEP="index-pages"
           else
             STEP="all"

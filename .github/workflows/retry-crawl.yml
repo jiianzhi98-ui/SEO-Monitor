@@ -9,9 +9,9 @@ on:
         options: [keywords, weight, rank]
         default: keywords
   schedule:
-    - cron: '0 18 * * *'    # 02:00 MYT → 目标执行 07:00 MYT（+5h queue）— keywords 重试
-    - cron: '30 18 * * *'   # 02:30 MYT → 目标执行 07:30 MYT（+5h queue）— weight 重试
-    - cron: '0 19 * * *'    # 03:00 MYT → 目标执行 08:00 MYT（+5h queue）— rank 重试
+    - cron: '0 17 * * *'    # 01:00 MYT → 目标执行 06:00 MYT（+5h queue）— keywords 重试
+    - cron: '30 17 * * *'   # 01:30 MYT → 目标执行 06:30 MYT（+5h queue）— weight 重试
+    - cron: '0 18 * * *'    # 02:00 MYT → 目标执行 07:00 MYT（+5h queue）— rank 重试
 
 jobs:
   retry:
@@ -38,11 +38,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STEP="${{ github.event.inputs.step }}"
-          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 17 * * *" ]; then
             STEP="keywords"
-          elif [ "${{ github.event.schedule }}" = "30 18 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "30 17 * * *" ]; then
             STEP="weight"
-          elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
             STEP="rank"
           else
             STEP="keywords"
