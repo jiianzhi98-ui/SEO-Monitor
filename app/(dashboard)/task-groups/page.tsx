@@ -755,7 +755,7 @@ export default function TaskGroupsPage() {
     if (incomplete.length > 0) {
       const ids = new Set(incomplete.map(k => k.id))
       setInvalidClaimIds(ids)
-      setExpandedClaimIds(prev => new Set([...prev, ...ids]))
+      setExpandedClaimIds(prev => new Set([...Array.from(prev), ...Array.from(ids)]))
       return
     }
     setInvalidClaimIds(new Set())
