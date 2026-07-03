@@ -595,44 +595,48 @@ export async function fetchBaiduIndexPages(
       const $ = cheerio.load(html)
       let pageCount = 0
 
-      // Use h3 a as anchor — more resilient to Baidu HTML structure changes
-      $('#content_left h3 a').each((_, titleEl) => {
-        const $titleEl = $(titleEl)
-        const titleText = $titleEl.text().replace(/\s+/g, ' ').trim()
+      // Walk each result container — Baidu stores real URL in `mu` attribute
+      $('#content_left > div[mu], #content_left > article[mu]').each((_, containerEl) => {
+        const $container = $(containerEl)
+
+        // Real URL from mu attribute
+        const mu = ($container.attr('mu') || '').trim()
+        if (!mu || !mu.toLowerCase().includes(domainRoot)) return
+        const displayUrl = mu.replace(/^https?:\/\//i, '')
+        if (seenUrls.has(displayUrl)) return
+
+        // Title from h3 a
+        const titleText = $container.find('h3 a').first().text().replace(/\s+/g, ' ').trim()
         if (!titleText || seenTitles.has(titleText)) return
 
-        // Walk up to find the result container (direct child of #content_left)
-        const $container = $titleEl.closest('#content_left > div, #content_left > article')
-        if (!$container.length) return
-
-        // cite element contains the display URL
-        const citeText = $container.find('cite').first().text().replace(/\s+/g, '').trim()
-          .replace(/^https?:\/\//i, '')
-        if (!citeText || !citeText.toLowerCase().includes(domainRoot)) return
-        if (seenUrls.has(citeText)) return
-
-        seenUrls.add(citeText)
+        seenUrls.add(displayUrl)
         seenTitles.add(titleText)
 
-        // Snippet: try known class names first, then longest text block
-        let snippet = $container.find('[class*="abstract"], [class*="desc"], [class*="content"]').first().text().replace(/\s+/g, ' ').trim()
+        // Snippet: new Baidu uses summary-text class; fall back to abstract or longest block
+        let snippet = $container.find('[class*="summary-text"]').first().text().replace(/\s+/g, ' ').trim()
+        if (!snippet) snippet = $container.find('[class*="abstract"]').first().text().replace(/\s+/g, ' ').trim()
         if (!snippet) {
           $container.find('p, span').each((_, p) => {
             const t = $(p).text().replace(/\s+/g, ' ').trim()
-            if (t.length > 20 && t.length > snippet.length && !t.includes(domainRoot)) snippet = t
+            if (t.length > 20 && t.length > snippet.length && !t.includes(domainRoot) && !t.includes('baidu')) snippet = t
           })
         }
         if (snippet.length > 200) snippet = snippet.slice(0, 200) + '…'
 
-        // Date: look for date-like text in spans/em
+        // Date: new Baidu uses prefix-time class; fall back to pattern scan
         let baiduDateStr: string | null = null
-        $container.find('span, em').each((_, dateEl) => {
-          if (baiduDateStr) return false
-          const t = $(dateEl).text().trim()
-          if (datePattern.test(t)) baiduDateStr = t
-        })
+        const prefixTime = $container.find('[class*="prefix-time"]').first().text().trim()
+        if (prefixTime && datePattern.test(prefixTime)) {
+          baiduDateStr = prefixTime
+        } else {
+          $container.find('span, em').each((_, el) => {
+            if (baiduDateStr) return false
+            const t = $(el).text().trim()
+            if (datePattern.test(t)) baiduDateStr = t
+          })
+        }
 
-        results.push({ url: citeText, title: titleText, snippet, baiduDateStr })
+        results.push({ url: displayUrl, title: titleText, snippet, baiduDateStr })
         pageCount++
       })
 
