@@ -83,7 +83,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const memberMap = new Map<string, {
     userId: string; username: string; memberType: string
     sourceMap: Map<string, { count: number; volume: number }>
-    dateMap: Map<string, { count: number; volume: number; keywords: { keyword: string; search_volume: number; source: string }[] }>
+    dateMap: Map<string, { count: number; volume: number; keywords: { keyword: string; search_volume: number; source: string; final_keyword: string | null; page_url: string | null }[] }>
     total: { count: number; volume: number }
   }>()
 
