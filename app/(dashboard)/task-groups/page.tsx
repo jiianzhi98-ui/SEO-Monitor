@@ -626,7 +626,7 @@ export default function TaskGroupsPage() {
       const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword, source, search_volume }),
+        body: JSON.stringify({ keyword, source, search_volume, operation_type: '新增' }),
       })
       if (res.status === 409) {
         // Another session already claimed it — refresh to show updated state
