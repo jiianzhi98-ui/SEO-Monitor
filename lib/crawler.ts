@@ -595,19 +595,21 @@ export async function fetchBaiduIndexPages(
       const $ = cheerio.load(html)
       let pageCount = 0
 
-      // Walk each result container — Baidu stores real URL in `mu` attribute
-      $('#content_left > div[mu], #content_left > article[mu]').each((_, containerEl) => {
-        const $container = $(containerEl)
+      // Find titles first, then walk up to the nearest [mu] container.
+      // This handles any nesting depth — sitelinks and regular results alike.
+      $('#content_left h3 a').each((_, titleEl) => {
+        const $titleEl = $(titleEl)
+        const titleText = $titleEl.text().replace(/\s+/g, ' ').trim()
+        if (!titleText || seenTitles.has(titleText)) return
 
-        // Real URL from mu attribute
+        // Walk up to find the ancestor with the real URL in mu attribute
+        const $container = $titleEl.closest('[mu]')
+        if (!$container.length) return
+
         const mu = ($container.attr('mu') || '').trim()
         if (!mu || !mu.toLowerCase().includes(domainRoot)) return
         const displayUrl = mu.replace(/^https?:\/\//i, '')
         if (seenUrls.has(displayUrl)) return
-
-        // Title from h3 a
-        const titleText = $container.find('h3 a').first().text().replace(/\s+/g, ' ').trim()
-        if (!titleText || seenTitles.has(titleText)) return
 
         seenUrls.add(displayUrl)
         seenTitles.add(titleText)
