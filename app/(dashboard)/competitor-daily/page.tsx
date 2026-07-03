@@ -188,14 +188,23 @@ export default function CompetitorDailyPage() {
 
       interface KwStatRow { site_id: string; stat_date: string; app_count: number; game_count: number }
 
-      const [sitesApiRes, { data: statsRaw }] = await Promise.all([
+      const [sitesApiRes, { data: statsRaw }, { data: groupsRaw }] = await Promise.all([
         fetch('/api/sites').then(r => r.json() as Promise<{ sites: SiteRow[] }>),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('competitor_kw_stats') as any)
           .select('site_id, stat_date, app_count, game_count')
           .gte('stat_date', d30ago)
           .lte('stat_date', yesterday),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from('task_groups') as any).select('associated_domains'),
       ])
+
+      const associatedDomains = new Set<string>()
+      for (const g of (groupsRaw || []) as { associated_domains: string[] | null }[]) {
+        for (const d of g.associated_domains || []) {
+          if (d) associatedDomains.add(d)
+        }
+      }
       const allSites = (sitesApiRes.sites || []) as SiteRow[]
       const sites = accessibleSiteIds
         ? allSites.filter(s => accessibleSiteIds.includes(s.id))
@@ -226,7 +235,7 @@ export default function CompetitorDailyPage() {
         const weekendBaseline = avg(weekendVals)
 
         const status = computeKwStatus(siteStats, yesterday)
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, weekdayBaseline, weekendBaseline, trend, status, hasHtml: !!site.list_url, hasRankData: site.has_rank_data ?? true }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, weekdayBaseline, weekendBaseline, trend, status, hasHtml: !!site.list_url, hasRankData: (site.has_rank_data ?? false) || associatedDomains.has(site.domain) }
       })
 
       const statusPriority = (r: CompetitorRow) => {
