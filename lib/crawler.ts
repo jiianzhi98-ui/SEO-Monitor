@@ -595,13 +595,18 @@ export async function fetchBaiduIndexPages(
       const $ = cheerio.load(html)
       let pageCount = 0
 
-      $('#content_left .result, #content_left .result-op').each((_, el) => {
-        const $el = $(el)
-
-        const titleText = $el.find('h3 a').first().text().replace(/\s+/g, ' ').trim()
+      // Use h3 a as anchor — more resilient to Baidu HTML structure changes
+      $('#content_left h3 a').each((_, titleEl) => {
+        const $titleEl = $(titleEl)
+        const titleText = $titleEl.text().replace(/\s+/g, ' ').trim()
         if (!titleText || seenTitles.has(titleText)) return
 
-        const citeText = $el.find('cite').first().text().replace(/\s+/g, '').trim()
+        // Walk up to find the result container (direct child of #content_left)
+        const $container = $titleEl.closest('#content_left > div, #content_left > article')
+        if (!$container.length) return
+
+        // cite element contains the display URL
+        const citeText = $container.find('cite').first().text().replace(/\s+/g, '').trim()
           .replace(/^https?:\/\//i, '')
         if (!citeText || !citeText.toLowerCase().includes(domainRoot)) return
         if (seenUrls.has(citeText)) return
@@ -609,17 +614,19 @@ export async function fetchBaiduIndexPages(
         seenUrls.add(citeText)
         seenTitles.add(titleText)
 
-        let snippet = $el.find('.c-abstract').first().text().replace(/\s+/g, ' ').trim()
+        // Snippet: try known class names first, then longest text block
+        let snippet = $container.find('[class*="abstract"], [class*="desc"], [class*="content"]').first().text().replace(/\s+/g, ' ').trim()
         if (!snippet) {
-          $el.find('p, span').each((_, p) => {
+          $container.find('p, span').each((_, p) => {
             const t = $(p).text().replace(/\s+/g, ' ').trim()
             if (t.length > 20 && t.length > snippet.length && !t.includes(domainRoot)) snippet = t
           })
         }
         if (snippet.length > 200) snippet = snippet.slice(0, 200) + '…'
 
+        // Date: look for date-like text in spans/em
         let baiduDateStr: string | null = null
-        $el.find('span, em').each((_, dateEl) => {
+        $container.find('span, em').each((_, dateEl) => {
           if (baiduDateStr) return false
           const t = $(dateEl).text().trim()
           if (datePattern.test(t)) baiduDateStr = t
