@@ -511,6 +511,7 @@ export default function TaskGroupsPage() {
   const [editSelectedAssocDomains, setEditSelectedAssocDomains] = useState<Set<string>>(new Set())
 
   const [expandedClaimIds, setExpandedClaimIds] = useState<Set<string>>(new Set())
+  const [invalidClaimIds, setInvalidClaimIds] = useState<Set<string>>(new Set())
   const [showAddForm, setShowAddForm] = useState(false)
   const [addKw, setAddKw] = useState('')
   const [addOpType, setAddOpType] = useState<'新增' | '更新'>('新增')
@@ -660,6 +661,7 @@ export default function TaskGroupsPage() {
   async function loadClaimed(groupId: string, userId: string, date: string) {
     setClaimedLoading(true)
     setExpandedClaimIds(new Set())
+    setInvalidClaimIds(new Set())
     try {
       const res = await fetch(`/api/task-groups/${groupId}/claimed?userId=${userId}&date=${date}`)
       const data = await res.json()
@@ -746,6 +748,18 @@ export default function TaskGroupsPage() {
 
   async function submitForDate() {
     if (!activeGroupId || submitting || pendingCount === 0) return
+
+    // Validate: all pending claims must have operation_type, final_keyword, and page_url
+    const pending = displayedClaims.filter(k => k.status === 'pending')
+    const incomplete = pending.filter(k => !k.operation_type || !k.final_keyword?.trim() || !k.page_url?.trim())
+    if (incomplete.length > 0) {
+      const ids = new Set(incomplete.map(k => k.id))
+      setInvalidClaimIds(ids)
+      setExpandedClaimIds(prev => new Set([...prev, ...ids]))
+      return
+    }
+    setInvalidClaimIds(new Set())
+
     setSubmitting(true)
     try {
       const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
@@ -1404,10 +1418,11 @@ export default function TaskGroupsPage() {
                       {displayedClaims.map(k => {
                         const isExpanded = expandedClaimIds.has(k.id)
                         const hasDetail = !!(k.operation_type || k.final_keyword || k.page_url)
+                        const isInvalid = invalidClaimIds.has(k.id)
                         return (
                           <div key={k.id} className={`transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
                             <div
-                              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer select-none"
+                              className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer select-none ${isInvalid && !isExpanded ? 'bg-red-50/60' : ''}`}
                               onClick={() => setExpandedClaimIds(prev => {
                                 const next = new Set(prev)
                                 if (next.has(k.id)) next.delete(k.id); else next.add(k.id)
@@ -1431,25 +1446,26 @@ export default function TaskGroupsPage() {
                                 <div className="flex items-center gap-1.5">
                                   {(['新增', '更新'] as const).map(op => (
                                     <button key={op}
-                                      onClick={() => saveClaim(k.id, 'operation_type', k.operation_type === op ? '' : op)}
-                                      className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${k.operation_type === op ? (op === '新增' ? 'bg-green-500 border-green-500 text-white' : 'bg-blue-500 border-blue-500 text-white') : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
+                                      onClick={() => { saveClaim(k.id, 'operation_type', k.operation_type === op ? '' : op); setInvalidClaimIds(prev => { const n = new Set(prev); n.delete(k.id); return n }) }}
+                                      className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${k.operation_type === op ? (op === '新增' ? 'bg-green-500 border-green-500 text-white' : 'bg-blue-500 border-blue-500 text-white') : isInvalid && !k.operation_type ? 'border-red-300 text-red-400 hover:border-red-400' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
                                       {op}
                                     </button>
                                   ))}
+                                  {isInvalid && !k.operation_type && <span className="text-[10px] text-red-400">必选</span>}
                                 </div>
                                 <input
                                   type="text"
                                   defaultValue={k.final_keyword ?? ''}
                                   placeholder="最终做的词"
-                                  className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
-                                  onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
+                                  className={`w-full text-xs px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300 ${isInvalid && !k.final_keyword?.trim() ? 'border-red-300 placeholder-red-300' : 'border-gray-200'}`}
+                                  onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) { saveClaim(k.id, 'final_keyword', e.target.value); if (e.target.value.trim()) setInvalidClaimIds(prev => { const n = new Set(prev); n.delete(k.id); return n }) } }}
                                 />
                                 <input
                                   type="url"
                                   defaultValue={k.page_url ?? ''}
                                   placeholder="https://..."
-                                  className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300 font-mono"
-                                  onBlur={e => { if (e.target.value !== (k.page_url ?? '')) saveClaim(k.id, 'page_url', e.target.value) }}
+                                  className={`w-full text-xs px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300 font-mono ${isInvalid && !k.page_url?.trim() ? 'border-red-300 placeholder-red-300' : 'border-gray-200'}`}
+                                  onBlur={e => { if (e.target.value !== (k.page_url ?? '')) { saveClaim(k.id, 'page_url', e.target.value); if (e.target.value.trim()) setInvalidClaimIds(prev => { const n = new Set(prev); n.delete(k.id); return n }) } }}
                                 />
                               </div>
                             )}
@@ -1513,9 +1529,14 @@ export default function TaskGroupsPage() {
                       </div>
                     )}
                     <div className="p-3">
+                      {invalidClaimIds.size > 0 && (
+                        <p className="text-xs text-red-500 text-center mb-2">
+                          {invalidClaimIds.size} 条词有未填项，请检查标红字段
+                        </p>
+                      )}
                       <button onClick={submitForDate} disabled={submitting || pendingCount === 0}
-                        className="w-full py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                        {submitting ? '提交中...' : `提交${selectedDate !== today ? ` (${selectedDate.slice(5).replace('-', '/')})` : ''}${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
+                        className={`w-full py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${invalidClaimIds.size > 0 ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600'}`}>
+                        {submitting ? '提交中...' : invalidClaimIds.size > 0 ? `${invalidClaimIds.size} 条未完整` : `提交${selectedDate !== today ? ` (${selectedDate.slice(5).replace('-', '/')})` : ''}${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
                       </button>
                     </div>
                   </div>
