@@ -69,6 +69,19 @@ export const CRAWL_RULES: RuleSection[] = [
     ],
   },
   {
+    key: 'index-pages',
+    title: '收录页面追踪',
+    badge: 'step=index-pages · GitHub Actions · 目标 07:00 MYT（cron 02:00 MYT + 排队约 5h）',
+    items: [
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 18 * * * UTC = 02:00 MYT)，5个 matrix job 并行；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
+      { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）' },
+      { label: '抓取方式', text: '百度 site:domain 搜索（一年内 tl=4），每站最多5页（50条），页间延迟2-4秒随机，站间延迟10秒' },
+      { label: '去重', text: '按 (site_id, url) 唯一索引 upsert；新页面写入 first_seen_date=today；已知页面更新 last_seen_date=today' },
+      { label: '写入表', text: 'site_indexed_pages（url, title, snippet, baidu_date_str, first_seen_date, last_seen_date）' },
+      { label: '风险', text: '百度对 GitHub Actions IP 有反爬限制，若返回 "百度安全验证" 页则自动停止该站抓取；empty 状态表示疑似被拦截' },
+    ],
+  },
+  {
     key: 'search',
     title: '站点情报查询',
     badge: '类型：search · 触发方式：页面搜索',

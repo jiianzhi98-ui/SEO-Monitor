@@ -4,6 +4,7 @@ import {
   cleanTitle,
   fetchAizhanData,
   fetchRankChanges,
+  fetchBaiduIndexPages,
   type HtmlSource,
 } from '../lib/crawler'
 import { activityStart, activityEnd, siteLog } from '../lib/activity-log'
@@ -107,6 +108,7 @@ interface SiteRecord {
   version_suffixes: string[]
   is_enabled: boolean
   has_rank_data: boolean
+  has_index_pages: boolean
 }
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
@@ -444,6 +446,69 @@ async function runWeight(sites: SiteRecord[], today: string, activityId: string 
   })
 }
 
+async function runIndexPages(sites: SiteRecord[], today: string, activityId: string | null = null) {
+  const stepStart = Date.now()
+  console.log(`\n${'═'.repeat(60)}`)
+  console.log(`  INDEX-PAGES   日期=${today}   ${ts()}`)
+  console.log(`${'═'.repeat(60)}`)
+
+  let ok = 0, failed = 0, empty = 0, totalNew = 0
+
+  for (let idx = 0; idx < sites.length; idx++) {
+    const site = sites[idx]
+    const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
+
+    try {
+      const pages = await fetchBaiduIndexPages(site.domain, 5)
+
+      if (pages.length === 0) {
+        console.log(`${prefix} ⚠  收录结果为空（可能被拦截）`)
+        empty++
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail: '百度site:查询返回空，可能被拦截' })
+      } else {
+        let newCount = 0
+        for (const chunk of chunkArray(pages, 100)) {
+          const rows = chunk.map(p => ({
+            site_id: site.id,
+            url: p.url,
+            title: p.title,
+            snippet: p.snippet,
+            baidu_date_str: p.baiduDateStr,
+            first_seen_date: today,
+            last_seen_date: today,
+            updated_at: new Date().toISOString(),
+          }))
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await (supabase.from('site_indexed_pages') as any).upsert(rows, {
+            onConflict: 'site_id,url',
+            ignoreDuplicates: false,
+          }).select('id, first_seen_date')
+          // Count rows where first_seen_date == today (newly inserted)
+          const inserted = (res.data || []) as { first_seen_date: string }[]
+          newCount += inserted.filter(r => r.first_seen_date === today).length
+        }
+        totalNew += newCount
+        ok++
+        console.log(`${prefix} ✓  发现=${String(pages.length).padStart(4)}  新增=${String(newCount).padStart(4)}`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条` })
+      }
+    } catch (e) {
+      console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)
+      failed++
+      if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'fail', detail: e instanceof Error ? e.message : String(e) })
+    }
+    await delay(10000)
+  }
+
+  const durationMs = Date.now() - stepStart
+  console.log(`\n  INDEX-PAGES 完成  ✓${ok}  ⚠${empty}  ✗${failed}  新增总计=${totalNew}  耗时=${elapsed(durationMs)}`)
+  if (activityId) await activityEnd(supabase, activityId, {
+    status: failed > 0 ? 'warn' : empty > 0 ? 'warn' : 'done',
+    ok, empty, fail: failed, rowsWritten: totalNew, durationMs,
+    summary: `收录页面 ${ok} 站成功，新增 ${totalNew} 条，${empty} 站为空，${failed} 站失败`,
+  })
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -537,6 +602,10 @@ async function main() {
   if (step === 'rank' || step === 'all') {
     const aid = await activityStart(supabase, { ...logBase, step: 'rank' })
     await runRank(sites.filter(s => s.has_rank_data), today, aid)
+  }
+  if (step === 'index-pages') {
+    const aid = await activityStart(supabase, { ...logBase, step: 'index-pages' })
+    await runIndexPages(sites.filter(s => s.has_index_pages), today, aid)
   }
 
   console.log(`\n${'✓'.repeat(60)}`)

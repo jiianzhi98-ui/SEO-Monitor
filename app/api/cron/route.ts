@@ -13,6 +13,7 @@ import {
   cleanTitle,
   fetchAizhanData,
   fetchRankChanges,
+  fetchBaiduIndexPages,
   type HtmlSource,
 } from '@/lib/crawler'
 import { activityStart, activityEnd, siteLog } from '@/lib/activity-log'
@@ -65,15 +66,17 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const siteFilter = searchParams.get('site')
-  const step = searchParams.get('step') // 'keywords' | 'rank' | 'weight' | null (all)
-  const runKeywords = !step || step === 'keywords'
-  const runRank     = !step || step === 'rank'
-  const runWeight   = !step || step === 'weight'
+  const step = searchParams.get('step') // 'keywords' | 'rank' | 'weight' | 'index-pages' | null (all)
+  const runKeywords    = !step || step === 'keywords'
+  const runRank        = !step || step === 'rank'
+  const runWeight      = !step || step === 'weight'
+  const runIndexPages  = step === 'index-pages'
   const isSingleSite = !!siteFilter
   const logType = isSingleSite ? 'cron_manual' as const : 'cron_task' as const
 
   try {
-    let query = supabase.from('sites').select('*').eq('is_enabled', true)
+    let query = supabase.from('sites').select('*')
+    if (!runIndexPages) query = query.eq('is_enabled', true) // index-pages uses has_index_pages flag instead
     if (siteFilter) query = query.eq('domain', siteFilter)
     const { data: sitesRaw, error: sitesErr } = await query
     if (sitesErr) throw sitesErr
@@ -369,6 +372,60 @@ export async function GET(request: Request) {
         status: wtFail > 0 ? 'warn' : 'done',
         ok: wtOk, fail: wtFail, rowsWritten: wtRows,
         durationMs: Date.now() - wtStart,
+      })
+    }
+
+    // ── Index Pages ───────────────────────────────────────────────────────────────
+    if (runIndexPages) {
+      let ipOk = 0, ipEmpty = 0, ipFail = 0, ipRows = 0
+      const ipStart = Date.now()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const indexPageSites = (sites as any[]).filter((s: any) => s.has_index_pages)
+      const ipAid = await activityStart(supabase, { type: logType, source: 'vercel', step: 'index-pages', domain: siteFilter ?? undefined })
+
+      for (const site of indexPageSites) {
+        try {
+          const pages = await fetchBaiduIndexPages(site.domain, 5)
+          if (pages.length === 0) {
+            ipEmpty++
+            if (ipAid) await siteLog(supabase, ipAid, { domain: site.domain, status: 'empty', detail: '百度site:查询返回空' })
+          } else {
+            let newCount = 0
+            for (const chunk of chunkArray(pages, 100)) {
+              const rows = chunk.map(p => ({
+                site_id: site.id,
+                url: p.url,
+                title: p.title,
+                snippet: p.snippet,
+                baidu_date_str: p.baiduDateStr,
+                first_seen_date: today,
+                last_seen_date: today,
+                updated_at: new Date().toISOString(),
+              }))
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const res = await (supabase.from('site_indexed_pages') as any).upsert(rows, {
+                onConflict: 'site_id,url',
+                ignoreDuplicates: false,
+              }).select('first_seen_date')
+              const inserted = ((res.data || []) as { first_seen_date: string }[])
+              newCount += inserted.filter(r => r.first_seen_date === today).length
+            }
+            ipRows += newCount
+            ipOk++
+            if (ipAid) await siteLog(supabase, ipAid, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条` })
+          }
+        } catch (e) {
+          ipFail++
+          const msg = e instanceof Error ? e.message : '收录页面抓取失败'
+          if (ipAid) await siteLog(supabase, ipAid, { domain: site.domain, status: 'fail', detail: msg })
+        }
+        await new Promise(r => setTimeout(r, 10000))
+      }
+
+      if (ipAid) await activityEnd(supabase, ipAid, {
+        status: ipFail > 0 ? 'warn' : ipEmpty > 0 ? 'warn' : 'done',
+        ok: ipOk, empty: ipEmpty, fail: ipFail, rowsWritten: ipRows,
+        durationMs: Date.now() - ipStart,
       })
     }
 

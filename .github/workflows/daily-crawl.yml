@@ -6,12 +6,13 @@ on:
       step:
         description: '抓取步骤'
         type: choice
-        options: [all, keywords, rank, weight]
+        options: [all, keywords, rank, weight, index-pages]
         default: all
   schedule:
     - cron: '0 13 * * *'   # 21:00 MYT (target ~02:00 MYT after ~5h queue) — keywords
     - cron: '0 15 * * *'   # 23:00 MYT (target ~04:00 MYT after ~5h queue) — weight
     - cron: '0 16 * * *'   # 00:00 MYT (target ~05:00 MYT after ~5h queue) — rank
+    - cron: '0 18 * * *'   # 02:00 MYT (target ~07:00 MYT after ~5h queue) — index-pages
 
 jobs:
   crawl:
@@ -44,6 +45,8 @@ jobs:
             STEP="weight"
           elif [ "${{ github.event.schedule }}" = "0 16 * * *" ]; then
             STEP="rank"
+          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+            STEP="index-pages"
           else
             STEP="all"
           fi

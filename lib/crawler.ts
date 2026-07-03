@@ -540,6 +540,89 @@ export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; m
   return { pc, mobile }
 }
 
+export interface BaiduIndexedPage {
+  url: string          // display URL from cite (e.g. "www.example.com/page/title")
+  title: string        // page title
+  snippet: string      // description snippet (≤200 chars)
+  baiduDateStr: string | null  // raw Baidu date label (e.g. "2天前", "2026年6月1日")
+}
+
+// Fetch Baidu site: search results to discover indexed pages.
+// Uses 一年内 (tl=4) so results are sorted by date — newest first.
+// Paginates up to maxPages (each page = 10 results).
+export async function fetchBaiduIndexPages(
+  domain: string,
+  maxPages = 5
+): Promise<BaiduIndexedPage[]> {
+  const results: BaiduIndexedPage[] = []
+  const seenUrls = new Set<string>()
+  const seenTitles = new Set<string>()
+  const domainRoot = domain.replace(/^www\./i, '').toLowerCase()
+  const datePattern = /^\d+(?:天|小时|分钟)前$|^昨天$|^\d{4}年\d{1,2}月\d{1,2}日$|^\d{4}-\d{2}-\d{2}$/
+
+  for (let page = 0; page < maxPages; page++) {
+    const pn = page * 10
+    const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&tl=4&pn=${pn}&rn=10`
+    try {
+      const referer = page === 0
+        ? 'https://www.baidu.com/'
+        : `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&tl=4&pn=${(page - 1) * 10}`
+      const { ok, html } = await fetchHtmlDecoded(searchUrl, { ...getBrowserHeaders(), Referer: referer })
+      if (!ok || !html) break
+      // Check for CAPTCHA / empty result page
+      if (!html.includes('content_left') || html.includes('百度安全验证')) break
+
+      const $ = cheerio.load(html)
+      let pageCount = 0
+
+      $('#content_left .result, #content_left .result-op').each((_, el) => {
+        const $el = $(el)
+
+        // Title from first h3 a
+        const titleText = $el.find('h3 a').first().text().replace(/\s+/g, ' ').trim()
+        if (!titleText || seenTitles.has(titleText)) return
+
+        // Display URL from cite element — must belong to this domain
+        const citeText = $el.find('cite').first().text().replace(/\s+/g, '').trim()
+          .replace(/^https?:\/\//i, '')
+        if (!citeText || !citeText.toLowerCase().includes(domainRoot)) return
+        if (seenUrls.has(citeText)) return
+
+        seenUrls.add(citeText)
+        seenTitles.add(titleText)
+
+        // Snippet: first sizeable text block that isn't title/URL
+        let snippet = $el.find('.c-abstract').first().text().replace(/\s+/g, ' ').trim()
+        if (!snippet) {
+          $el.find('p, span').each((_, p) => {
+            const t = $(p).text().replace(/\s+/g, ' ').trim()
+            if (t.length > 20 && t.length > snippet.length && !t.includes(domainRoot)) snippet = t
+          })
+        }
+        if (snippet.length > 200) snippet = snippet.slice(0, 200) + '…'
+
+        // Date: scan for date-like text in spans/em
+        let baiduDateStr: string | null = null
+        $el.find('span, em').each((_, dateEl) => {
+          if (baiduDateStr) return false
+          const t = $(dateEl).text().trim()
+          if (datePattern.test(t)) baiduDateStr = t
+        })
+
+        results.push({ url: citeText, title: titleText, snippet, baiduDateStr })
+        pageCount++
+      })
+
+      if (pageCount === 0) break
+      if (page < maxPages - 1) await randomDelay(2000, 4000)
+    } catch {
+      break
+    }
+  }
+
+  return results
+}
+
 // Fetch Baidu search suggestions for a keyword
 export async function fetchBaiduSuggestion(keyword: string): Promise<string[]> {
   try {
