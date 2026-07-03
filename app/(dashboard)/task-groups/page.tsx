@@ -1362,14 +1362,14 @@ export default function TaskGroupsPage() {
                                     {op}
                                   </button>
                                 ))}
-                                <input
-                                  type="text"
-                                  defaultValue={k.final_keyword ?? ''}
-                                  placeholder="最终做的词"
-                                  className="flex-1 min-w-0 text-xs px-2 py-0.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
-                                  onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
-                                />
                               </div>
+                              <input
+                                type="text"
+                                defaultValue={k.final_keyword ?? ''}
+                                placeholder="最终做的词"
+                                className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
+                                onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
+                              />
                               <input
                                 type="url"
                                 defaultValue={k.page_url ?? ''}
