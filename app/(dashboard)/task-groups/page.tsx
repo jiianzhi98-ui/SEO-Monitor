@@ -20,7 +20,7 @@ interface CrossWord { keyword: string; volume: number; last_date: string; first_
 interface ClaimedKeyword {
   id: string; keyword: string; source: string
   search_volume: number; status: string; created_at: string
-  final_keyword: string | null; page_url: string | null
+  operation_type: string | null; final_keyword: string | null; page_url: string | null
 }
 
 type RightTab = 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
@@ -453,6 +453,13 @@ export default function TaskGroupsPage() {
   const [editSelectedRankDomains, setEditSelectedRankDomains] = useState<Set<string>>(new Set())
   const [editSelectedNewDomains, setEditSelectedNewDomains] = useState<Set<string>>(new Set())
 
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addKw, setAddKw] = useState('')
+  const [addOpType, setAddOpType] = useState<'新增' | '更新'>('新增')
+  const [addFinalKw, setAddFinalKw] = useState('')
+  const [addUrl, setAddUrl] = useState('')
+  const [addingManual, setAddingManual] = useState(false)
+
   const claimingRef = useRef<Set<string>>(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
   const claimedListRef = useRef<HTMLDivElement>(null)
@@ -644,13 +651,38 @@ export default function TaskGroupsPage() {
     })
   }
 
-  async function saveClaim(claimId: string, field: 'final_keyword' | 'page_url', value: string) {
+  async function saveClaim(claimId: string, field: 'final_keyword' | 'page_url' | 'operation_type', value: string) {
     if (!activeGroupId) return
     setClaimedKeywords(prev => prev.map(k => k.id === claimId ? { ...k, [field]: value || null } : k))
     await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ claimId, [field]: value }),
     })
+  }
+
+  async function addManualKeyword() {
+    if (!activeGroupId || !addKw.trim() || addingManual) return
+    setAddingManual(true)
+    try {
+      const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: addKw.trim(),
+          source: '手动添加',
+          search_volume: 0,
+          operation_type: addOpType,
+          final_keyword: addFinalKw.trim() || undefined,
+          page_url: addUrl.trim() || undefined,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setClaimedKeywords(prev => [...prev, data.keyword])
+        setAddKw(''); setAddFinalKw(''); setAddUrl(''); setAddOpType('新增')
+        setShowAddForm(false)
+      }
+    } finally { setAddingManual(false) }
   }
 
   async function submitForDate() {
@@ -847,7 +879,7 @@ export default function TaskGroupsPage() {
             if (rec.status !== 'dismissed') setClaimedKeywords(prev => prev.some(k => k.id === rec.id) ? prev : [...prev, rec])
           } else if (payload.eventType === 'UPDATE') {
             if (rec.status === 'dismissed') setClaimedKeywords(prev => prev.filter(k => k.id !== rec.id))
-            else setClaimedKeywords(prev => prev.map(k => k.id === rec.id ? { ...k, status: rec.status, final_keyword: rec.final_keyword, page_url: rec.page_url } : k))
+            else setClaimedKeywords(prev => prev.map(k => k.id === rec.id ? { ...k, status: rec.status, operation_type: rec.operation_type, final_keyword: rec.final_keyword, page_url: rec.page_url } : k))
           } else if (payload.eventType === 'DELETE') {
             setClaimedKeywords(prev => prev.filter(k => k.id !== (payload.old as { id: string }).id))
           }
@@ -1170,7 +1202,7 @@ export default function TaskGroupsPage() {
   ]
 
   function SourceTag({ s }: { s: string }) {
-    const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库' }
+    const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库', '手动添加': '手动' }
     return <span className="text-[10px] text-gray-300 flex-shrink-0">{map[s] ?? s}</span>
   }
 
@@ -1322,13 +1354,22 @@ export default function TaskGroupsPage() {
                           </div>
                           {isViewingOwn && (
                             <div className="mt-1.5 ml-7 space-y-1">
-                              <input
-                                type="text"
-                                defaultValue={k.final_keyword ?? ''}
-                                placeholder="最终做的词"
-                                className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
-                                onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
-                              />
+                              <div className="flex items-center gap-1.5">
+                                {(['新增', '更新'] as const).map(op => (
+                                  <button key={op}
+                                    onClick={() => saveClaim(k.id, 'operation_type', k.operation_type === op ? '' : op)}
+                                    className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${k.operation_type === op ? (op === '新增' ? 'bg-green-500 border-green-500 text-white' : 'bg-blue-500 border-blue-500 text-white') : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
+                                    {op}
+                                  </button>
+                                ))}
+                                <input
+                                  type="text"
+                                  defaultValue={k.final_keyword ?? ''}
+                                  placeholder="最终做的词"
+                                  className="flex-1 min-w-0 text-xs px-2 py-0.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300"
+                                  onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) saveClaim(k.id, 'final_keyword', e.target.value) }}
+                                />
+                              </div>
                               <input
                                 type="url"
                                 defaultValue={k.page_url ?? ''}
@@ -1344,11 +1385,64 @@ export default function TaskGroupsPage() {
                   )}
                 </div>
                 {isViewingOwn && (
-                  <div className="p-3 border-t border-gray-100">
-                    <button onClick={submitForDate} disabled={submitting || pendingCount === 0}
-                      className="w-full py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                      {submitting ? '提交中...' : `提交${selectedDate !== today ? ` (${selectedDate.slice(5).replace('-', '/')})` : ''}${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
-                    </button>
+                  <div className="border-t border-gray-100">
+                    {showAddForm ? (
+                      <div className="p-3 space-y-1.5 bg-gray-50/60">
+                        <input
+                          type="text"
+                          value={addKw}
+                          onChange={e => setAddKw(e.target.value)}
+                          placeholder="关键词（必填）"
+                          className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white"
+                          autoFocus
+                          onKeyDown={e => e.key === 'Enter' && addManualKeyword()}
+                        />
+                        <div className="flex items-center gap-1.5">
+                          {(['新增', '更新'] as const).map(op => (
+                            <button key={op} onClick={() => setAddOpType(op)}
+                              className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${addOpType === op ? (op === '新增' ? 'bg-green-500 border-green-500 text-white' : 'bg-blue-500 border-blue-500 text-white') : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
+                              {op}
+                            </button>
+                          ))}
+                          <input
+                            type="text"
+                            value={addFinalKw}
+                            onChange={e => setAddFinalKw(e.target.value)}
+                            placeholder="最终做的词"
+                            className="flex-1 min-w-0 text-xs px-2 py-0.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white"
+                          />
+                        </div>
+                        <input
+                          type="url"
+                          value={addUrl}
+                          onChange={e => setAddUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white font-mono"
+                          onKeyDown={e => e.key === 'Enter' && addManualKeyword()}
+                        />
+                        <div className="flex gap-2 pt-0.5">
+                          <button onClick={() => { setShowAddForm(false); setAddKw(''); setAddFinalKw(''); setAddUrl(''); setAddOpType('新增') }}
+                            className="flex-1 py-1 text-xs text-gray-500 border border-gray-200 rounded hover:bg-gray-100 transition-colors">取消</button>
+                          <button onClick={addManualKeyword} disabled={!addKw.trim() || addingManual}
+                            className="flex-1 py-1 text-xs font-medium bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-40 transition-colors">
+                            {addingManual ? '添加中…' : '添加'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-3 pt-2">
+                        <button onClick={() => setShowAddForm(true)}
+                          className="w-full py-1.5 text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg hover:border-green-300 hover:text-green-500 transition-colors flex items-center justify-center gap-1">
+                          <span className="text-base leading-none">+</span> 手动添加词
+                        </button>
+                      </div>
+                    )}
+                    <div className="p-3">
+                      <button onClick={submitForDate} disabled={submitting || pendingCount === 0}
+                        className="w-full py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        {submitting ? '提交中...' : `提交${selectedDate !== today ? ` (${selectedDate.slice(5).replace('-', '/')})` : ''}${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

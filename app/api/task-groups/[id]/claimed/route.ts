@@ -42,7 +42,7 @@ export async function GET(
   const service = createServiceClient() as any
   const { data, error } = await service
     .from('member_claimed_keywords')
-    .select('id, keyword, keyword_type, source, search_volume, status, final_keyword, page_url, created_at')
+    .select('id, keyword, keyword_type, source, search_volume, status, operation_type, final_keyword, page_url, created_at')
     .eq('group_id', groupId)
     .eq('user_id', userId)
     .eq('claimed_date', date)
@@ -61,10 +61,13 @@ export async function POST(
   if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: groupId } = await params
-  const { keyword, source, search_volume } = await req.json() as {
+  const { keyword, source, search_volume, operation_type, final_keyword, page_url } = await req.json() as {
     keyword: string
     source: string
     search_volume?: number
+    operation_type?: string
+    final_keyword?: string
+    page_url?: string
   }
 
   if (!keyword) {
@@ -99,8 +102,11 @@ export async function POST(
       search_volume: search_volume || 0,
       claimed_date: claimedDate,
       status: 'pending',
+      operation_type: operation_type || null,
+      final_keyword: final_keyword || null,
+      page_url: page_url || null,
     })
-    .select('id, keyword, keyword_type, source, search_volume, status, created_at')
+    .select('id, keyword, keyword_type, source, search_volume, status, operation_type, final_keyword, page_url, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -115,11 +121,12 @@ export async function PATCH(
   if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: groupId } = await params
-  const { claimId, status, final_keyword, page_url } = await req.json() as {
+  const { claimId, status, final_keyword, page_url, operation_type } = await req.json() as {
     claimId: string
     status?: string
     final_keyword?: string
     page_url?: string
+    operation_type?: string
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,6 +138,7 @@ export async function PATCH(
   }
   if (final_keyword !== undefined) updateData.final_keyword = final_keyword || null
   if (page_url !== undefined) updateData.page_url = page_url || null
+  if (operation_type !== undefined) updateData.operation_type = operation_type || null
 
   const { error } = await service
     .from('member_claimed_keywords')

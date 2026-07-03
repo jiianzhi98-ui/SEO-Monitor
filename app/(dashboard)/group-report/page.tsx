@@ -12,7 +12,7 @@ interface Group { id: string; name: string; members: { user_id: string; username
 interface BySourceItem { source: string; count: number; volume: number }
 interface DayEntry {
   date: string; count: number; volume: number
-  keywords: { keyword: string; search_volume: number; source: string; final_keyword: string | null; page_url: string | null }[]
+  keywords: { keyword: string; search_volume: number; source: string; operation_type: string | null; final_keyword: string | null; page_url: string | null }[]
 }
 interface MemberReport {
   userId: string; username: string; memberType: string
@@ -187,7 +187,7 @@ export default function GroupReportPage() {
     const entries: {
       key: string; date: string; userId: string; username: string
       count: number; volume: number
-      keywords: { keyword: string; search_volume: number; source: string; final_keyword: string | null; page_url: string | null }[]
+      keywords: { keyword: string; search_volume: number; source: string; operation_type: string | null; final_keyword: string | null; page_url: string | null }[]
     }[] = []
     for (const member of report.members) {
       for (const day of member.byDate) {
@@ -356,7 +356,12 @@ export default function GroupReportPage() {
                               {entry.keywords.map((kw, i) => (
                                 <div key={i} className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 items-start px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
                                   <div className="min-w-0">
-                                    <span className="text-sm text-gray-800 truncate block" title={kw.keyword}>{kw.keyword}</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
+                                      {kw.operation_type && (
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${kw.operation_type === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{kw.operation_type}</span>
+                                      )}
+                                    </div>
                                     {kw.final_keyword && (
                                       <span className="text-xs text-green-600 truncate block" title={kw.final_keyword}>→ {kw.final_keyword}</span>
                                     )}
