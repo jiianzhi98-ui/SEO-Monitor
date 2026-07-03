@@ -17,8 +17,7 @@ interface IndexedPage {
   title: string
   snippet: string
   baidu_date_str: string | null
-  first_seen_date: string
-  last_seen_date: string
+  is_new: boolean
 }
 
 const PAGE_SIZE = 20
@@ -243,16 +242,22 @@ export default function IndexPagesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[40%]">页面标题</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[25%]">显示 URL</th>
-                    <th className="text-center px-4 py-3 font-medium text-gray-500 w-[12%]">百度日期</th>
-                    <th className="text-center px-4 py-3 font-medium text-gray-500 w-[11%]">首次发现</th>
-                    <th className="text-center px-4 py-3 font-medium text-gray-500 w-[12%]">最近出现</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[9%]">状态</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[42%]">页面标题</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[32%]">显示 URL</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[17%]">百度日期</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {rows.map(row => (
                     <tr key={row.id} className="hover:bg-gray-50 transition-colors group">
+                      <td className="px-3 py-3 text-center">
+                        {row.is_new ? (
+                          <span className="inline-block text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">新发现</span>
+                        ) : (
+                          <span className="inline-block text-xs text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap">已收录</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-800 line-clamp-1 group-hover:text-green-700">
                           {row.title || '—'}
@@ -264,13 +269,11 @@ export default function IndexPagesPage() {
                       <td className="px-4 py-3">
                         <div className="text-xs text-gray-400 font-mono line-clamp-2 break-all">{row.url}</div>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-3 text-center">
                         {row.baidu_date_str ? (
                           <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{row.baidu_date_str}</span>
                         ) : <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-center text-xs text-gray-500">{row.first_seen_date}</td>
-                      <td className="px-4 py-3 text-center text-xs text-gray-400">{row.last_seen_date}</td>
                     </tr>
                   ))}
                 </tbody>

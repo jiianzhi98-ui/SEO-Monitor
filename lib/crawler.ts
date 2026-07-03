@@ -545,10 +545,25 @@ export async function fetchAizhanWeight(domain: string): Promise<{ pc: number; m
 }
 
 export interface BaiduIndexedPage {
-  url: string          // display URL from cite (e.g. "www.example.com/page/title")
+  url: string          // display URL from mu attribute (e.g. "www.example.com/page/title")
   title: string        // page title
   snippet: string      // description snippet (≤200 chars)
-  baiduDateStr: string | null  // raw Baidu date label (e.g. "2天前", "2026年6月1日")
+  baiduDateStr: string | null  // actual date in YYYY-MM-DD (converted from "3天前", "2026年6月1日" etc.)
+}
+
+// Convert Baidu relative/Chinese date text to YYYY-MM-DD using MYT (UTC+8)
+function parseBaiduRelativeDate(text: string): string | null {
+  const nowMYT = Date.now() + 8 * 3600000
+  const toDate = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+
+  const daysAgo = text.match(/^(\d+)天前$/)
+  if (daysAgo) return toDate(nowMYT - parseInt(daysAgo[1]) * 86400000)
+  if (/^\d+(?:小时|分钟)前$/.test(text)) return toDate(nowMYT)
+  if (text === '昨天') return toDate(nowMYT - 86400000)
+  const m1 = text.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)
+  if (m1) return `${m1[1]}-${m1[2].padStart(2, '0')}-${m1[3].padStart(2, '0')}`
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+  return null
 }
 
 export type BaiduIndexFailReason = 'captcha' | 'no_content' | 'http_error' | 'empty_results' | null
@@ -629,18 +644,19 @@ export async function fetchBaiduIndexPages(
         }
         if (snippet.length > 200) snippet = snippet.slice(0, 200) + '…'
 
-        // Date: new Baidu uses prefix-time class; fall back to pattern scan
-        let baiduDateStr: string | null = null
+        // Date: extract raw text then convert to YYYY-MM-DD
+        let rawDateText: string | null = null
         const prefixTime = $container.find('[class*="prefix-time"]').first().text().trim()
         if (prefixTime && datePattern.test(prefixTime)) {
-          baiduDateStr = prefixTime
+          rawDateText = prefixTime
         } else {
           $container.find('span, em').each((_, el) => {
-            if (baiduDateStr) return false
+            if (rawDateText) return false
             const t = $(el).text().trim()
-            if (datePattern.test(t)) baiduDateStr = t
+            if (datePattern.test(t)) rawDateText = t
           })
         }
+        const baiduDateStr = rawDateText ? parseBaiduRelativeDate(rawDateText) : null
 
         results.push({ url: displayUrl, title: titleText, snippet, baiduDateStr })
         pageCount++

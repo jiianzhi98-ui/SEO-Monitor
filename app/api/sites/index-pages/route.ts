@@ -26,20 +26,26 @@ export async function GET(req: Request) {
 
   let query = service
     .from('site_indexed_pages')
-    .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date', { count: 'exact' })
+    .select('id, url, title, snippet, baidu_date_str, first_seen_date', { count: 'exact' })
     .eq('site_id', siteId)
-    .order('first_seen_date', { ascending: false })
-    .order('title', { ascending: true })
+    .order('first_seen_date', { ascending: false })    // 新发现（今日）排最前
+    .order('baidu_date_str', { ascending: false, nullsFirst: false })  // 再按百度日期降序
     .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
   if (search) query = query.ilike('title', `%${search}%`)
-  if (filter === 'new7') query = query.gte('first_seen_date', getMY(-7))
-  if (filter === 'new30') query = query.gte('first_seen_date', getMY(-30))
+  if (filter === 'new7') query = query.gte('baidu_date_str', getMY(-7))
+  if (filter === 'new30') query = query.gte('baidu_date_str', getMY(-30))
 
   const { data, count, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ rows: data || [], total: count ?? 0, page, pageSize: PAGE_SIZE })
+  const today = getMY()
+  const rows = (data || []).map((r: { id: string; url: string; title: string; snippet: string; baidu_date_str: string | null; first_seen_date: string }) => ({
+    ...r,
+    is_new: r.first_seen_date === today,
+  }))
+
+  return NextResponse.json({ rows, total: count ?? 0, page, pageSize: PAGE_SIZE })
 }
 
 // PATCH /api/sites/index-pages — toggle has_index_pages for a site
