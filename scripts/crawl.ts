@@ -461,12 +461,19 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
     try {
-      const pages = await fetchBaiduIndexPages(site.domain, 5)
+      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, 5)
 
       if (pages.length === 0) {
-        console.log(`${prefix} ⚠  收录结果为空（可能被拦截）`)
+        const reasonMap: Record<string, string> = {
+          captcha: '百度安全验证拦截（IP被封）',
+          no_content: '页面无搜索结果区域（可能被拦截）',
+          http_error: 'HTTP请求失败',
+          empty_results: '百度site:查询无结果（该域名未被收录或已过滤）',
+        }
+        const detail = reasonMap[failReason ?? ''] ?? '百度site:查询返回空'
+        console.log(`${prefix} ⚠  ${detail}`)
         empty++
-        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail: '百度site:查询返回空，可能被拦截' })
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail })
       } else {
         let newCount = 0
         for (const chunk of chunkArray(pages, 100)) {

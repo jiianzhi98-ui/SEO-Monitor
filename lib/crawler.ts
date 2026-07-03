@@ -551,30 +551,46 @@ export interface BaiduIndexedPage {
   baiduDateStr: string | null  // raw Baidu date label (e.g. "2天前", "2026年6月1日")
 }
 
+export type BaiduIndexFailReason = 'captcha' | 'no_content' | 'http_error' | 'empty_results' | null
+
 // Fetch Baidu site: search results to discover indexed pages.
-// Uses 一年内 (tl=4) so results are sorted by date — newest first.
 // Paginates up to maxPages (each page = 10 results).
 export async function fetchBaiduIndexPages(
   domain: string,
   maxPages = 5
-): Promise<BaiduIndexedPage[]> {
+): Promise<{ pages: BaiduIndexedPage[]; failReason: BaiduIndexFailReason }> {
   const results: BaiduIndexedPage[] = []
   const seenUrls = new Set<string>()
   const seenTitles = new Set<string>()
   const domainRoot = domain.replace(/^www\./i, '').toLowerCase()
   const datePattern = /^\d+(?:天|小时|分钟)前$|^昨天$|^\d{4}年\d{1,2}月\d{1,2}日$|^\d{4}-\d{2}-\d{2}$/
 
+  // Pre-fetch Baidu homepage to acquire session cookies (BAIDUID etc.)
+  let sessionCookie = ''
+  try {
+    const homeRes = await fetch('https://www.baidu.com/', {
+      headers: { ...getBrowserHeaders(), Referer: 'https://www.baidu.com/' },
+      signal: AbortSignal.timeout(8000),
+    })
+    const setCookies = homeRes.headers.getSetCookie?.() ?? []
+    sessionCookie = setCookies.map((c: string) => c.split(';')[0]).join('; ')
+  } catch { /* ignore — proceed without cookie */ }
+
+  let failReason: BaiduIndexFailReason = null
+
   for (let page = 0; page < maxPages; page++) {
     const pn = page * 10
-    const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&tl=4&pn=${pn}&rn=10`
+    const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&pn=${pn}&rn=10`
     try {
       const referer = page === 0
         ? 'https://www.baidu.com/'
-        : `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&tl=4&pn=${(page - 1) * 10}`
-      const { ok, html } = await fetchHtmlDecoded(searchUrl, { ...getBrowserHeaders(), Referer: referer })
-      if (!ok || !html) break
-      // Check for CAPTCHA / empty result page
-      if (!html.includes('content_left') || html.includes('百度安全验证')) break
+        : `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&pn=${(page - 1) * 10}`
+      const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: referer }
+      if (sessionCookie) headers['Cookie'] = sessionCookie
+      const { ok, html } = await fetchHtmlDecoded(searchUrl, headers)
+      if (!ok || !html) { failReason = 'http_error'; break }
+      if (html.includes('百度安全验证') || html.includes('verify')) { failReason = 'captcha'; break }
+      if (!html.includes('content_left')) { failReason = 'no_content'; break }
 
       const $ = cheerio.load(html)
       let pageCount = 0
@@ -582,11 +598,9 @@ export async function fetchBaiduIndexPages(
       $('#content_left .result, #content_left .result-op').each((_, el) => {
         const $el = $(el)
 
-        // Title from first h3 a
         const titleText = $el.find('h3 a').first().text().replace(/\s+/g, ' ').trim()
         if (!titleText || seenTitles.has(titleText)) return
 
-        // Display URL from cite element — must belong to this domain
         const citeText = $el.find('cite').first().text().replace(/\s+/g, '').trim()
           .replace(/^https?:\/\//i, '')
         if (!citeText || !citeText.toLowerCase().includes(domainRoot)) return
@@ -595,7 +609,6 @@ export async function fetchBaiduIndexPages(
         seenUrls.add(citeText)
         seenTitles.add(titleText)
 
-        // Snippet: first sizeable text block that isn't title/URL
         let snippet = $el.find('.c-abstract').first().text().replace(/\s+/g, ' ').trim()
         if (!snippet) {
           $el.find('p, span').each((_, p) => {
@@ -605,7 +618,6 @@ export async function fetchBaiduIndexPages(
         }
         if (snippet.length > 200) snippet = snippet.slice(0, 200) + '…'
 
-        // Date: scan for date-like text in spans/em
         let baiduDateStr: string | null = null
         $el.find('span, em').each((_, dateEl) => {
           if (baiduDateStr) return false
@@ -617,14 +629,15 @@ export async function fetchBaiduIndexPages(
         pageCount++
       })
 
-      if (pageCount === 0) break
+      if (pageCount === 0) { failReason = 'empty_results'; break }
       if (page < maxPages - 1) await randomDelay(2000, 4000)
     } catch {
+      failReason = 'http_error'
       break
     }
   }
 
-  return results
+  return { pages: results, failReason }
 }
 
 // Fetch Baidu search suggestions for a keyword
