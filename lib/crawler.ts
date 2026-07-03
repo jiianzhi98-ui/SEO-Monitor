@@ -578,13 +578,19 @@ export async function fetchBaiduIndexPages(
 
   let failReason: BaiduIndexFailReason = null
 
+  // Build one-month time filter using dynamic timestamps (matches Baidu's real URL format)
+  const nowSec = Math.floor(Date.now() / 1000)
+  const monthAgoSec = nowSec - 30 * 24 * 3600
+  const gpcParam = `stf%3D${monthAgoSec}%2C${nowSec}%7Cstftype%3D1`
+  const baseSearch = `wd=${encodeURIComponent(`site:${domain}`)}&gpc=${gpcParam}&tfflag=1&si=${encodeURIComponent(domain)}&ct=2097152`
+
   for (let page = 0; page < maxPages; page++) {
     const pn = page * 10
-    const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&pn=${pn}&rn=10`
+    const searchUrl = `https://www.baidu.com/s?${baseSearch}&pn=${pn}&rn=10`
     try {
       const referer = page === 0
         ? 'https://www.baidu.com/'
-        : `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&pn=${(page - 1) * 10}`
+        : `https://www.baidu.com/s?${baseSearch}&pn=${(page - 1) * 10}`
       const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: referer }
       if (sessionCookie) headers['Cookie'] = sessionCookie
       const { ok, html } = await fetchHtmlDecoded(searchUrl, headers)
