@@ -582,18 +582,16 @@ export async function fetchBaiduIndexPages(
   const nowSec = Math.floor(Date.now() / 1000)
   const monthAgoSec = nowSec - 30 * 24 * 3600
   const gpcParam = `stf%3D${monthAgoSec}%2C${nowSec}%7Cstftype%3D1`
-  const baseSearch = `wd=${encodeURIComponent(`site:${domain}`)}&gpc=${gpcParam}&tfflag=1&si=${encodeURIComponent(domain)}&ct=2097152`
+  const firstPageUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&gpc=${gpcParam}&tfflag=1&si=${encodeURIComponent(domain)}&ct=2097152`
 
-  for (let page = 0; page < maxPages; page++) {
-    const pn = page * 10
-    const searchUrl = `https://www.baidu.com/s?${baseSearch}&pn=${pn}&rn=10`
+  let currentUrl: string | null = firstPageUrl
+  let prevUrl = 'https://www.baidu.com/'
+
+  for (let page = 0; page < maxPages && currentUrl; page++) {
     try {
-      const referer = page === 0
-        ? 'https://www.baidu.com/'
-        : `https://www.baidu.com/s?${baseSearch}&pn=${(page - 1) * 10}`
-      const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: referer }
+      const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: prevUrl }
       if (sessionCookie) headers['Cookie'] = sessionCookie
-      const { ok, html } = await fetchHtmlDecoded(searchUrl, headers)
+      const { ok, html } = await fetchHtmlDecoded(currentUrl, headers)
       if (!ok || !html) { failReason = 'http_error'; break }
       if (html.includes('百度安全验证') || html.includes('verify')) { failReason = 'captcha'; break }
       if (!html.includes('content_left')) { failReason = 'no_content'; break }
@@ -649,7 +647,11 @@ export async function fetchBaiduIndexPages(
       })
 
       if (pageCount === 0) { failReason = 'empty_results'; break }
-      if (page < maxPages - 1) await randomDelay(2000, 4000)
+
+      // Use Baidu's own "下一页" link for next page URL — it carries rsv_pq/rsv_t session tokens
+      prevUrl = currentUrl
+      currentUrl = findNextPageUrl($, currentUrl)
+      if (currentUrl && page < maxPages - 1) await randomDelay(2000, 4000)
     } catch {
       failReason = 'http_error'
       break
