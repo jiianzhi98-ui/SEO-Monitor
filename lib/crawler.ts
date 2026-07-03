@@ -114,11 +114,15 @@ function findNextPageUrl($: ReturnType<typeof cheerio.load>, currentUrl: string)
   return null
 }
 
-// Parse a date string like "2026-06-09 17:04" or "2026/06/09" to YYYY-MM-DD
+// Parse a date string like "2026-06-09 17:04", "2026/06/09", or "26-07-01" to YYYY-MM-DD
 function parseEntryDateStr(dateStr: string | undefined): string | null {
   if (!dateStr) return null
+  // 4-digit year: 2026-07-01
   const m = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+  // 2-digit year: 26-07-01 → 2026-07-01
+  const m2 = dateStr.match(/^(\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+  if (m2) return `20${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`
   return null
 }
 

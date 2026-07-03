@@ -27,6 +27,8 @@ function parseContentDate(dateStr: string | undefined): string | null {
   if (!dateStr) return null
   const m = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+  const m2 = dateStr.match(/^(\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+  if (m2) return `20${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`
   try {
     const d = new Date(dateStr)
     if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
