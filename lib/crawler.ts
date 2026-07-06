@@ -674,11 +674,12 @@ function parseBaiduRelativeDate(text: string): string | null {
 
 export type BaiduIndexFailReason = 'captcha' | 'no_content' | 'http_error' | 'empty_results' | null
 
-// Fetch Baidu site: search results to discover indexed pages.
-// Paginates up to maxPages (each page = 10 results).
+// Fetch Baidu site: search results to discover ALL currently indexed pages.
+// Uses pn= parameter for reliable pagination (no time filter).
+// Stops when a page returns 0 results or maxPages is reached.
 export async function fetchBaiduIndexPages(
   domain: string,
-  maxPages = 5
+  maxPages = 100  // 100 pages × 10 results = up to 1000; stops early when empty
 ): Promise<{ pages: BaiduIndexedPage[]; failReason: BaiduIndexFailReason }> {
   const results: BaiduIndexedPage[] = []
   const seenUrls = new Set<string>()
@@ -699,18 +700,16 @@ export async function fetchBaiduIndexPages(
 
   let failReason: BaiduIndexFailReason = null
 
-  // Build one-month time filter using dynamic timestamps (matches Baidu's real URL format)
-  const nowSec = Math.floor(Date.now() / 1000)
-  const monthAgoSec = nowSec - 30 * 24 * 3600
-  const gpcParam = `stf%3D${monthAgoSec}%2C${nowSec}%7Cstftype%3D1`
-  const firstPageUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&gpc=${gpcParam}&tfflag=1&si=${encodeURIComponent(domain)}&ct=2097152`
+  // No time filter (gpc removed) to fetch ALL indexed pages.
+  // Use pn=0/10/20/... for reliable pagination instead of findNextPageUrl.
+  const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&si=${encodeURIComponent(domain)}&ct=2097152`
 
-  let currentUrl: string | null = firstPageUrl
-  let prevUrl = 'https://www.baidu.com/'
-
-  for (let page = 0; page < maxPages && currentUrl; page++) {
+  for (let page = 0; page < maxPages; page++) {
+    const pn = page * 10
+    const currentUrl = pn === 0 ? baseUrl : `${baseUrl}&pn=${pn}`
+    const referer = page === 0 ? 'https://www.baidu.com/' : `${baseUrl}&pn=${(page - 1) * 10}`
     try {
-      const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: prevUrl }
+      const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: referer }
       if (sessionCookie) headers['Cookie'] = sessionCookie
       const { ok, html } = await fetchHtmlDecoded(currentUrl, headers)
       if (!ok || !html) { failReason = 'http_error'; break }
@@ -768,18 +767,16 @@ export async function fetchBaiduIndexPages(
         pageCount++
       })
 
-      if (pageCount === 0) { failReason = 'empty_results'; break }
+      if (pageCount === 0) break  // No more results — stop paginating
 
-      // Use Baidu's own "下一页" link for next page URL — it carries rsv_pq/rsv_t session tokens
-      prevUrl = currentUrl
-      currentUrl = findNextPageUrl($, currentUrl)
-      if (currentUrl && page < maxPages - 1) await randomDelay(2000, 4000)
+      if (page < maxPages - 1) await randomDelay(2000, 4000)
     } catch {
       failReason = 'http_error'
       break
     }
   }
 
+  if (results.length === 0 && !failReason) failReason = 'empty_results'
   return { pages: results, failReason }
 }
 

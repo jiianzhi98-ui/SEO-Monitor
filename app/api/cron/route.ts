@@ -390,7 +390,7 @@ export async function GET(request: Request) {
 
       for (const site of indexPageSites) {
         try {
-          const { pages, failReason } = await fetchBaiduIndexPages(site.domain, 5)
+          const { pages, failReason } = await fetchBaiduIndexPages(site.domain)
           if (pages.length === 0) {
             const reasonMap: Record<string, string> = {
               captcha: '百度安全验证拦截（IP被封）',
@@ -410,8 +410,9 @@ export async function GET(request: Request) {
                 title: p.title,
                 snippet: p.snippet,
                 baidu_date_str: p.baiduDateStr,
-                first_seen_date: today,
+                first_seen_date: today,      // preserved by DB trigger on UPDATE
                 last_seen_date: today,
+                disappeared_date: null,      // clear if was previously disappeared
                 updated_at: new Date().toISOString(),
               }))
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -422,9 +423,20 @@ export async function GET(request: Request) {
               const inserted = ((res.data || []) as { first_seen_date: string }[])
               newCount += inserted.filter(r => r.first_seen_date === today).length
             }
+
+            // Mark pages not seen in this crawl as disappeared
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: disappeared } = await (supabase.from('site_indexed_pages') as any)
+              .update({ disappeared_date: today })
+              .eq('site_id', site.id)
+              .lt('last_seen_date', today)
+              .is('disappeared_date', null)
+              .select('id')
+            const disappearedCount = (disappeared || []).length
+
             ipRows += newCount
             ipOk++
-            if (ipAid) await siteLog(supabase, ipAid, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条` })
+            if (ipAid) await siteLog(supabase, ipAid, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条，脱收${disappearedCount}条` })
           }
         } catch (e) {
           ipFail++

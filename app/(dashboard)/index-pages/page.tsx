@@ -17,12 +17,16 @@ interface IndexedPage {
   title: string
   snippet: string
   baidu_date_str: string | null
+  first_seen_date: string
+  last_seen_date: string
+  disappeared_date: string | null
   is_new: boolean
+  is_disappeared: boolean
 }
 
 const PAGE_SIZE = 20
 
-type FilterType = 'all' | 'new7' | 'new30'
+type FilterType = 'all' | 'active' | 'new7' | 'new30' | 'disappeared'
 
 export default function IndexPagesPage() {
   const { role } = useUser()
@@ -186,16 +190,22 @@ export default function IndexPagesPage() {
         <>
           {/* Filters */}
           <div className="flex items-center gap-3 mb-4">
-            {/* Time filter */}
+            {/* Status filter */}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              {(['all', 'new7', 'new30'] as FilterType[]).map(f => {
-                const labels = { all: '全部', new7: '近7天', new30: '近30天' }
+              {(['all', 'active', 'new7', 'new30', 'disappeared'] as FilterType[]).map(f => {
+                const labels: Record<FilterType, string> = {
+                  all: '全部', active: '已收录', new7: '近7天新增', new30: '近30天新增', disappeared: '已脱收',
+                }
                 return (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                      filter === f ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                      filter === f
+                        ? f === 'disappeared'
+                          ? 'bg-white shadow-sm text-red-600'
+                          : 'bg-white shadow-sm text-gray-900'
+                        : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {labels[f]}
@@ -250,25 +260,30 @@ export default function IndexPagesPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {rows.map(row => (
-                    <tr key={row.id} className="hover:bg-gray-50 transition-colors group">
+                    <tr key={row.id} className={`transition-colors group ${row.is_disappeared ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
                       <td className="px-3 py-3 text-center">
                         {row.baidu_date_str ? (
-                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{row.baidu_date_str}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${row.is_disappeared ? 'text-red-400 bg-red-50' : 'text-blue-600 bg-blue-50'}`}>{row.baidu_date_str}</span>
                         ) : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-3 py-3 text-center">
-                        {row.is_new ? (
+                        {row.is_disappeared ? (
+                          <span className="inline-block text-xs font-medium text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full whitespace-nowrap">已脱收</span>
+                        ) : row.is_new ? (
                           <span className="inline-block text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">新发现</span>
                         ) : (
                           <span className="inline-block text-xs text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap">已收录</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-800 line-clamp-1 group-hover:text-green-700">
+                        <div className={`font-medium line-clamp-1 ${row.is_disappeared ? 'text-gray-400 line-through decoration-red-300' : 'text-gray-800 group-hover:text-green-700'}`}>
                           {row.title || '—'}
                         </div>
-                        {row.snippet && (
+                        {row.snippet && !row.is_disappeared && (
                           <div className="text-xs text-gray-400 line-clamp-1 mt-0.5">{row.snippet}</div>
+                        )}
+                        {row.is_disappeared && (
+                          <div className="text-xs text-red-300 mt-0.5">脱收于 {row.disappeared_date}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">

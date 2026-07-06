@@ -461,7 +461,7 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
     try {
-      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, 5)
+      const { pages, failReason } = await fetchBaiduIndexPages(site.domain)
 
       if (pages.length === 0) {
         const reasonMap: Record<string, string> = {
@@ -483,8 +483,9 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
             title: p.title,
             snippet: p.snippet,
             baidu_date_str: p.baiduDateStr,
-            first_seen_date: today,
+            first_seen_date: today,      // preserved by DB trigger on UPDATE
             last_seen_date: today,
+            disappeared_date: null,      // clear if was previously disappeared
             updated_at: new Date().toISOString(),
           }))
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -492,14 +493,25 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
             onConflict: 'site_id,url',
             ignoreDuplicates: false,
           }).select('id, first_seen_date')
-          // Count rows where first_seen_date == today (newly inserted)
+          // first_seen_date is preserved on UPDATE by trigger; equals today only for new inserts
           const inserted = (res.data || []) as { first_seen_date: string }[]
           newCount += inserted.filter(r => r.first_seen_date === today).length
         }
+
+        // Mark pages not seen in this crawl as disappeared
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: disappeared } = await (supabase.from('site_indexed_pages') as any)
+          .update({ disappeared_date: today })
+          .eq('site_id', site.id)
+          .lt('last_seen_date', today)
+          .is('disappeared_date', null)
+          .select('id')
+        const disappearedCount = (disappeared || []).length
+
         totalNew += newCount
         ok++
-        console.log(`${prefix} ✓  发现=${String(pages.length).padStart(4)}  新增=${String(newCount).padStart(4)}`)
-        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条` })
+        console.log(`${prefix} ✓  发现=${String(pages.length).padStart(4)}  新增=${String(newCount).padStart(4)}  脱收=${String(disappearedCount).padStart(3)}`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条，脱收${disappearedCount}条` })
       }
     } catch (e) {
       console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)

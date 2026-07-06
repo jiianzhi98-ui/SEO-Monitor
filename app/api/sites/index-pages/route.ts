@@ -39,26 +39,54 @@ export async function GET(req: Request) {
     return text
   }
 
+  const today = getMY()
+
+  // filter values: all | active | new7 | new30 | disappeared
   let query = service
     .from('site_indexed_pages')
-    .select('id, url, title, snippet, baidu_date_str, first_seen_date', { count: 'exact' })
+    .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date', { count: 'exact' })
     .eq('site_id', siteId)
-    .order('first_seen_date', { ascending: false })    // 新发现（今日）排最前
-    .order('baidu_date_str', { ascending: false, nullsFirst: false })  // 再按百度日期降序
-    .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
   if (search) query = query.ilike('title', `%${search}%`)
-  if (filter === 'new7') query = query.gte('baidu_date_str', getMY(-7))
-  if (filter === 'new30') query = query.gte('baidu_date_str', getMY(-30))
+
+  if (filter === 'disappeared') {
+    query = query.not('disappeared_date', 'is', null)
+      .order('disappeared_date', { ascending: false })
+      .order('last_seen_date', { ascending: false })
+  } else if (filter === 'new7') {
+    query = query.gte('first_seen_date', getMY(-7)).is('disappeared_date', null)
+      .order('first_seen_date', { ascending: false })
+      .order('baidu_date_str', { ascending: false, nullsFirst: false })
+  } else if (filter === 'new30') {
+    query = query.gte('first_seen_date', getMY(-30)).is('disappeared_date', null)
+      .order('first_seen_date', { ascending: false })
+      .order('baidu_date_str', { ascending: false, nullsFirst: false })
+  } else if (filter === 'active') {
+    query = query.is('disappeared_date', null)
+      .order('first_seen_date', { ascending: false })
+      .order('baidu_date_str', { ascending: false, nullsFirst: false })
+  } else {
+    // all: disappeared pages sorted to bottom
+    query = query
+      .order('disappeared_date', { ascending: true, nullsFirst: true })
+      .order('first_seen_date', { ascending: false })
+      .order('baidu_date_str', { ascending: false, nullsFirst: false })
+  }
+
+  query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
   const { data, count, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const today = getMY()
-  const rows = (data || []).map((r: { id: string; url: string; title: string; snippet: string; baidu_date_str: string | null; first_seen_date: string }) => ({
+  const rows = (data || []).map((r: {
+    id: string; url: string; title: string; snippet: string
+    baidu_date_str: string | null; first_seen_date: string
+    last_seen_date: string; disappeared_date: string | null
+  }) => ({
     ...r,
     baidu_date_str: normalizeBaiduDate(r.baidu_date_str),
-    is_new: r.first_seen_date === today,
+    is_new: r.first_seen_date === today && !r.disappeared_date,
+    is_disappeared: !!r.disappeared_date,
   }))
 
   return NextResponse.json({ rows, total: count ?? 0, page, pageSize: PAGE_SIZE })
