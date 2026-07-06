@@ -242,15 +242,20 @@ export default function IndexPagesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[9%]">状态</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[42%]">页面标题</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[32%]">显示 URL</th>
-                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[17%]">百度日期</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[13%]">百度日期</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[8%]">状态</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[38%]">页面标题</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[41%]">显示 URL</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {rows.map(row => (
                     <tr key={row.id} className="hover:bg-gray-50 transition-colors group">
+                      <td className="px-3 py-3 text-center">
+                        {row.baidu_date_str ? (
+                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{row.baidu_date_str}</span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className="px-3 py-3 text-center">
                         {row.is_new ? (
                           <span className="inline-block text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">新发现</span>
@@ -268,11 +273,6 @@ export default function IndexPagesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-xs text-gray-400 font-mono line-clamp-2 break-all">{row.url}</div>
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        {row.baidu_date_str ? (
-                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{row.baidu_date_str}</span>
-                        ) : <span className="text-gray-300">—</span>}
                       </td>
                     </tr>
                   ))}
