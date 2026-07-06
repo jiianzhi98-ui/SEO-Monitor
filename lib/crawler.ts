@@ -677,8 +677,11 @@ export type BaiduIndexFailReason = 'captcha' | 'no_content' | 'http_error' | 'em
 // Fetch Baidu site: search results to discover ALL currently indexed pages.
 // Uses pn= parameter for reliable pagination (no time filter, no page cap).
 // Stops only when a page returns 0 results, a captcha is hit, or an HTTP error occurs.
+// onPageResults: optional callback invoked after each page — enables incremental saving
+//   so partial crawls (timeout mid-way) still persist what was collected.
 export async function fetchBaiduIndexPages(
   domain: string,
+  onPageResults?: (batch: BaiduIndexedPage[]) => Promise<void>,
 ): Promise<{ pages: BaiduIndexedPage[]; failReason: BaiduIndexFailReason }> {
   const results: BaiduIndexedPage[] = []
   const seenUrls = new Set<string>()
@@ -767,6 +770,12 @@ export async function fetchBaiduIndexPages(
       })
 
       if (pageCount === 0) break  // No more results — stop paginating
+
+      // Incrementally save this page's new results so partial crawls (timeout/captcha) still persist
+      if (onPageResults && results.length > (page * 10)) {
+        const batch = results.slice(page * 10)
+        if (batch.length > 0) await onPageResults(batch)
+      }
 
       await randomDelay(2000, 4000)
     } catch {

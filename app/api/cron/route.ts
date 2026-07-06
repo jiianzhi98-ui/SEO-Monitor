@@ -403,7 +403,7 @@ export async function GET(request: Request) {
             if (ipAid) await siteLog(supabase, ipAid, { domain: site.domain, status: 'empty', detail })
           } else {
             let newCount = 0
-            for (const chunk of chunkArray(pages, 100)) {
+            for (const chunk of chunkArray(pages, 500)) {
               const rows = chunk.map(p => ({
                 site_id: site.id,
                 url: p.url,
@@ -424,12 +424,14 @@ export async function GET(request: Request) {
               newCount += inserted.filter(r => r.first_seen_date === today).length
             }
 
-            // Mark pages not seen in this crawl as disappeared
+            // Only mark as disappeared if not seen for 60+ days (2 missed monthly crawls).
+            // Baidu's site: results rotate — older pages may simply not appear in a given crawl.
+            const threshold60d = getMalaysiaDate(-60)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data: disappeared } = await (supabase.from('site_indexed_pages') as any)
               .update({ disappeared_date: today })
               .eq('site_id', site.id)
-              .lt('last_seen_date', today)
+              .lt('last_seen_date', threshold60d)
               .is('disappeared_date', null)
               .select('id')
             const disappearedCount = (disappeared || []).length

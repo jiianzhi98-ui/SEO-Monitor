@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 // GET /api/sites/index-pages?siteId=X&page=0&search=keyword&filter=all|new7|new30
 export async function GET(req: Request) {

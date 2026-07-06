@@ -24,7 +24,7 @@ interface IndexedPage {
   is_disappeared: boolean
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 type FilterType = 'all' | 'active' | 'new7' | 'new30' | 'disappeared'
 
@@ -43,11 +43,16 @@ export default function IndexPagesPage() {
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [filter, setFilter] = useState<FilterType>('all')
+  const [filter, setFilter] = useState<FilterType>('new7')
 
   const [toggling, setToggling] = useState(false)
   const [crawling, setCrawling] = useState(false)
   const [crawlMsg, setCrawlMsg] = useState<string | null>(null)
+
+  // Manual supplemental crawl by domain
+  const [manualDomain, setManualDomain] = useState('')
+  const [manualCrawling, setManualCrawling] = useState(false)
+  const [manualMsg, setManualMsg] = useState<string | null>(null)
 
   // Load all sites
   useEffect(() => {
@@ -128,6 +133,31 @@ export default function IndexPagesPage() {
     setCrawling(false)
   }
 
+  async function handleManualCrawl() {
+    const domain = manualDomain.trim().replace(/^https?:\/\/(www\.|m\.)?/, '').replace(/\/$/, '')
+    if (!domain) return
+    setManualCrawling(true)
+    setManualMsg(null)
+    try {
+      const res = await fetch('/api/sites/index-crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setManualMsg(`发现 ${data.found} 条，新增 ${data.newCount} 条 (${data.domain})`)
+        setManualDomain('')
+        if (activeSiteId) await fetchPages()
+      } else {
+        setManualMsg(data.error || '抓取失败')
+      }
+    } catch {
+      setManualMsg('请求失败')
+    }
+    setManualCrawling(false)
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -185,6 +215,31 @@ export default function IndexPagesPage() {
           <span className="text-sm text-gray-500">{crawlMsg}</span>
         )}
       </div>
+
+      {/* Manual supplemental crawl — for domains not yet fully indexed */}
+      {isAdmin && (
+        <div className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-gray-50 rounded-xl border border-gray-100">
+          <span className="text-xs text-gray-400 shrink-0">补充抓取：</span>
+          <input
+            type="text"
+            value={manualDomain}
+            onChange={e => setManualDomain(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !manualCrawling && handleManualCrawl()}
+            placeholder="输入域名（如 example.com）"
+            className="h-8 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 w-64"
+            disabled={manualCrawling}
+          />
+          <button
+            onClick={handleManualCrawl}
+            disabled={manualCrawling || !manualDomain.trim()}
+            className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40"
+          >
+            {manualCrawling ? '抓取中…' : '开始抓取'}
+          </button>
+          {manualMsg && <span className="text-xs text-gray-500">{manualMsg}</span>}
+          {!manualMsg && <span className="text-xs text-gray-300">对任意域名补充资料，不影响脱收标记</span>}
+        </div>
+      )}
 
       {activeSiteId && (
         <>
