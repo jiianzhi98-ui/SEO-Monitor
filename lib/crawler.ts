@@ -49,10 +49,11 @@ const DOWNLOAD_KEYWORDS = [
 ]
 
 // Fetch HTML with automatic charset detection (handles GBK/GB2312 sites)
-async function fetchHtmlDecoded(url: string, headers: Record<string, string>): Promise<{ ok: boolean; html: string; status?: number }> {
+async function fetchHtmlDecoded(url: string, headers: Record<string, string>): Promise<{ ok: boolean; html: string; status?: number; setCookies: string[] }> {
   try {
     const res = await fetch(url, { headers, next: { revalidate: 0 }, signal: AbortSignal.timeout(10000) })
-    if (!res.ok) return { ok: false, html: '', status: res.status }
+    const setCookies = res.headers.getSetCookie?.() ?? []
+    if (!res.ok) return { ok: false, html: '', status: res.status, setCookies }
     const buffer = Buffer.from(await res.arrayBuffer())
     // ASCII-safe peek to detect charset without corrupting data
     const peek = buffer.subarray(0, 4096).toString('ascii')
@@ -60,9 +61,9 @@ async function fetchHtmlDecoded(url: string, headers: Record<string, string>): P
     const metaCharset = peek.match(/<meta[^>]+charset=["']?\s*([^"'\s;>]+)/i)?.[1]?.toLowerCase()
     const raw = ctCharset || metaCharset || 'utf-8'
     const charset = (raw === 'gb2312' || raw === 'gb18030') ? 'gbk' : raw
-    return { ok: true, html: iconv.decode(buffer, charset) }
+    return { ok: true, html: iconv.decode(buffer, charset), setCookies }
   } catch {
-    return { ok: false, html: '' }
+    return { ok: false, html: '', setCookies: [] }
   }
 }
 
@@ -714,21 +715,15 @@ export async function fetchBaiduIndexPages(
       const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: referer }
       if (sessionCookie) headers['Cookie'] = sessionCookie
 
-      // Use raw fetch so we can capture Set-Cookie and keep the session alive across pages
-      const res = await fetch(currentUrl, { headers, next: { revalidate: 0 }, signal: AbortSignal.timeout(12000) })
-      if (!res.ok) { failReason = 'http_error'; break }
+      const { ok, html, setCookies } = await fetchHtmlDecoded(currentUrl, headers)
+      if (!ok || !html) { failReason = 'http_error'; break }
 
-      // Update session cookie from each page's Set-Cookie response (Baidu rotates anti-bot tokens)
-      const setCookies = res.headers.getSetCookie?.() ?? []
+      // Update session cookie from each page's Set-Cookie (Baidu rotates anti-bot tokens per request)
       if (setCookies.length > 0) {
-        const newCookies = setCookies.map((c: string) => c.split(';')[0]).join('; ')
-        sessionCookie = sessionCookie
-          ? `${sessionCookie}; ${newCookies}`
-          : newCookies
+        const newPairs = setCookies.map((c: string) => c.split(';')[0]).join('; ')
+        sessionCookie = sessionCookie ? `${sessionCookie}; ${newPairs}` : newPairs
       }
 
-      const html = await res.text()
-      if (!html) { failReason = 'http_error'; break }
       if (html.includes('百度安全验证') || html.includes('verify')) { failReason = 'captcha'; break }
       if (!html.includes('content_left')) { failReason = 'no_content'; break }
 
