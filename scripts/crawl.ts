@@ -448,10 +448,10 @@ async function runWeight(sites: SiteRecord[], today: string, activityId: string 
   })
 }
 
-async function runIndexPages(sites: SiteRecord[], today: string, activityId: string | null = null) {
+async function runIndexPages(sites: SiteRecord[], today: string, activityId: string | null = null, baiduCookie?: string) {
   const stepStart = Date.now()
   console.log(`\n${'═'.repeat(60)}`)
-  console.log(`  INDEX-PAGES   日期=${today}   ${ts()}`)
+  console.log(`  INDEX-PAGES   日期=${today}   ${ts()}${baiduCookie ? '   Cookie=✓' : ''}`)
   console.log(`${'═'.repeat(60)}`)
 
   let ok = 0, failed = 0, empty = 0, totalNew = 0
@@ -461,7 +461,7 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
     try {
-      const { pages, failReason } = await fetchBaiduIndexPages(site.domain)
+      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie)
 
       if (pages.length === 0) {
         const reasonMap: Record<string, string> = {
@@ -630,7 +630,9 @@ async function main() {
   }
   if (step === 'index-pages') {
     const aid = await activityStart(supabase, { ...logBase, step: 'index-pages' })
-    await runIndexPages(sites.filter(s => s.has_index_pages), today, aid)
+    const { data: cookieSetting } = await supabase.from('app_settings').select('value').eq('key', 'baidu_index_cookie').maybeSingle()
+    const baiduCookie = (cookieSetting as { value: string } | null)?.value ?? undefined
+    await runIndexPages(sites.filter(s => s.has_index_pages), today, aid, baiduCookie)
   }
 
   console.log(`\n${'✓'.repeat(60)}`)

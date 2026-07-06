@@ -250,12 +250,33 @@ function RetryModal({ step, sites, onClose, onRefresh }: {
 
 const SELECT_CLS = 'text-xs border border-gray-200 rounded-md pl-2.5 pr-6 py-1 text-gray-600 bg-white cursor-pointer hover:border-gray-300 focus:outline-none appearance-none'
 
+type Row2Stats = {
+  rankPos: { domains: number; rows: number; date: string | null }
+  rankTitle: { domains: number; rows: number; date: string | null }
+  indexPages: ActivityLog | null
+}
+
 export default function CrawlLogPage() {
   const [todayLogs, setTodayLogs] = useState<Record<string, ActivityLog[]>>({
     keywords: [], rank: [], weight: [],
   })
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Row 2 cards
+  const [row2, setRow2] = useState<Row2Stats>({
+    rankPos: { domains: 0, rows: 0, date: null },
+    rankTitle: { domains: 0, rows: 0, date: null },
+    indexPages: null,
+  })
+
+  // Cookie setting
+  const [cookieUpdatedAt, setCookieUpdatedAt] = useState<string | null>(null)
+  const [cookieSet, setCookieSet] = useState(false)
+  const [showCookieModal, setShowCookieModal] = useState(false)
+  const [cookieInput, setCookieInput] = useState('')
+  const [cookieSaving, setCookieSaving] = useState(false)
+  const [cookieSaveMsg, setCookieSaveMsg] = useState('')
 
   // Filters
   const [filterDate, setFilterDate] = useState('')
@@ -281,7 +302,7 @@ export default function CrawlLogPage() {
     const today = getMalaysiaToday()
     const { from, to } = getMytDayRange(today)
 
-    // Cards: cron_task (main crawl) + cron_manual (manual retries) for accurate per-site status
+    // Cards row 1: cron_task + cron_manual
     const { data: todayData } = await supabase
       .from('activity_log')
       .select('*')
@@ -296,6 +317,47 @@ export default function CrawlLogPage() {
     }
     setTodayLogs(grouped)
 
+    // Row 2 card A: own-site rank positions (site_keyword_ranks)
+    const { data: rkRows } = await supabase
+      .from('site_keyword_ranks')
+      .select('site_id, stat_date')
+      .eq('stat_date', today)
+    const rkDomains = new Set((rkRows || []).map((r: { site_id: string }) => r.site_id)).size
+
+    // Row 2 card B: competitor rank titles (site_rank_keywords)
+    const { data: rtRows } = await supabase
+      .from('site_rank_keywords')
+      .select('site_id, stat_date')
+      .eq('stat_date', today)
+      .eq('platform', 'mobile')
+    const rtDomains = new Set((rtRows || []).map((r: { site_id: string }) => r.site_id)).size
+
+    // Row 2 card C: index-pages latest activity_log (last 2 days in case run was yesterday night)
+    const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString()
+    const { data: ipLogs } = await supabase
+      .from('activity_log')
+      .select('*')
+      .gte('logged_at', twoDaysAgo)
+      .eq('step', 'index-pages')
+      .eq('type', 'cron_task')
+      .order('logged_at', { ascending: false })
+      .limit(1)
+    const latestIndexPages = ((ipLogs || []) as ActivityLog[])[0] ?? null
+
+    setRow2({
+      rankPos: { domains: rkDomains, rows: (rkRows || []).length, date: today },
+      rankTitle: { domains: rtDomains, rows: (rtRows || []).length, date: today },
+      indexPages: latestIndexPages,
+    })
+
+    // Cookie status
+    const cookieRes = await fetch('/api/settings?key=baidu_index_cookie')
+    if (cookieRes.ok) {
+      const cd = await cookieRes.json()
+      setCookieSet(!!cd.value)
+      setCookieUpdatedAt(cd.updated_at ?? null)
+    }
+
     const { data: logsData } = await supabase
       .from('activity_log')
       .select('*')
@@ -305,6 +367,26 @@ export default function CrawlLogPage() {
     setLogs((logsData || []) as ActivityLog[])
     setLoading(false)
   }, [])
+
+  async function saveCookie() {
+    if (!cookieInput.trim()) return
+    setCookieSaving(true)
+    setCookieSaveMsg('')
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'baidu_index_cookie', value: cookieInput.trim() }),
+    })
+    if (res.ok) {
+      setCookieSet(true)
+      setCookieUpdatedAt(new Date().toISOString())
+      setCookieSaveMsg('已保存，下次 GitHub Actions 定时抓取将使用此 Cookie')
+      setCookieInput('')
+    } else {
+      setCookieSaveMsg('保存失败')
+    }
+    setCookieSaving(false)
+  }
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -546,6 +628,101 @@ export default function CrawlLogPage() {
             </div>
           </div>
 
+          {/* Row 2: rank-positions / rank-title / index-pages */}
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">专项任务状态</h2>
+            <div className="grid grid-cols-3 gap-4">
+
+              {/* Card A — 自站排名位置 */}
+              <div className="card p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">自站排名位置</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 02:00 MYT</p>
+                  </div>
+                  <span className="text-xs text-gray-400 whitespace-nowrap">
+                    {row2.rankPos.date ?? '—'}
+                  </span>
+                </div>
+                {row2.rankPos.rows > 0 ? (
+                  <div className="mt-3">
+                    <span className="text-2xl font-bold tabular-nums text-green-700">{row2.rankPos.domains}</span>
+                    <span className="text-sm text-gray-400"> 个域名</span>
+                    <p className="text-xs text-gray-400 mt-1">{row2.rankPos.rows.toLocaleString()} 条数据写入</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
+                )}
+              </div>
+
+              {/* Card B — 竞品排名标题 */}
+              <div className="card p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">竞品排名标题</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 00:00 MYT</p>
+                  </div>
+                  <span className="text-xs text-gray-400 whitespace-nowrap">
+                    {row2.rankTitle.date ?? '—'}
+                  </span>
+                </div>
+                {row2.rankTitle.rows > 0 ? (
+                  <div className="mt-3">
+                    <span className="text-2xl font-bold tabular-nums text-green-700">{row2.rankTitle.domains}</span>
+                    <span className="text-sm text-gray-400"> 个站点</span>
+                    <p className="text-xs text-gray-400 mt-1">{row2.rankTitle.rows.toLocaleString()} 条数据写入</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
+                )}
+              </div>
+
+              {/* Card C — 百度收录 */}
+              <div className="card p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">百度收录</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 01:00 MYT</p>
+                  </div>
+                  {row2.indexPages ? (
+                    <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                      {formatCardTime(row2.indexPages.logged_at)} 执行
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">尚无记录</span>
+                  )}
+                </div>
+                {row2.indexPages ? (
+                  <div className="mt-3">
+                    <span className={`text-2xl font-bold tabular-nums ${row2.indexPages.fail_count > 0 ? 'text-yellow-600' : 'text-green-700'}`}>
+                      {row2.indexPages.ok_count}
+                    </span>
+                    <span className="text-sm text-gray-400">/{row2.indexPages.ok_count + row2.indexPages.empty_count + row2.indexPages.fail_count} 站成功</span>
+                    {row2.indexPages.rows_written > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">{row2.indexPages.rows_written.toLocaleString()} 新增页面</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
+                )}
+                <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">
+                    {cookieSet
+                      ? `Cookie 已设置${cookieUpdatedAt ? ' · ' + formatCardTime(cookieUpdatedAt) : ''}`
+                      : 'Cookie 未设置'}
+                  </span>
+                  <button
+                    onClick={() => { setShowCookieModal(true); setCookieSaveMsg('') }}
+                    className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-2 py-0.5 hover:border-blue-200"
+                  >
+                    更新 Cookie
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
           {/* Run log table */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -763,6 +940,57 @@ export default function CrawlLogPage() {
             setExpandedStep(null)
           }}
         />
+      )}
+
+      {/* Cookie Update Modal */}
+      {showCookieModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowCookieModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-xl w-full" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">更新百度收录 Cookie</h3>
+                <p className="text-xs text-gray-400 mt-0.5">保存后将用于 GitHub Actions 定时抓取</p>
+              </div>
+              <button onClick={() => setShowCookieModal(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-2">
+                  DevTools → Application → Cookies → baidu.com，全选复制 Name=Value 行贴入：
+                </p>
+                <textarea
+                  value={cookieInput}
+                  onChange={e => setCookieInput(e.target.value)}
+                  placeholder="BAIDUID=xxx; BDUSS=xxx; COOKIE_SESSION=xxx; ..."
+                  rows={5}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono resize-none"
+                />
+              </div>
+              {cookieSaveMsg && (
+                <p className={`text-xs ${cookieSaveMsg.includes('失败') ? 'text-red-500' : 'text-green-600'}`}>
+                  {cookieSaveMsg}
+                </p>
+              )}
+              <div className="flex gap-3">
+                <button onClick={() => setShowCookieModal(false)}
+                  className="flex-1 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
+                  取消
+                </button>
+                <button
+                  onClick={saveCookie}
+                  disabled={cookieSaving || !cookieInput.trim()}
+                  className="flex-1 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
+                >
+                  {cookieSaving ? '保存中…' : '保存 Cookie'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Rules Modal */}
