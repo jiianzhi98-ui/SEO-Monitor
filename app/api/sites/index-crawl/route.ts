@@ -36,10 +36,14 @@ export async function POST(req: Request) {
   const domain = rawDomain.replace(/^https?:\/\/(www\.|m\.)?/, '').replace(/\/$/, '')
   if (!domain) return NextResponse.json({ error: '域名格式不正确' }, { status: 400 })
 
-  // Find matching site (fuzzy: domain column contains the input domain)
-  const { data: sites } = await service.from('sites').select('id, domain').ilike('domain', `%${domain}%`).limit(5)
-  const site = (sites || []).find((s: { domain: string }) => s.domain.includes(domain) || domain.includes(s.domain))
-  if (!site) return NextResponse.json({ error: `未找到域名包含 "${domain}" 的站点，请先在站点管理中添加` }, { status: 404 })
+  // Find matching site: exact match first, then suffix match (e.g. "sjwyx.com" matches "m.sjwyx.com")
+  const { data: exactSites } = await service.from('sites').select('id, domain').eq('domain', domain).limit(1)
+  const exactSite = (exactSites || [])[0]
+  const site = exactSite ?? await (async () => {
+    const { data: fuzzy } = await service.from('sites').select('id, domain').ilike('domain', `%${domain}%`).limit(5)
+    return (fuzzy || []).find((s: { domain: string }) => s.domain.endsWith(domain) || domain.endsWith(s.domain))
+  })()
+  if (!site) return NextResponse.json({ error: `未找到域名 "${domain}" 对应的站点，请先在站点管理中添加` }, { status: 404 })
 
   const today = getMYDate()
 

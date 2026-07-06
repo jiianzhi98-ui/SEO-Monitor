@@ -120,16 +120,16 @@ export default function IndexPagesPage() {
   async function handleCrawl() {
     if (!activeSite) return
     setCrawling(true)
-    setCrawlMsg(null)
+    setCrawlMsg('抓取中，可能需要几分钟…')
     try {
-      const res = await fetch('/api/trigger-crawl', {
+      const res = await fetch('/api/sites/index-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ site: activeSite.domain, step: 'index-pages' }),
+        body: JSON.stringify({ domain: activeSite.domain }),
       })
       const data = await res.json()
       if (res.ok) {
-        setCrawlMsg('抓取完成，刷新中…')
+        setCrawlMsg(`完成，发现 ${data.found} 条，新增 ${data.newCount} 条`)
         await fetchPages()
       } else {
         setCrawlMsg(data.error || '抓取失败')
