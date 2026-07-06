@@ -40,6 +40,9 @@ function fmtVol(v: number) {
   return v.toLocaleString()
 }
 function fmtDate(d: string) { return d ? d.slice(5).replace('-', '/') : '—' }
+function normalizeUrl(raw: string): string {
+  return raw.trim().replace(/^https?:\/\/(www\.|m\.)?/, '')
+}
 
 function getBadge(first_date: string, last_date: string, yesterday: string): Badge {
   if (!last_date || last_date < yesterday) return null
@@ -697,6 +700,7 @@ export default function TaskGroupsPage() {
       if (res.ok) {
         const data = await res.json()
         setClaimedKeywords(prev => [...prev, data.keyword])
+        setExpandedClaimIds(new Set<string>([data.keyword.id]))
       }
     } catch {
       // network error — user can retry
@@ -734,7 +738,7 @@ export default function TaskGroupsPage() {
           search_volume: 0,
           operation_type: addOpType,
           final_keyword: addFinalKw.trim() || undefined,
-          page_url: addUrl.trim() || undefined,
+          page_url: normalizeUrl(addUrl) || undefined,
         }),
       })
       if (res.ok) {
@@ -1423,11 +1427,9 @@ export default function TaskGroupsPage() {
                           <div key={k.id} className={`transition-colors ${k.status !== 'pending' ? 'opacity-55' : ''}`}>
                             <div
                               className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer select-none ${isInvalid && !isExpanded ? 'bg-red-50/60' : ''}`}
-                              onClick={() => setExpandedClaimIds(prev => {
-                                const next = new Set(prev)
-                                if (next.has(k.id)) next.delete(k.id); else next.add(k.id)
-                                return next
-                              })}
+                              onClick={() => setExpandedClaimIds(prev =>
+                                prev.has(k.id) ? new Set<string>() : new Set<string>([k.id])
+                              )}
                             >
                               {isViewingOwn && k.status === 'pending' ? (
                                 <button onClick={e => { e.stopPropagation(); dismissClaimed(k.id) }} className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm leading-none">×</button>
@@ -1461,11 +1463,18 @@ export default function TaskGroupsPage() {
                                   onBlur={e => { if (e.target.value !== (k.final_keyword ?? '')) { saveClaim(k.id, 'final_keyword', e.target.value); if (e.target.value.trim()) setInvalidClaimIds(prev => { const n = new Set(prev); n.delete(k.id); return n }) } }}
                                 />
                                 <input
-                                  type="url"
+                                  type="text"
                                   defaultValue={k.page_url ?? ''}
                                   placeholder="https://..."
                                   className={`w-full text-xs px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder-gray-300 font-mono ${isInvalid && !k.page_url?.trim() ? 'border-red-300 placeholder-red-300' : 'border-gray-200'}`}
-                                  onBlur={e => { if (e.target.value !== (k.page_url ?? '')) { saveClaim(k.id, 'page_url', e.target.value); if (e.target.value.trim()) setInvalidClaimIds(prev => { const n = new Set(prev); n.delete(k.id); return n }) } }}
+                                  onBlur={e => {
+                                    const normalized = normalizeUrl(e.target.value)
+                                    if (normalized !== e.target.value) e.target.value = normalized
+                                    if (normalized !== (k.page_url ?? '')) {
+                                      saveClaim(k.id, 'page_url', normalized)
+                                      if (normalized.trim()) setInvalidClaimIds(prev => { const n = new Set(prev); n.delete(k.id); return n })
+                                    }
+                                  }}
                                 />
                               </div>
                             )}
@@ -1504,9 +1513,10 @@ export default function TaskGroupsPage() {
                           />
                         </div>
                         <input
-                          type="url"
+                          type="text"
                           value={addUrl}
                           onChange={e => setAddUrl(e.target.value)}
+                          onBlur={e => setAddUrl(normalizeUrl(e.target.value))}
                           placeholder="https://..."
                           className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-green-400 bg-white font-mono"
                           onKeyDown={e => e.key === 'Enter' && addManualKeyword()}
