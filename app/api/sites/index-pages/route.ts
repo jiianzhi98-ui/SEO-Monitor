@@ -44,7 +44,7 @@ export async function GET(req: Request) {
   // filter values: all | active | new7 | new30 | disappeared
   let query = service
     .from('site_indexed_pages')
-    .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, baidu_date_changed_at', { count: 'exact' })
+    .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, baidu_date_changed_at, reindexed_at', { count: 'exact' })
     .eq('site_id', siteId)
 
   if (search) query = query.ilike('title', `%${search}%`)
@@ -82,13 +82,14 @@ export async function GET(req: Request) {
     id: string; url: string; title: string; snippet: string
     baidu_date_str: string | null; first_seen_date: string
     last_seen_date: string; disappeared_date: string | null
-    baidu_date_changed_at: string | null
+    baidu_date_changed_at: string | null; reindexed_at: string | null
   }) => ({
     ...r,
     baidu_date_str: normalizeBaiduDate(r.baidu_date_str),
     is_new: r.first_seen_date === today && !r.disappeared_date,
-    is_updated: r.baidu_date_changed_at === today && r.first_seen_date !== today && !r.disappeared_date,
+    is_reindexed: r.reindexed_at === today,
     is_disappeared: !!r.disappeared_date,
+    is_updated: r.baidu_date_changed_at === today && r.first_seen_date !== today && !r.disappeared_date,
   }))
 
   return NextResponse.json({ rows, total: count ?? 0, page, pageSize: PAGE_SIZE })
