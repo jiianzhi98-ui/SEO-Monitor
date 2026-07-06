@@ -498,15 +498,16 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
           newCount += inserted.filter(r => r.first_seen_date === today).length
         }
 
-        // Only mark as disappeared if not seen for 60+ days (2 missed monthly crawls).
-        // Pages missing from just one crawl are NOT marked — Baidu's site: results rotate and
-        // may not surface every indexed page every time, especially older content.
-        const threshold60d = getMalaysiaDate(-60)
+        // Only mark as disappeared if the page was seen in the last 30 days but is not in today's crawl.
+        // Pages older than 30 days are outside the observable window of a monthly crawl —
+        // their absence in today's results does NOT mean they were de-indexed.
+        const window30d = getMalaysiaDate(-30)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: disappeared } = await (supabase.from('site_indexed_pages') as any)
           .update({ disappeared_date: today })
           .eq('site_id', site.id)
-          .lt('last_seen_date', threshold60d)
+          .gte('last_seen_date', window30d)    // was seen within the observable window
+          .lt('last_seen_date', today)          // but not in today's crawl
           .is('disappeared_date', null)
           .select('id')
         const disappearedCount = (disappeared || []).length
