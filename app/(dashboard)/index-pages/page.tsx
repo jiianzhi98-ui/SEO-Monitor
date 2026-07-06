@@ -119,6 +119,24 @@ export default function IndexPagesPage() {
     setToggling(false)
   }
 
+  function parseCookie(raw: string): string {
+    const trimmed = raw.trim()
+    if (trimmed.includes('\t')) {
+      return trimmed.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.includes('\t'))
+        .map(line => {
+          const cols = line.split('\t')
+          const name = cols[0]?.trim() ?? ''
+          const value = cols[1]?.trim() ?? ''
+          return name && value ? `${name}=${value}` : null
+        })
+        .filter(Boolean)
+        .join('; ')
+    }
+    return trimmed
+  }
+
   async function handleCrawl() {
     if (!activeSite) return
     setCrawling(true)
@@ -127,7 +145,7 @@ export default function IndexPagesPage() {
       const res = await fetch('/api/sites/index-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: activeSite.domain, cookie: manualCookie.trim() || undefined }),
+        body: JSON.stringify({ domain: activeSite.domain, cookie: parseCookie(manualCookie) || undefined }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -152,7 +170,7 @@ export default function IndexPagesPage() {
       const res = await fetch('/api/sites/index-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain, cookie: manualCookie.trim() || undefined }),
+        body: JSON.stringify({ domain, cookie: parseCookie(manualCookie) || undefined }),
       })
       const data = await res.json()
       if (res.ok) {
