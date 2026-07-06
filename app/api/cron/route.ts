@@ -455,8 +455,8 @@ export async function GET(request: Request) {
             fetchRankdownWithTitle(site.domain, today),
           ])
           const rows = [
-            ...upEntries.map(e => ({ site_id: site.id, keyword: e.keyword, stat_date: today, type: 'rankup', platform: 'mobile', rank_position: e.rank_position, volume: e.volume, title: e.title || null })),
-            ...downEntries.map(e => ({ site_id: site.id, keyword: e.keyword, stat_date: today, type: 'rankdown', platform: 'mobile', rank_position: e.rank_position, volume: e.volume, title: e.title || null })),
+            ...upEntries.map(e => ({ site_id: site.id, keyword: e.keyword, stat_date: today, type: 'rankup', platform: 'mobile', rank_position: e.rank_position, volume: e.volume, title: e.title || null, url: e.url || null })),
+            ...downEntries.map(e => ({ site_id: site.id, keyword: e.keyword, stat_date: today, type: 'rankdown', platform: 'mobile', rank_position: e.rank_position, volume: e.volume, title: e.title || null, url: e.url || null })),
           ]
           for (const chunk of chunkArray(rows, 500)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

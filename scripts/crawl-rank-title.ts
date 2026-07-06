@@ -84,6 +84,7 @@ async function main() {
           rank_position: e.rank_position,
           volume: e.volume,
           title: e.title || null,
+          url: e.url || null,
         }))
         for (const chunk of chunkArray(rows, 500)) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,6 +122,7 @@ async function main() {
           rank_position: e.rank_position,
           volume: e.volume,
           title: e.title || null,
+          url: e.url || null,
         }))
         for (const chunk of chunkArray(rows, 500)) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
