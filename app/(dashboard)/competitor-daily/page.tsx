@@ -466,10 +466,11 @@ export default function CompetitorDailyPage() {
     if (!rankSite) return
     setRankCrawling(true)
     try {
+      const step = rankSite.hasRankTitle ? 'rank-title' : 'rank'
       await fetch('/api/trigger-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ site: rankSite.domain, step: 'rank' }),
+        body: JSON.stringify({ site: rankSite.domain, step }),
       })
       await fetchRankPage(rankSite, rankDate, rankType, 0, pageSize, true)
       setRankPage(0)

@@ -13,6 +13,8 @@ import {
   cleanTitle,
   fetchAizhanData,
   fetchRankChanges,
+  fetchRankupWithTitle,
+  fetchRankdownWithTitle,
   fetchBaiduIndexPages,
   type HtmlSource,
 } from '@/lib/crawler'
@@ -73,6 +75,7 @@ export async function GET(request: Request) {
   const runRank        = !step || step === 'rank'
   const runWeight      = !step || step === 'weight'
   const runIndexPages  = step === 'index-pages'
+  const runRankTitle   = step === 'rank-title'
   const isSingleSite = !!siteFilter
   const logType = isSingleSite ? 'cron_manual' as const : 'cron_task' as const
 
@@ -436,6 +439,42 @@ export async function GET(request: Request) {
         ok: ipOk, empty: ipEmpty, fail: ipFail, rowsWritten: ipRows,
         durationMs: Date.now() - ipStart,
       })
+    }
+
+    // ── Rank Title (竞品追踪) ────────────────────────────────────────────────────
+    if (runRankTitle && siteFilter) {
+      const rtStart = Date.now()
+      const rtAid = await activityStart(supabase, { type: 'cron_manual', source: 'vercel', step: 'rank-title', domain: siteFilter })
+      const site = sites[0]
+      if (site) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('site_rank_keywords') as any).delete().eq('site_id', site.id).eq('stat_date', today).eq('platform', 'mobile')
+          const [upEntries, downEntries] = await Promise.all([
+            fetchRankupWithTitle(site.domain, today),
+            fetchRankdownWithTitle(site.domain, today),
+          ])
+          const rows = [
+            ...upEntries.map(e => ({ site_id: site.id, keyword: e.keyword, stat_date: today, type: 'rankup', platform: 'mobile', rank_position: e.rank_position, volume: e.volume, title: e.title || null })),
+            ...downEntries.map(e => ({ site_id: site.id, keyword: e.keyword, stat_date: today, type: 'rankdown', platform: 'mobile', rank_position: e.rank_position, volume: e.volume, title: e.title || null })),
+          ]
+          for (const chunk of chunkArray(rows, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('site_rank_keywords') as any).upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
+          }
+          const kwVol = upEntries.filter(e => e.volume > 0).map(e => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
+          for (const chunk of chunkArray(kwVol, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
+          }
+          if (rtAid) await activityEnd(supabase, rtAid, { status: rows.length > 0 ? 'done' : 'warn', ok: rows.length > 0 ? 1 : 0, empty: rows.length === 0 ? 1 : 0, fail: 0, rowsWritten: rows.length, durationMs: Date.now() - rtStart })
+          results.push({ site: site.domain, count: rows.length })
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : '竞品追踪抓取失败'
+          if (rtAid) await activityEnd(supabase, rtAid, { status: 'fail', ok: 0, empty: 0, fail: 1, rowsWritten: 0, durationMs: Date.now() - rtStart })
+          results.push({ site: site.domain, count: -1, error: msg })
+        }
+      }
     }
 
     return NextResponse.json({ date: today, yesterday, results })
