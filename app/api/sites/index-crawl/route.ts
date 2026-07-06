@@ -51,41 +51,46 @@ export async function POST(req: Request) {
   let totalFound = 0
   let totalNew = 0
 
-  const { pages, failReason } = await fetchBaiduIndexPages(domain, undefined, baiduCookie || undefined)
+  async function saveBatch(batch: import('@/lib/crawler').BaiduIndexedPage[]) {
+    for (const chunk of chunkArray(batch, 500)) {
+      const rows = chunk.map(p => ({
+        site_id: site.id,
+        url: p.url,
+        title: p.title,
+        snippet: p.snippet,
+        baidu_date_str: p.baiduDateStr,
+        first_seen_date: today,
+        last_seen_date: today,
+        disappeared_date: null,
+        updated_at: new Date().toISOString(),
+      }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = await (service.from('site_indexed_pages') as any).upsert(rows, {
+        onConflict: 'site_id,url',
+        ignoreDuplicates: false,
+      }).select('first_seen_date')
+      const inserted = ((res.data || []) as { first_seen_date: string }[])
+      totalFound += chunk.length
+      totalNew += inserted.filter(r => r.first_seen_date === today).length
+    }
+  }
+
+  const { pages, failReason } = await fetchBaiduIndexPages(domain, saveBatch, baiduCookie || undefined)
 
   if (failReason === 'captcha' || failReason === 'http_error') {
+    if (totalFound > 0) {
+      // Partial results already saved — return what we got instead of error
+      return NextResponse.json({ found: totalFound, newCount: totalNew, domain: site.domain, truncated: true })
+    }
     return NextResponse.json({ error: '百度返回安全验证或HTTP错误，抓取被拦截', failReason }, { status: 502 })
   }
 
-  if (pages.length === 0) {
+  if (totalFound === 0 && pages.length === 0) {
     return NextResponse.json({ found: 0, newCount: 0, domain, failReason: failReason ?? 'empty_results' })
   }
 
-  // no_content means Baidu stopped returning results mid-crawl (anti-bot / IP block)
+  // no_content means Baidu stopped returning results mid-crawl
   const truncated = failReason === 'no_content'
-
-  totalFound = pages.length
-
-  for (const chunk of chunkArray(pages, 500)) {
-    const rows = chunk.map(p => ({
-      site_id: site.id,
-      url: p.url,
-      title: p.title,
-      snippet: p.snippet,
-      baidu_date_str: p.baiduDateStr,
-      first_seen_date: today,
-      last_seen_date: today,
-      disappeared_date: null,
-      updated_at: new Date().toISOString(),
-    }))
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await (service.from('site_indexed_pages') as any).upsert(rows, {
-      onConflict: 'site_id,url',
-      ignoreDuplicates: false,
-    }).select('first_seen_date')
-    const inserted = ((res.data || []) as { first_seen_date: string }[])
-    totalNew += inserted.filter(r => r.first_seen_date === today).length
-  }
 
   return NextResponse.json({ found: totalFound, newCount: totalNew, domain: site.domain, truncated })
 }

@@ -801,8 +801,8 @@ export async function fetchBaiduIndexPages(
         if (batch.length > 0) await onPageResults(batch)
       }
 
-      // Longer delay between pages to reduce Baidu anti-bot triggering
-      await randomDelay(4000, 7000)
+      // Minimal delay when user-provided cookies are present (real session, far less risk of blocking)
+      await randomDelay(initialCookie ? 300 : 4000, initialCookie ? 500 : 7000)
     } catch {
       failReason = 'http_error'
       break
