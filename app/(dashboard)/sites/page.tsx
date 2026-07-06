@@ -26,6 +26,14 @@ interface Site {
   created_at: string
 }
 
+interface PendingToggle {
+  site: Site
+  direction: 'to_site_rank_keywords' | 'to_rank_changes'
+  // after migration: the new field values to apply
+  newRankData: boolean
+  newRankTitle: boolean
+}
+
 export default function SitesPage() {
   const [sites, setSites] = useState<Site[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,6 +44,8 @@ export default function SitesPage() {
   const [filterSite, setFilterSite] = useState('')
   const [filterFocus, setFilterFocus] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [pendingToggle, setPendingToggle] = useState<PendingToggle | null>(null)
+  const [migrating, setMigrating] = useState(false)
 
   async function loadSites() {
     setLoading(true)
@@ -99,45 +109,61 @@ export default function SitesPage() {
     }
   }
 
-  async function handleToggleRank(site: Site) {
-    const newVal = !site.has_rank_data
-    try {
-      const res = await fetch('/api/sites', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        // Enabling 排名 clears 竞品追踪 (mutual exclusion)
-        body: JSON.stringify({ ...site, has_rank_data: newVal, has_rank_title: newVal ? false : site.has_rank_title }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || '更新失败')
-      }
-      setSites((prev) =>
-        prev.map((s) => s.id === site.id ? { ...s, has_rank_data: newVal, has_rank_title: newVal ? false : s.has_rank_title } : s)
-      )
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : '更新失败')
+  async function applyToggle(site: Site, newRankData: boolean, newRankTitle: boolean) {
+    const res = await fetch('/api/sites', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...site, has_rank_data: newRankData, has_rank_title: newRankTitle }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || '更新失败')
     }
+    setSites((prev) =>
+      prev.map((s) => s.id === site.id ? { ...s, has_rank_data: newRankData, has_rank_title: newRankTitle } : s)
+    )
   }
 
-  async function handleToggleRankTitle(site: Site) {
+  function handleToggleRank(site: Site) {
+    const newVal = !site.has_rank_data
+    // Turning ON 排名 while 竞品追踪 is active → offer migration
+    if (newVal && site.has_rank_title) {
+      setPendingToggle({ site, direction: 'to_rank_changes', newRankData: true, newRankTitle: false })
+      return
+    }
+    applyToggle(site, newVal, newVal ? false : site.has_rank_title).catch(err => alert(err.message))
+  }
+
+  function handleToggleRankTitle(site: Site) {
     const newVal = !site.has_rank_title
+    // Turning ON 竞品追踪 while 排名 is active → offer migration
+    if (newVal && site.has_rank_data) {
+      setPendingToggle({ site, direction: 'to_site_rank_keywords', newRankData: false, newRankTitle: true })
+      return
+    }
+    applyToggle(site, newVal ? false : site.has_rank_data, newVal).catch(err => alert(err.message))
+  }
+
+  async function executePendingToggle(withMigration: boolean) {
+    if (!pendingToggle) return
+    const { site, direction, newRankData, newRankTitle } = pendingToggle
+    setMigrating(true)
     try {
-      const res = await fetch('/api/sites', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        // Enabling 竞品追踪 clears 排名 (mutual exclusion)
-        body: JSON.stringify({ ...site, has_rank_title: newVal, has_rank_data: newVal ? false : site.has_rank_data }),
-      })
-      if (!res.ok) {
+      if (withMigration) {
+        const res = await fetch('/api/migrate-rank-site', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ site_id: site.id, direction }),
+        })
         const data = await res.json()
-        throw new Error(data.error || '更新失败')
+        if (!res.ok) throw new Error(data.error || '迁移失败')
       }
-      setSites((prev) =>
-        prev.map((s) => s.id === site.id ? { ...s, has_rank_title: newVal, has_rank_data: newVal ? false : s.has_rank_data } : s)
-      )
+      await applyToggle(site, newRankData, newRankTitle)
+      setPendingToggle(null)
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : '更新失败')
+      alert(err instanceof Error ? err.message : '操作失败')
+    } finally {
+      setMigrating(false)
     }
   }
 
@@ -242,6 +268,57 @@ export default function SitesPage() {
           onClose={handleModalClose}
           onSaved={handleSaved}
         />
+      )}
+
+      {pendingToggle && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="font-semibold text-gray-900 mb-1">
+              {pendingToggle.direction === 'to_site_rank_keywords' ? '切换至竞品追踪模式' : '切换至排名变动模式'}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {pendingToggle.direction === 'to_site_rank_keywords'
+                ? `将 rank_changes 中 ${pendingToggle.site.domain} 的现有记录复制到竞品追踪表（新排名/标题字段为空，平台统一设为移动端）。`
+                : `将竞品追踪表中 ${pendingToggle.site.domain} 的移动端记录复制到 rank_changes。PC 端数据、新排名及标题字段将会丢弃。`
+              }
+            </p>
+            {pendingToggle.direction === 'to_rank_changes' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-xs text-amber-700">
+                ⚠ 注意：PC 端数据、新排名（rank_position）及标题（title）不会被迁移。
+              </div>
+            )}
+            <p className="text-sm text-gray-600 mb-5">是否同时迁移现有历史数据？</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setPendingToggle(null)}
+                disabled={migrating}
+                className="text-sm px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => executePendingToggle(false)}
+                disabled={migrating}
+                className="text-sm px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                仅切换，不迁移
+              </button>
+              <button
+                onClick={() => executePendingToggle(true)}
+                disabled={migrating}
+                className="text-sm px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-40 flex items-center gap-1.5"
+              >
+                {migrating && (
+                  <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+                确认并迁移数据
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
