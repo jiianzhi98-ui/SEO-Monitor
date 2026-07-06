@@ -88,7 +88,7 @@ const STEP_LABELS: Record<string, string> = {
 }
 
 const STEP_TIMES: Record<string, string> = {
-  keywords: '每日 02:00', rank: '每日 05:00', weight: '每日 04:00',
+  keywords: '每日 03:00', rank: '每日 06:00', weight: '每日 05:00',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -678,7 +678,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">自站排名位置</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 02:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 03:00 MYT</p>
                   </div>
                   <span className="text-xs text-gray-400 whitespace-nowrap">
                     {row2.rankPos.date ?? '—'}
@@ -701,7 +701,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">竞品排名标题</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 00:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 01:00 MYT</p>
                   </div>
                   <span className="text-xs text-gray-400 whitespace-nowrap">
                     {row2.rankTitle.date ?? '—'}
@@ -724,15 +724,23 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">百度收录</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 01:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 02:00 MYT</p>
                   </div>
-                  {row2.indexPages ? (
-                    <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
-                      {formatCardTime(row2.indexPages.logged_at)} 执行
-                    </span>
-                  ) : (
-                    <span className="text-xs text-gray-400">尚无记录</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {row2.indexPages ? (
+                      <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                        {formatCardTime(row2.indexPages.logged_at)} 执行
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">尚无记录</span>
+                    )}
+                    <button
+                      onClick={() => { setShowCookieModal(true); setCookieSaveMsg('') }}
+                      className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-2 py-0.5 hover:border-blue-200 whitespace-nowrap"
+                    >
+                      更新 Cookie
+                    </button>
+                  </div>
                 </div>
                 {row2.indexPages ? (
                   <div className="mt-3">
@@ -747,19 +755,11 @@ export default function CrawlLogPage() {
                 ) : (
                   <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
                 )}
-                <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-xs text-gray-400">
-                    {cookieSet
-                      ? `Cookie 已设置${cookieUpdatedAt ? ' · ' + formatCardTime(cookieUpdatedAt) : ''}`
-                      : 'Cookie 未设置'}
-                  </span>
-                  <button
-                    onClick={() => { setShowCookieModal(true); setCookieSaveMsg('') }}
-                    className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-2 py-0.5 hover:border-blue-200"
-                  >
-                    更新 Cookie
-                  </button>
-                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  {cookieSet
+                    ? `Cookie 已设置${cookieUpdatedAt ? ' · ' + formatCardTime(cookieUpdatedAt) : ''}`
+                    : 'Cookie 未设置'}
+                </p>
               </div>
 
             </div>

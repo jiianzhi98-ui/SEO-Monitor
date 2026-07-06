@@ -2,8 +2,8 @@ name: Rank Title Crawl (Competitor Sites)
 
 on:
   schedule:
-    # 16:00 UTC = 00:00 MYT — runs after rank finishes
-    - cron: '0 16 * * *'
+    # 17:00 UTC = 01:00 MYT — runs after rank finishes
+    - cron: '0 17 * * *'
   workflow_dispatch:
 
 jobs:
