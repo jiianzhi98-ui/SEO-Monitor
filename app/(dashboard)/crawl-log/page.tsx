@@ -678,7 +678,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">自站排名位置</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 03:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 07:30 MYT</p>
                   </div>
                   <span className="text-xs text-gray-400 whitespace-nowrap">
                     {row2.rankPos.date ?? '—'}
@@ -701,7 +701,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">竞品排名标题</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 01:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 07:00 MYT</p>
                   </div>
                   <span className="text-xs text-gray-400 whitespace-nowrap">
                     {row2.rankTitle.date ?? '—'}
@@ -724,7 +724,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">百度收录</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 02:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 08:00 MYT</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {row2.indexPages ? (
