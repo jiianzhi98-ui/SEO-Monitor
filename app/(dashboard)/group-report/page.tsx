@@ -44,7 +44,7 @@ interface CompetitorData {
 
 type Period = 'yesterday' | 'week' | 'month' | 'custom'
 type ReportTab = 'submissions' | 'outcomes' | 'rules'
-type CompetitorInnerTab = 'keywords' | 'ranks'
+type CompetitorInnerTab = 'keywords' | 'ranks' | 'rules'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -371,9 +371,9 @@ export default function GroupReportPage() {
     setCompetitorData(null)
   }, [competitorGroupId, groups])
 
-  // Load competitor data
+  // Load competitor data (skip for rules tab — no API call needed)
   useEffect(() => {
-    if (!activeCompetitorDomain || !competitorDate) { setCompetitorData(null); return }
+    if (!activeCompetitorDomain || !competitorDate || competitorInnerTab === 'rules') { return }
     setCompetitorLoading(true)
     setCompetitorData(null)
     fetch(`/api/competitor-site?domain=${encodeURIComponent(activeCompetitorDomain)}&date=${competitorDate}&tab=${competitorInnerTab}`)
@@ -546,44 +546,76 @@ export default function GroupReportPage() {
 
                   {activeCompetitorDomain && (
                     <div className="space-y-3">
-                      {/* Controls row */}
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden">
-                          {([['keywords', '昨日新增'], ['ranks', '排名变动']] as [CompetitorInnerTab, string][]).map(([t, label]) => (
-                            <button key={t} onClick={() => setCompetitorInnerTab(t)}
-                              className={`px-4 py-1.5 text-sm font-medium transition-colors ${competitorInnerTab === t ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                        <input type="date" value={competitorDate} max={today}
-                          onChange={e => setCompetitorDate(e.target.value)}
-                          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700" />
-                        {competitorData && !competitorLoading && (
-                          <span className="text-xs text-gray-400">
-                            {competitorInnerTab === 'keywords'
-                              ? `${competitorData.keywords.length} 词`
-                              : `涨 ${competitorData.rankup.length} · 跌 ${competitorData.rankdown.length}`}
-                          </span>
-                        )}
+                      {/* Sub-tabs — match group sub-tab style */}
+                      <div className="flex gap-0 border-b border-gray-100">
+                        {([
+                          ['keywords', '提交记录'],
+                          ['ranks', '成效追踪'],
+                          ['rules', '规则中心'],
+                        ] as [CompetitorInnerTab, string][]).map(([t, label]) => (
+                          <button key={t} onClick={() => setCompetitorInnerTab(t)}
+                            className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${competitorInnerTab === t ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                            {label}
+                          </button>
+                        ))}
                       </div>
 
-                      {/* Content card */}
-                      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-700">{activeCompetitorDomain}</span>
-                          <span className="text-xs text-gray-400">
-                            {competitorInnerTab === 'keywords' ? `· ${competitorDate} 新增词` : `· ${competitorDate} 排名变动`}
-                          </span>
-                          {competitorData?.site?.has_rank_title && competitorInnerTab === 'ranks' && (
-                            <span className="ml-auto text-[11px] bg-orange-50 text-orange-500 border border-orange-100 px-2 py-0.5 rounded-full">竞品追踪</span>
+                      {/* Date + count — only for keywords / ranks */}
+                      {competitorInnerTab !== 'rules' && (
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <input type="date" value={competitorDate} max={today}
+                            onChange={e => setCompetitorDate(e.target.value)}
+                            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700" />
+                          {competitorData && !competitorLoading && (
+                            <span className="text-xs text-gray-400">
+                              {competitorInnerTab === 'keywords'
+                                ? `${competitorData.keywords.length} 词`
+                                : `涨 ${competitorData.rankup.length} · 跌 ${competitorData.rankdown.length}`}
+                            </span>
                           )}
                         </div>
-                        {competitorLoading ? <Spinner /> : competitorInnerTab === 'keywords'
-                          ? <CompetitorKeywordsTable keywords={competitorData?.keywords || []} />
-                          : <div className="p-4"><CompetitorRanksPanel site={competitorData?.site || null} rankup={competitorData?.rankup || []} rankdown={competitorData?.rankdown || []} /></div>
-                        }
-                      </div>
+                      )}
+
+                      {/* Content */}
+                      {competitorInnerTab === 'rules' ? (
+                        <div className="space-y-3">
+                          <div className="bg-amber-50 border border-amber-100 rounded-xl px-5 py-3 text-sm text-amber-700">
+                            以下为针对竞品 <span className="font-medium">{activeCompetitorDomain}</span> 的建议监控规则，激活后将每日自动运行。
+                          </div>
+                          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <div className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-2.5 bg-gray-50 text-[11px] font-medium text-gray-400 border-b border-gray-100">
+                              <span>规则名称</span><span>触发条件</span><span>建议动作</span><span>数据来源</span>
+                            </div>
+                            {SUGGESTED_RULES.map((rule, i) => (
+                              <div key={i} className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors items-start">
+                                <div>
+                                  <span className="text-sm font-medium text-gray-800">{rule.name}</span>
+                                  <span className="ml-2 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">待激活</span>
+                                </div>
+                                <span className="text-xs text-gray-500 leading-relaxed">{rule.condition}</span>
+                                <span className="text-xs text-gray-600 leading-relaxed">{rule.action}</span>
+                                <span className="text-[11px] text-gray-400 leading-relaxed font-mono">{rule.metric}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-700">{activeCompetitorDomain}</span>
+                            <span className="text-xs text-gray-400">
+                              {competitorInnerTab === 'keywords' ? `· ${competitorDate} 新增词` : `· ${competitorDate} 排名变动`}
+                            </span>
+                            {competitorData?.site?.has_rank_title && competitorInnerTab === 'ranks' && (
+                              <span className="ml-auto text-[11px] bg-orange-50 text-orange-500 border border-orange-100 px-2 py-0.5 rounded-full">竞品追踪</span>
+                            )}
+                          </div>
+                          {competitorLoading ? <Spinner /> : competitorInnerTab === 'keywords'
+                            ? <CompetitorKeywordsTable keywords={competitorData?.keywords || []} />
+                            : <div className="p-4"><CompetitorRanksPanel site={competitorData?.site || null} rankup={competitorData?.rankup || []} rankdown={competitorData?.rankdown || []} /></div>
+                          }
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

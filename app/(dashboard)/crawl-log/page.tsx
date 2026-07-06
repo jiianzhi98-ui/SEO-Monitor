@@ -317,13 +317,16 @@ export default function CrawlLogPage() {
     }
     setTodayLogs(grouped)
 
-    // Row 2 card A: own-site rank positions
-    // Total = sites in task_groups.associated_domains; succeeded = those with site_keyword_ranks data today
-    const { data: taskGroupsData } = await supabase.from('task_groups').select('associated_domains')
+    // Row 2 card A + B: fetch task_groups once for both cards
+    const { data: taskGroupsData } = await supabase.from('task_groups').select('associated_domains, competitor_domains')
     const allRkDomains = new Set<string>()
-    for (const g of (taskGroupsData || []) as { associated_domains: string[] | null }[]) {
+    const allRtDomains = new Set<string>()
+    for (const g of (taskGroupsData || []) as { associated_domains: string[] | null; competitor_domains: string[] | null }[]) {
       for (const d of g.associated_domains || []) { if (d?.trim()) allRkDomains.add(d.trim()) }
+      for (const d of g.competitor_domains || []) { if (d?.trim()) allRtDomains.add(d.trim()) }
     }
+
+    // Card A: own-site rank positions — total = associated_domains, succeeded = those with data today
     let rkSucceeded = 0, rkTotal = 0, rkRowCount = 0
     if (allRkDomains.size > 0) {
       const { data: rkSiteData } = await supabase.from('sites').select('id').in('domain', Array.from(allRkDomains))
@@ -333,22 +336,18 @@ export default function CrawlLogPage() {
         const { data: chk } = await supabase.from('site_keyword_ranks').select('site_id').eq('site_id', siteId).eq('stat_date', today).limit(1)
         if (chk && chk.length > 0) rkSucceeded++
       }
-      const { count } = await supabase.from('site_keyword_ranks').select('*', { count: 'exact', head: true }).eq('stat_date', today).in('site_id', rkSiteIds.length > 0 ? rkSiteIds : ['__none__'])
-      rkRowCount = count ?? 0
     }
 
-    // Row 2 card B: competitor rank titles — sites with has_rank_title=true
-    const { data: rtSiteData } = await supabase.from('sites').select('id').eq('has_rank_title', true)
-    const rtSiteIds = (rtSiteData || []).map((s: { id: string }) => s.id)
-    const rtTotal = rtSiteIds.length
+    // Card B: competitor rank titles — total = competitor_domains across all task_groups
+    const rtTotal = allRtDomains.size
     let rtSucceeded = 0, rtRowCount = 0
-    if (rtSiteIds.length > 0) {
+    if (allRtDomains.size > 0) {
+      const { data: rtSiteData } = await supabase.from('sites').select('id').in('domain', Array.from(allRtDomains))
+      const rtSiteIds = (rtSiteData || []).map((s: { id: string }) => s.id)
       for (const siteId of rtSiteIds) {
         const { data: chk } = await supabase.from('site_rank_keywords').select('site_id').eq('site_id', siteId).eq('stat_date', today).eq('platform', 'mobile').limit(1)
         if (chk && chk.length > 0) rtSucceeded++
       }
-      const { count } = await supabase.from('site_rank_keywords').select('*', { count: 'exact', head: true }).eq('stat_date', today).in('site_id', rtSiteIds)
-      rtRowCount = count ?? 0
     }
 
     // Row 2 card C: index-pages latest activity_log (last 2 days in case run was yesterday night)
@@ -691,9 +690,6 @@ export default function CrawlLogPage() {
                       {row2.rankPos.succeeded}
                     </span>
                     <span className="text-sm text-gray-400">/{row2.rankPos.total} 站成功</span>
-                    {row2.rankPos.rows > 0 && (
-                      <p className="text-xs text-gray-400 mt-1">{row2.rankPos.rows.toLocaleString()} 条数据写入</p>
-                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
@@ -717,9 +713,6 @@ export default function CrawlLogPage() {
                       {row2.rankTitle.succeeded}
                     </span>
                     <span className="text-sm text-gray-400">/{row2.rankTitle.total} 站成功</span>
-                    {row2.rankTitle.rows > 0 && (
-                      <p className="text-xs text-gray-400 mt-1">{row2.rankTitle.rows.toLocaleString()} 条数据写入</p>
-                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
