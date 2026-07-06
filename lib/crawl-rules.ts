@@ -75,7 +75,7 @@ export const CRAWL_RULES: RuleSection[] = [
     items: [
       { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 17 * * * UTC = 01:00 MYT)，5个 matrix job 并行；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
       { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）' },
-      { label: '抓取方式', text: '百度 site:domain 搜索（无时间过滤），pn=0/10/20... 翻页，最多100页（1000条），遇空页停止；页间延迟2-4秒随机，站间延迟10秒' },
+      { label: '抓取方式', text: '百度 site:domain 搜索（无时间过滤），pn=0/10/20... 翻页，无页数上限，遇空页或被拦截时停止；页间延迟2-4秒随机，站间延迟10秒' },
       { label: '去重', text: '按 (site_id, url) 唯一索引 upsert；新页面写入 first_seen_date=today（DB trigger 保护，UPDATE 时不覆盖）；已知页面更新 last_seen_date=today；抓完后将本次未出现的老页面标记 disappeared_date=today（重新出现则清为 null）' },
       { label: '写入表', text: 'site_indexed_pages（url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date）' },
       { label: '风险', text: '百度对 GitHub Actions IP 有反爬限制，若返回 "百度安全验证" 页则自动停止该站抓取；empty 状态表示疑似被拦截' },

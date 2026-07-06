@@ -675,11 +675,10 @@ function parseBaiduRelativeDate(text: string): string | null {
 export type BaiduIndexFailReason = 'captcha' | 'no_content' | 'http_error' | 'empty_results' | null
 
 // Fetch Baidu site: search results to discover ALL currently indexed pages.
-// Uses pn= parameter for reliable pagination (no time filter).
-// Stops when a page returns 0 results or maxPages is reached.
+// Uses pn= parameter for reliable pagination (no time filter, no page cap).
+// Stops only when a page returns 0 results, a captcha is hit, or an HTTP error occurs.
 export async function fetchBaiduIndexPages(
   domain: string,
-  maxPages = 100  // 100 pages × 10 results = up to 1000; stops early when empty
 ): Promise<{ pages: BaiduIndexedPage[]; failReason: BaiduIndexFailReason }> {
   const results: BaiduIndexedPage[] = []
   const seenUrls = new Set<string>()
@@ -704,7 +703,7 @@ export async function fetchBaiduIndexPages(
   // Use pn=0/10/20/... for reliable pagination instead of findNextPageUrl.
   const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&si=${encodeURIComponent(domain)}&ct=2097152`
 
-  for (let page = 0; page < maxPages; page++) {
+  for (let page = 0; ; page++) {
     const pn = page * 10
     const currentUrl = pn === 0 ? baseUrl : `${baseUrl}&pn=${pn}`
     const referer = page === 0 ? 'https://www.baidu.com/' : `${baseUrl}&pn=${(page - 1) * 10}`
@@ -769,7 +768,7 @@ export async function fetchBaiduIndexPages(
 
       if (pageCount === 0) break  // No more results — stop paginating
 
-      if (page < maxPages - 1) await randomDelay(2000, 4000)
+      await randomDelay(2000, 4000)
     } catch {
       failReason = 'http_error'
       break
