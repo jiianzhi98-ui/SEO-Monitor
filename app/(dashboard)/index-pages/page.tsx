@@ -20,7 +20,9 @@ interface IndexedPage {
   first_seen_date: string
   last_seen_date: string
   disappeared_date: string | null
+  baidu_date_changed_at: string | null
   is_new: boolean
+  is_updated: boolean
   is_disappeared: boolean
 }
 
@@ -326,6 +328,8 @@ export default function IndexPagesPage() {
                           <span className="inline-block text-xs font-medium text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full whitespace-nowrap">已脱收</span>
                         ) : row.is_new ? (
                           <span className="inline-block text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">新发现</span>
+                        ) : row.is_updated ? (
+                          <span className="inline-block text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full whitespace-nowrap">更新</span>
                         ) : (
                           <span className="inline-block text-xs text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap">已收录</span>
                         )}
