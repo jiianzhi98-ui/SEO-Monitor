@@ -368,14 +368,34 @@ export default function CrawlLogPage() {
     setLoading(false)
   }, [])
 
+  function parseCookieInput(raw: string): string {
+    const trimmed = raw.trim()
+    // Tab-separated format (copied from DevTools): "Name\tValue\n..."
+    if (trimmed.includes('\t')) {
+      return trimmed.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.includes('\t'))
+        .map(line => {
+          const tab = line.indexOf('\t')
+          const name = line.slice(0, tab).trim()
+          const value = line.slice(tab + 1).trim()
+          return `${name}=${value}`
+        })
+        .join('; ')
+    }
+    // Already in Name=Value; ... format
+    return trimmed
+  }
+
   async function saveCookie() {
     if (!cookieInput.trim()) return
     setCookieSaving(true)
     setCookieSaveMsg('')
+    const value = parseCookieInput(cookieInput)
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: 'baidu_index_cookie', value: cookieInput.trim() }),
+      body: JSON.stringify({ key: 'baidu_index_cookie', value }),
     })
     if (res.ok) {
       setCookieSet(true)
