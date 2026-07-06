@@ -18,6 +18,10 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
     const firstDay = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`
     return { startDate: firstDay, endDate: today }
   }
+  if (period === 'yesterday') {
+    const y = getMY(-1)
+    return { startDate: y, endDate: y }
+  }
   return { startDate: today, endDate: today }
 }
 

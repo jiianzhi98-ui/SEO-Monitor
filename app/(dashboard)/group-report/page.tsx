@@ -42,13 +42,13 @@ interface CompetitorData {
   rankdown: CompetitorRankRow[]
 }
 
-type Period = 'today' | 'week' | 'month' | 'custom'
+type Period = 'yesterday' | 'week' | 'month' | 'custom'
 type ReportTab = 'submissions' | 'outcomes' | 'rules'
 type CompetitorInnerTab = 'keywords' | 'ranks'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const PERIOD_LABELS: Record<Period, string> = { today: '今日', week: '本周', month: '本月', custom: '自定义' }
+const PERIOD_LABELS: Record<Period, string> = { yesterday: '昨日', week: '本周', month: '本月', custom: '自定义' }
 
 const MOCK_OUTCOMES = [
   { member: 'Joanne',  date: '2026-06-10', keyword: '葫芦侠',          final_keyword: '葫芦侠官方下载',    op: '新增', url: 'https://www.sjwyx.com/ruanjian/1001.html', rank: '上涨 +14', indexed: '3天',   outcome: 'success' },
@@ -328,7 +328,7 @@ export default function GroupReportPage() {
   const [activeTabId, setActiveTabId] = useState<string>('competitors') // 'competitors' | groupId
   const [competitorGroupId, setCompetitorGroupId] = useState<string>('')
   const [reportTab, setReportTab] = useState<ReportTab>('submissions')
-  const [period, setPeriod] = useState<Period>('today')
+  const [period, setPeriod] = useState<Period>('yesterday')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
@@ -675,7 +675,7 @@ export default function GroupReportPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-gray-500 mr-1">时间范围：</span>
               <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden">
-                {(['today', 'week', 'month', 'custom'] as Period[]).map(p => (
+                {(['yesterday', 'week', 'month', 'custom'] as Period[]).map(p => (
                   <button key={p} onClick={() => setPeriod(p)}
                     className={`px-4 py-1.5 text-sm font-medium transition-colors ${period === p ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
                     {PERIOD_LABELS[p]}

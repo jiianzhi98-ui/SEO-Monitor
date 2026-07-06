@@ -251,8 +251,8 @@ function RetryModal({ step, sites, onClose, onRefresh }: {
 const SELECT_CLS = 'text-xs border border-gray-200 rounded-md pl-2.5 pr-6 py-1 text-gray-600 bg-white cursor-pointer hover:border-gray-300 focus:outline-none appearance-none'
 
 type Row2Stats = {
-  rankPos: { domains: number; rows: number; date: string | null }
-  rankTitle: { domains: number; rows: number; date: string | null }
+  rankPos: { succeeded: number; total: number; rows: number; date: string | null }
+  rankTitle: { succeeded: number; total: number; rows: number; date: string | null }
   indexPages: ActivityLog | null
 }
 
@@ -265,8 +265,8 @@ export default function CrawlLogPage() {
 
   // Row 2 cards
   const [row2, setRow2] = useState<Row2Stats>({
-    rankPos: { domains: 0, rows: 0, date: null },
-    rankTitle: { domains: 0, rows: 0, date: null },
+    rankPos: { succeeded: 0, total: 0, rows: 0, date: null },
+    rankTitle: { succeeded: 0, total: 0, rows: 0, date: null },
     indexPages: null,
   })
 
@@ -317,20 +317,39 @@ export default function CrawlLogPage() {
     }
     setTodayLogs(grouped)
 
-    // Row 2 card A: own-site rank positions (site_keyword_ranks)
-    const { data: rkRows } = await supabase
-      .from('site_keyword_ranks')
-      .select('site_id, stat_date')
-      .eq('stat_date', today)
-    const rkDomains = new Set((rkRows || []).map((r: { site_id: string }) => r.site_id)).size
+    // Row 2 card A: own-site rank positions
+    // Total = sites in task_groups.associated_domains; succeeded = those with site_keyword_ranks data today
+    const { data: taskGroupsData } = await supabase.from('task_groups').select('associated_domains')
+    const allRkDomains = new Set<string>()
+    for (const g of (taskGroupsData || []) as { associated_domains: string[] | null }[]) {
+      for (const d of g.associated_domains || []) { if (d?.trim()) allRkDomains.add(d.trim()) }
+    }
+    let rkSucceeded = 0, rkTotal = 0, rkRowCount = 0
+    if (allRkDomains.size > 0) {
+      const { data: rkSiteData } = await supabase.from('sites').select('id').in('domain', Array.from(allRkDomains))
+      const rkSiteIds = (rkSiteData || []).map((s: { id: string }) => s.id)
+      rkTotal = rkSiteIds.length
+      for (const siteId of rkSiteIds) {
+        const { data: chk } = await supabase.from('site_keyword_ranks').select('site_id').eq('site_id', siteId).eq('stat_date', today).limit(1)
+        if (chk && chk.length > 0) rkSucceeded++
+      }
+      const { count } = await supabase.from('site_keyword_ranks').select('*', { count: 'exact', head: true }).eq('stat_date', today).in('site_id', rkSiteIds.length > 0 ? rkSiteIds : ['__none__'])
+      rkRowCount = count ?? 0
+    }
 
-    // Row 2 card B: competitor rank titles (site_rank_keywords)
-    const { data: rtRows } = await supabase
-      .from('site_rank_keywords')
-      .select('site_id, stat_date')
-      .eq('stat_date', today)
-      .eq('platform', 'mobile')
-    const rtDomains = new Set((rtRows || []).map((r: { site_id: string }) => r.site_id)).size
+    // Row 2 card B: competitor rank titles — sites with has_rank_title=true
+    const { data: rtSiteData } = await supabase.from('sites').select('id').eq('has_rank_title', true)
+    const rtSiteIds = (rtSiteData || []).map((s: { id: string }) => s.id)
+    const rtTotal = rtSiteIds.length
+    let rtSucceeded = 0, rtRowCount = 0
+    if (rtSiteIds.length > 0) {
+      for (const siteId of rtSiteIds) {
+        const { data: chk } = await supabase.from('site_rank_keywords').select('site_id').eq('site_id', siteId).eq('stat_date', today).eq('platform', 'mobile').limit(1)
+        if (chk && chk.length > 0) rtSucceeded++
+      }
+      const { count } = await supabase.from('site_rank_keywords').select('*', { count: 'exact', head: true }).eq('stat_date', today).in('site_id', rtSiteIds)
+      rtRowCount = count ?? 0
+    }
 
     // Row 2 card C: index-pages latest activity_log (last 2 days in case run was yesterday night)
     const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString()
@@ -345,8 +364,8 @@ export default function CrawlLogPage() {
     const latestIndexPages = ((ipLogs || []) as ActivityLog[])[0] ?? null
 
     setRow2({
-      rankPos: { domains: rkDomains, rows: (rkRows || []).length, date: today },
-      rankTitle: { domains: rtDomains, rows: (rtRows || []).length, date: today },
+      rankPos: { succeeded: rkSucceeded, total: rkTotal, rows: rkRowCount, date: today },
+      rankTitle: { succeeded: rtSucceeded, total: rtTotal, rows: rtRowCount, date: today },
       indexPages: latestIndexPages,
     })
 
@@ -666,11 +685,15 @@ export default function CrawlLogPage() {
                     {row2.rankPos.date ?? '—'}
                   </span>
                 </div>
-                {row2.rankPos.rows > 0 ? (
+                {row2.rankPos.total > 0 ? (
                   <div className="mt-3">
-                    <span className="text-2xl font-bold tabular-nums text-green-700">{row2.rankPos.domains}</span>
-                    <span className="text-sm text-gray-400"> 个域名</span>
-                    <p className="text-xs text-gray-400 mt-1">{row2.rankPos.rows.toLocaleString()} 条数据写入</p>
+                    <span className={`text-2xl font-bold tabular-nums ${row2.rankPos.succeeded < row2.rankPos.total ? 'text-yellow-600' : 'text-green-700'}`}>
+                      {row2.rankPos.succeeded}
+                    </span>
+                    <span className="text-sm text-gray-400">/{row2.rankPos.total} 站成功</span>
+                    {row2.rankPos.rows > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">{row2.rankPos.rows.toLocaleString()} 条数据写入</p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
@@ -688,11 +711,15 @@ export default function CrawlLogPage() {
                     {row2.rankTitle.date ?? '—'}
                   </span>
                 </div>
-                {row2.rankTitle.rows > 0 ? (
+                {row2.rankTitle.total > 0 ? (
                   <div className="mt-3">
-                    <span className="text-2xl font-bold tabular-nums text-green-700">{row2.rankTitle.domains}</span>
-                    <span className="text-sm text-gray-400"> 个站点</span>
-                    <p className="text-xs text-gray-400 mt-1">{row2.rankTitle.rows.toLocaleString()} 条数据写入</p>
+                    <span className={`text-2xl font-bold tabular-nums ${row2.rankTitle.succeeded < row2.rankTitle.total ? 'text-yellow-600' : 'text-green-700'}`}>
+                      {row2.rankTitle.succeeded}
+                    </span>
+                    <span className="text-sm text-gray-400">/{row2.rankTitle.total} 站成功</span>
+                    {row2.rankTitle.rows > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">{row2.rankTitle.rows.toLocaleString()} 条数据写入</p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
