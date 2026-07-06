@@ -100,18 +100,20 @@ export default function SitesPage() {
   }
 
   async function handleToggleRank(site: Site) {
+    const newVal = !site.has_rank_data
     try {
       const res = await fetch('/api/sites', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...site, has_rank_data: !site.has_rank_data }),
+        // Enabling 排名 clears 竞品追踪 (mutual exclusion)
+        body: JSON.stringify({ ...site, has_rank_data: newVal, has_rank_title: newVal ? false : site.has_rank_title }),
       })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || '更新失败')
       }
       setSites((prev) =>
-        prev.map((s) => s.id === site.id ? { ...s, has_rank_data: !s.has_rank_data } : s)
+        prev.map((s) => s.id === site.id ? { ...s, has_rank_data: newVal, has_rank_title: newVal ? false : s.has_rank_title } : s)
       )
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : '更新失败')
@@ -119,18 +121,20 @@ export default function SitesPage() {
   }
 
   async function handleToggleRankTitle(site: Site) {
+    const newVal = !site.has_rank_title
     try {
       const res = await fetch('/api/sites', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...site, has_rank_title: !site.has_rank_title }),
+        // Enabling 竞品追踪 clears 排名 (mutual exclusion)
+        body: JSON.stringify({ ...site, has_rank_title: newVal, has_rank_data: newVal ? false : site.has_rank_data }),
       })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || '更新失败')
       }
       setSites((prev) =>
-        prev.map((s) => s.id === site.id ? { ...s, has_rank_title: !s.has_rank_title } : s)
+        prev.map((s) => s.id === site.id ? { ...s, has_rank_title: newVal, has_rank_data: newVal ? false : s.has_rank_data } : s)
       )
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : '更新失败')

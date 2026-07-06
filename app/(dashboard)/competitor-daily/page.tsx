@@ -20,6 +20,7 @@ interface CompetitorRow {
   status: 'normal' | 'warning' | 'danger' | 'high'
   hasHtml: boolean
   hasRankData: boolean
+  hasRankTitle: boolean
 }
 
 
@@ -30,6 +31,7 @@ interface SiteRow {
   focus_level: number
   list_url: string | null
   has_rank_data: boolean
+  has_rank_title: boolean
   friend_links?: string[] | null
   is_enabled?: boolean
 }
@@ -235,7 +237,7 @@ export default function CompetitorDailyPage() {
         const weekendBaseline = avg(weekendVals)
 
         const status = computeKwStatus(siteStats, yesterday)
-        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, weekdayBaseline, weekendBaseline, trend, status, hasHtml: !!site.list_url, hasRankData: (site.has_rank_data ?? false) || associatedDomains.has(site.domain) }
+        return { site_id: site.id, domain: site.domain, name: site.name, focus_level: site.focus_level ?? 3, yesterday: yesterdayVal, weekdayBaseline, weekendBaseline, trend, status, hasHtml: !!site.list_url, hasRankData: (site.has_rank_data ?? false) || associatedDomains.has(site.domain), hasRankTitle: site.has_rank_title ?? false }
       })
 
       const statusPriority = (r: CompetitorRow) => {
@@ -432,26 +434,25 @@ export default function CompetitorDailyPage() {
       const from = page * ps
       const to = (page + 1) * ps - 1
 
+      const useNewTable = site.hasRankTitle
       if (fetchCounts) {
-        const [upCount, downCount, pageRes] = await Promise.all([
-          supabase.from('site_rank_keywords').select('id', { count: 'exact', head: true })
-            .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup')
-            .eq('platform', 'mobile').gt('volume', 0),
-          supabase.from('site_rank_keywords').select('id', { count: 'exact', head: true })
-            .eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown')
-            .eq('platform', 'mobile').gt('volume', 0),
-          supabase.from('site_rank_keywords').select('keyword, volume')
-            .eq('site_id', site.site_id).eq('stat_date', date).eq('type', type)
-            .eq('platform', 'mobile').gt('volume', 0)
-            .order('volume', { ascending: false }).range(from, to),
-        ])
+        const baseUp = useNewTable
+          ? supabase.from('site_rank_keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup').eq('platform', 'mobile').gt('volume', 0)
+          : supabase.from('rank_changes').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup')
+        const baseDown = useNewTable
+          ? supabase.from('site_rank_keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown').eq('platform', 'mobile').gt('volume', 0)
+          : supabase.from('rank_changes').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown')
+        const basePage = useNewTable
+          ? supabase.from('site_rank_keywords').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).eq('platform', 'mobile').gt('volume', 0).order('volume', { ascending: false }).range(from, to)
+          : supabase.from('rank_changes').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).order('volume', { ascending: false }).range(from, to)
+        const [upCount, downCount, pageRes] = await Promise.all([baseUp, baseDown, basePage])
         setRankCounts({ rankup: upCount.count ?? 0, rankdown: downCount.count ?? 0 })
         setRankPageData((pageRes.data || []) as RankEntry[])
       } else {
-        const { data } = await supabase.from('site_rank_keywords').select('keyword, volume')
-          .eq('site_id', site.site_id).eq('stat_date', date).eq('type', type)
-          .eq('platform', 'mobile').gt('volume', 0)
-          .order('volume', { ascending: false }).range(from, to)
+        const q = useNewTable
+          ? supabase.from('site_rank_keywords').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).eq('platform', 'mobile').gt('volume', 0).order('volume', { ascending: false }).range(from, to)
+          : supabase.from('rank_changes').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).order('volume', { ascending: false }).range(from, to)
+        const { data } = await q
         setRankPageData((data || []) as RankEntry[])
       }
     } catch {
@@ -488,14 +489,10 @@ export default function CompetitorDailyPage() {
     try {
       const supabase = getBrowserClient()
       const since = getMalaysiaDate(-30)
-      const { data } = await supabase
-        .from('site_rank_keywords')
-        .select('keyword, type, stat_date')
-        .eq('site_id', site.site_id)
-        .eq('platform', 'mobile')
-        .gt('volume', 0)
-        .gte('stat_date', since)
-        .limit(5000)
+      const q = site.hasRankTitle
+        ? supabase.from('site_rank_keywords').select('keyword, type, stat_date').eq('site_id', site.site_id).eq('platform', 'mobile').gt('volume', 0).gte('stat_date', since).limit(5000)
+        : supabase.from('rank_changes').select('keyword, type, stat_date').eq('site_id', site.site_id).gte('stat_date', since).limit(5000)
+      const { data } = await q
 
       type RawRow = { keyword: string; type: string; stat_date: string }
       const rows = (data || []) as RawRow[]
@@ -555,14 +552,10 @@ export default function CompetitorDailyPage() {
     try {
       const supabase = getBrowserClient()
       const since = getMalaysiaDate(-30)
-      const { data } = await supabase
-        .from('site_rank_keywords')
-        .select('keyword, volume, type, stat_date')
-        .eq('site_id', site.site_id)
-        .eq('platform', 'mobile')
-        .gt('volume', 0)
-        .gte('stat_date', since)
-        .limit(5000)
+      const q = site.hasRankTitle
+        ? supabase.from('site_rank_keywords').select('keyword, volume, type, stat_date').eq('site_id', site.site_id).eq('platform', 'mobile').gt('volume', 0).gte('stat_date', since).limit(5000)
+        : supabase.from('rank_changes').select('keyword, volume, type, stat_date').eq('site_id', site.site_id).gte('stat_date', since).limit(5000)
+      const { data } = await q
 
       type RawRow = { keyword: string; volume: number; type: string; stat_date: string }
       const rows = (data || []) as RawRow[]
@@ -710,16 +703,16 @@ export default function CompetitorDailyPage() {
                               更新词库
                             </button>
                             <button
-                              onClick={() => row.hasRankData && openRankModal(row)}
-                              disabled={!row.hasRankData}
-                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-purple-500 hover:text-purple-700 border-purple-100 hover:border-purple-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                              onClick={() => (row.hasRankData || row.hasRankTitle) && openRankModal(row)}
+                              disabled={!row.hasRankData && !row.hasRankTitle}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${(row.hasRankData || row.hasRankTitle) ? 'text-purple-500 hover:text-purple-700 border-purple-100 hover:border-purple-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               排名变动
                             </button>
                             <button
-                              onClick={() => row.hasRankData && openUnstableModal(row)}
-                              disabled={!row.hasRankData}
-                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${row.hasRankData ? 'text-rose-500 hover:text-rose-700 border-rose-100 hover:border-rose-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                              onClick={() => (row.hasRankData || row.hasRankTitle) && openUnstableModal(row)}
+                              disabled={!row.hasRankData && !row.hasRankTitle}
+                              className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${(row.hasRankData || row.hasRankTitle) ? 'text-rose-500 hover:text-rose-700 border-rose-100 hover:border-rose-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               不稳定词
                             </button>

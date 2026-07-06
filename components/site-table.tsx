@@ -53,10 +53,10 @@ const frequencyLabel: Record<string, string> = {
 
 export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank, onToggleRankTitle }: SiteTableProps) {
   const [page, setPage] = useState(0)
-  const [sortCol, setSortCol] = useState<'isEnabled' | 'hasRankData' | null>(null)
+  const [sortCol, setSortCol] = useState<'isEnabled' | 'hasRankData' | 'hasRankTitle' | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  function handleSort(col: 'isEnabled' | 'hasRankData', dir: 'asc' | 'desc') {
+  function handleSort(col: 'isEnabled' | 'hasRankData' | 'hasRankTitle', dir: 'asc' | 'desc') {
     if (sortCol === col && sortDir === dir) { setSortCol(null) }
     else { setSortCol(col); setSortDir(dir) }
     setPage(0)
@@ -73,13 +73,15 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
     r => [r.focus_level, CAT_ORDER[r.category] ?? 3]
   )
   const sortedDisplay = sortCol === null ? sorted : [...sorted].sort((a, b) => {
-    const va = sortCol === 'isEnabled' ? (a.is_enabled ? 1 : 0) : (a.has_rank_data ? 1 : 0)
-    const vb = sortCol === 'isEnabled' ? (b.is_enabled ? 1 : 0) : (b.has_rank_data ? 1 : 0)
-    return sortDir === 'asc' ? va - vb : vb - va
+    const valOf = (s: typeof sorted[0]) =>
+      sortCol === 'isEnabled' ? (s.is_enabled ? 1 : 0)
+      : sortCol === 'hasRankTitle' ? (s.has_rank_title ? 1 : 0)
+      : (s.has_rank_data ? 1 : 0)
+    return sortDir === 'asc' ? valOf(a) - valOf(b) : valOf(b) - valOf(a)
   })
   const paged = sortedDisplay.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
-  const sortIcons = (col: 'isEnabled' | 'hasRankData') => {
+  const sortIcons = (col: 'isEnabled' | 'hasRankData' | 'hasRankTitle') => {
     const isAsc = sortCol === col && sortDir === 'asc'
     const isDesc = sortCol === col && sortDir === 'desc'
     return (
@@ -111,7 +113,7 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
             <th className="table-th text-center">版本清洗</th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">关键词{sortIcons('isEnabled')}</div></th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">排名{sortIcons('hasRankData')}</div></th>
-            <th className="table-th text-center">竞品追踪</th>
+            <th className="table-th"><div className="flex items-center justify-center gap-1">竞品追踪{sortIcons('hasRankTitle')}</div></th>
             <th className="table-th text-right">操作</th>
           </tr>
         </thead>
