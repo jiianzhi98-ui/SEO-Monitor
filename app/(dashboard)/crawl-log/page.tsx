@@ -370,17 +370,19 @@ export default function CrawlLogPage() {
 
   function parseCookieInput(raw: string): string {
     const trimmed = raw.trim()
-    // Tab-separated format (copied from DevTools): "Name\tValue\n..."
+    // Tab-separated format from DevTools (multiple columns: Name, Value, Domain, Path, ...)
+    // Only take column 0 (Name) and column 1 (Value), ignore the rest
     if (trimmed.includes('\t')) {
       return trimmed.split('\n')
         .map(line => line.trim())
         .filter(line => line.includes('\t'))
         .map(line => {
-          const tab = line.indexOf('\t')
-          const name = line.slice(0, tab).trim()
-          const value = line.slice(tab + 1).trim()
-          return `${name}=${value}`
+          const cols = line.split('\t')
+          const name = cols[0]?.trim() ?? ''
+          const value = cols[1]?.trim() ?? ''
+          return name && value ? `${name}=${value}` : null
         })
+        .filter(Boolean)
         .join('; ')
     }
     // Already in Name=Value; ... format
