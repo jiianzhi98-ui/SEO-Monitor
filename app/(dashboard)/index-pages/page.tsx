@@ -30,7 +30,8 @@ interface IndexedPage {
 
 const PAGE_SIZE = 10
 
-type FilterType = 'all' | 'active' | 'new7' | 'new30' | 'disappeared'
+type TimeFilter = 'all' | 'near7' | 'near30'
+type StatusFilter = 'all' | 'new' | 'reindexed' | 'disappeared' | 'updated' | 'active'
 
 export default function IndexPagesPage() {
   const { role } = useUser()
@@ -47,7 +48,8 @@ export default function IndexPagesPage() {
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [filter, setFilter] = useState<FilterType>('new7')
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('near7')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   const [toggling, setToggling] = useState(false)
   const [crawling, setCrawling] = useState(false)
@@ -74,7 +76,7 @@ export default function IndexPagesPage() {
   }, [search])
 
   // Reset page when filters change
-  useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, filter])
+  useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, timeFilter, statusFilter])
 
   const fetchPages = useCallback(async () => {
     if (!activeSiteId) { setRows([]); setTotal(0); return }
@@ -83,7 +85,8 @@ export default function IndexPagesPage() {
       const params = new URLSearchParams({
         siteId: activeSiteId,
         page: String(page),
-        filter,
+        timeFilter,
+        statusFilter,
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
       })
       const res = await fetch(`/api/sites/index-pages?${params}`)
@@ -92,7 +95,7 @@ export default function IndexPagesPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeSiteId, page, debouncedSearch, filter])
+  }, [activeSiteId, page, debouncedSearch, timeFilter, statusFilter])
 
   useEffect(() => { fetchPages() }, [fetchPages])
 
@@ -249,29 +252,37 @@ export default function IndexPagesPage() {
         <>
           {/* Filters */}
           <div className="flex items-center gap-3 mb-4">
-            {/* Status filter */}
+            {/* Time filter tabs */}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              {(['all', 'active', 'new7', 'new30', 'disappeared'] as FilterType[]).map(f => {
-                const labels: Record<FilterType, string> = {
-                  all: '全部', active: '已收录', new7: '近7天新增', new30: '近30天新增', disappeared: '已脱收',
-                }
+              {(['all', 'near7', 'near30'] as TimeFilter[]).map(t => {
+                const labels: Record<TimeFilter, string> = { all: '全部', near7: '近7天', near30: '近30天' }
                 return (
                   <button
-                    key={f}
-                    onClick={() => setFilter(f)}
+                    key={t}
+                    onClick={() => setTimeFilter(t)}
                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                      filter === f
-                        ? f === 'disappeared'
-                          ? 'bg-white shadow-sm text-red-600'
-                          : 'bg-white shadow-sm text-gray-900'
-                        : 'text-gray-500 hover:text-gray-700'
+                      timeFilter === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    {labels[f]}
+                    {labels[t]}
                   </button>
                 )
               })}
             </div>
+
+            {/* Status filter select */}
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as StatusFilter)}
+              className="h-8 px-2 rounded-lg border border-gray-200 text-sm text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="all">全部状态</option>
+              <option value="new">新发现</option>
+              <option value="reindexed">再收录</option>
+              <option value="disappeared">已脱收</option>
+              <option value="updated">更新</option>
+              <option value="active">已收录</option>
+            </select>
 
             {/* Search */}
             <div className="relative">

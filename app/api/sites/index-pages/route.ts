@@ -3,7 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 const PAGE_SIZE = 10
 
-// GET /api/sites/index-pages?siteId=X&page=0&search=keyword&filter=all|new7|new30
+// GET /api/sites/index-pages?siteId=X&page=0&search=keyword&timeFilter=all|near7|near30&statusFilter=all|new|reindexed|disappeared|updated|active
 export async function GET(req: Request) {
   const authClient = createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -15,11 +15,11 @@ export async function GET(req: Request) {
   const siteId = searchParams.get('siteId')
   const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10))
   const search = searchParams.get('search') || ''
-  const filter = searchParams.get('filter') || 'all' // all | new7 | new30
+  const timeFilter = searchParams.get('timeFilter') || 'all'   // all | near7 | near30
+  const statusFilter = searchParams.get('statusFilter') || 'all' // all | new | reindexed | disappeared | updated | active
 
   if (!siteId) return NextResponse.json({ error: '缺少 siteId' }, { status: 400 })
 
-  // Build date cutoff for filter
   function getMY(offsetDays = 0) {
     return new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
   }
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   // Convert legacy relative date strings still in DB to YYYY-MM-DD
   function normalizeBaiduDate(text: string | null): string | null {
     if (!text) return null
-    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text  // already converted
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
     const nowMYT = Date.now() + 8 * 3600000
     const toDate = (ms: number) => new Date(ms).toISOString().slice(0, 10)
     const daysAgo = text.match(/^(\d+)天前$/)
@@ -41,7 +41,6 @@ export async function GET(req: Request) {
 
   const today = getMY()
 
-  // filter values: all | active | new7 | new30 | disappeared
   let query = service
     .from('site_indexed_pages')
     .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, baidu_date_changed_at, reindexed_at', { count: 'exact' })
@@ -49,26 +48,32 @@ export async function GET(req: Request) {
 
   if (search) query = query.ilike('title', `%${search}%`)
 
-  if (filter === 'disappeared') {
+  // Apply time filter (based on first_seen_date)
+  if (timeFilter === 'near7') query = query.gte('first_seen_date', getMY(-7))
+  else if (timeFilter === 'near30') query = query.gte('first_seen_date', getMY(-30))
+
+  // Apply status filter
+  if (statusFilter === 'new') {
+    query = query.eq('first_seen_date', today).is('disappeared_date', null)
+  } else if (statusFilter === 'reindexed') {
+    query = query.eq('reindexed_at', today)
+  } else if (statusFilter === 'disappeared') {
     query = query.not('disappeared_date', 'is', null)
-      .order('disappeared_date', { ascending: false })
-      .order('last_seen_date', { ascending: false })
-  } else if (filter === 'new7') {
-    query = query.gte('first_seen_date', getMY(-7)).is('disappeared_date', null)
-      .order('first_seen_date', { ascending: false })
-      .order('baidu_date_str', { ascending: false, nullsFirst: false })
-  } else if (filter === 'new30') {
-    query = query.gte('first_seen_date', getMY(-30)).is('disappeared_date', null)
-      .order('first_seen_date', { ascending: false })
-      .order('baidu_date_str', { ascending: false, nullsFirst: false })
-  } else if (filter === 'active') {
+  } else if (statusFilter === 'updated') {
+    query = query.eq('baidu_date_changed_at', today).neq('first_seen_date', today).is('disappeared_date', null)
+  } else if (statusFilter === 'active') {
     query = query.is('disappeared_date', null)
+  }
+  // 'all': no status filter
+
+  // Order: disappeared pages sink to bottom when showing all; otherwise recency first
+  if (statusFilter === 'all' && timeFilter === 'all') {
+    query = query
+      .order('disappeared_date', { ascending: true, nullsFirst: true })
       .order('first_seen_date', { ascending: false })
       .order('baidu_date_str', { ascending: false, nullsFirst: false })
   } else {
-    // all: disappeared pages sorted to bottom
     query = query
-      .order('disappeared_date', { ascending: true, nullsFirst: true })
       .order('first_seen_date', { ascending: false })
       .order('baidu_date_str', { ascending: false, nullsFirst: false })
   }
