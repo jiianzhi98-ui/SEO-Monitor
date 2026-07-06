@@ -129,7 +129,8 @@ export default function IndexPagesPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setCrawlMsg(`完成，发现 ${data.found} 条，新增 ${data.newCount} 条`)
+        const truncNote = data.truncated ? '（被拦截，抓取不完整）' : ''
+        setCrawlMsg(`完成，发现 ${data.found} 条，新增 ${data.newCount} 条${truncNote}`)
         await fetchPages()
       } else {
         setCrawlMsg(data.error || '抓取失败')
@@ -153,7 +154,8 @@ export default function IndexPagesPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setManualMsg(`发现 ${data.found} 条，新增 ${data.newCount} 条 (${data.domain})`)
+        const truncNote = data.truncated ? '（被拦截，不完整）' : ''
+        setManualMsg(`发现 ${data.found} 条，新增 ${data.newCount} 条 (${data.domain})${truncNote}`)
         setManualDomain('')
         if (activeSiteId) await fetchPages()
       } else {

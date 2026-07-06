@@ -60,6 +60,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ found: 0, newCount: 0, domain, failReason: failReason ?? 'empty_results' })
   }
 
+  // no_content means Baidu stopped returning results mid-crawl (anti-bot / IP block)
+  const truncated = failReason === 'no_content'
+
   totalFound = pages.length
 
   for (const chunk of chunkArray(pages, 500)) {
@@ -83,5 +86,5 @@ export async function POST(req: Request) {
     totalNew += inserted.filter(r => r.first_seen_date === today).length
   }
 
-  return NextResponse.json({ found: totalFound, newCount: totalNew, domain: site.domain })
+  return NextResponse.json({ found: totalFound, newCount: totalNew, domain: site.domain, truncated })
 }

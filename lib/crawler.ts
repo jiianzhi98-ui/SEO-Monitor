@@ -713,8 +713,22 @@ export async function fetchBaiduIndexPages(
     try {
       const headers: Record<string, string> = { ...getBrowserHeaders(), Referer: referer }
       if (sessionCookie) headers['Cookie'] = sessionCookie
-      const { ok, html } = await fetchHtmlDecoded(currentUrl, headers)
-      if (!ok || !html) { failReason = 'http_error'; break }
+
+      // Use raw fetch so we can capture Set-Cookie and keep the session alive across pages
+      const res = await fetch(currentUrl, { headers, next: { revalidate: 0 }, signal: AbortSignal.timeout(12000) })
+      if (!res.ok) { failReason = 'http_error'; break }
+
+      // Update session cookie from each page's Set-Cookie response (Baidu rotates anti-bot tokens)
+      const setCookies = res.headers.getSetCookie?.() ?? []
+      if (setCookies.length > 0) {
+        const newCookies = setCookies.map((c: string) => c.split(';')[0]).join('; ')
+        sessionCookie = sessionCookie
+          ? `${sessionCookie}; ${newCookies}`
+          : newCookies
+      }
+
+      const html = await res.text()
+      if (!html) { failReason = 'http_error'; break }
       if (html.includes('百度安全验证') || html.includes('verify')) { failReason = 'captcha'; break }
       if (!html.includes('content_left')) { failReason = 'no_content'; break }
 
@@ -777,7 +791,8 @@ export async function fetchBaiduIndexPages(
         if (batch.length > 0) await onPageResults(batch)
       }
 
-      await randomDelay(2000, 4000)
+      // Longer delay between pages to reduce Baidu anti-bot triggering
+      await randomDelay(4000, 7000)
     } catch {
       failReason = 'http_error'
       break
