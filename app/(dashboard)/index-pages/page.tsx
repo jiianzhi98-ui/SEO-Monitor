@@ -127,7 +127,7 @@ export default function IndexPagesPage() {
       const res = await fetch('/api/sites/index-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: activeSite.domain }),
+        body: JSON.stringify({ domain: activeSite.domain, cookie: manualCookie.trim() || undefined }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -213,19 +213,44 @@ export default function IndexPagesPage() {
 
         {/* Manual crawl */}
         {activeSite && isAdmin && (
-          <button
-            onClick={handleCrawl}
-            disabled={crawling}
-            className="h-9 px-4 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
-          >
-            {crawling ? '抓取中…' : '手动重抓'}
-          </button>
+          <>
+            <button
+              onClick={handleCrawl}
+              disabled={crawling}
+              className="h-9 px-4 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              {crawling ? '抓取中…' : '手动重抓'}
+            </button>
+            <button
+              onClick={() => setShowCookieInput(v => !v)}
+              className={`h-9 px-3 rounded-lg text-xs font-medium border transition-colors ${showCookieInput ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
+            >
+              {manualCookie ? 'Cookie ✓' : 'Cookie'}
+            </button>
+          </>
         )}
 
         {crawlMsg && (
           <span className="text-sm text-gray-500">{crawlMsg}</span>
         )}
       </div>
+
+      {/* Cookie input for manual crawl */}
+      {isAdmin && activeSite && showCookieInput && (
+        <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-200">
+          <div className="text-xs text-amber-700 mb-1">
+            百度 Cookie（DevTools → Application → Cookies → baidu.com，全选复制 Name=Value 行贴入）
+          </div>
+          <textarea
+            value={manualCookie}
+            onChange={e => setManualCookie(e.target.value)}
+            placeholder="BAIDUID=xxx; BDUSS=xxx; COOKIE_SESSION=xxx; ..."
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg border border-amber-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono resize-none"
+            disabled={crawling}
+          />
+        </div>
+      )}
 
       {/* Manual supplemental crawl — for domains not yet fully indexed */}
       {isAdmin && (
@@ -248,30 +273,9 @@ export default function IndexPagesPage() {
             >
               {manualCrawling ? '抓取中…' : '开始抓取'}
             </button>
-            <button
-              onClick={() => setShowCookieInput(v => !v)}
-              className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${showCookieInput ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
-            >
-              {manualCookie ? 'Cookie ✓' : 'Cookie'}
-            </button>
             {manualMsg && <span className="text-xs text-gray-500">{manualMsg}</span>}
             {!manualMsg && <span className="text-xs text-gray-300">对任意域名补充资料，不影响脱收标记</span>}
           </div>
-          {showCookieInput && (
-            <div className="mt-2 pt-2 border-t border-gray-200">
-              <div className="text-xs text-gray-400 mb-1">
-                百度 Cookie（DevTools → Application → Cookies → baidu.com，全选复制 Name=Value 行贴入）
-              </div>
-              <textarea
-                value={manualCookie}
-                onChange={e => setManualCookie(e.target.value)}
-                placeholder="BAIDUID=xxx; BDUSS=xxx; COOKIE_SESSION=xxx; ..."
-                rows={3}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono resize-none"
-                disabled={manualCrawling}
-              />
-            </div>
-          )}
         </div>
       )}
 
