@@ -728,14 +728,17 @@ export async function fetchBaiduIndexPages(
       if (!html.includes('content_left')) { failReason = 'no_content'; break }
 
       const $ = cheerio.load(html)
-      let pageCount = 0
+      let rawCount = 0   // how many results Baidu actually returned (before dedup)
+      let pageCount = 0  // how many new unique results added this page
 
       // Find titles first, then walk up to the nearest [mu] container.
       // This handles any nesting depth — sitelinks and regular results alike.
       $('#content_left h3 a').each((_, titleEl) => {
         const $titleEl = $(titleEl)
         const titleText = $titleEl.text().replace(/\s+/g, ' ').trim()
-        if (!titleText || seenTitles.has(titleText)) return
+        if (!titleText) return
+        rawCount++  // count ALL results Baidu returned, even duplicates
+        if (seenTitles.has(titleText)) return
 
         // Walk up to find the ancestor with the real URL in mu attribute
         const $container = $titleEl.closest('[mu]')
@@ -778,7 +781,7 @@ export async function fetchBaiduIndexPages(
         pageCount++
       })
 
-      if (pageCount === 0) break  // No more results — stop paginating
+      if (rawCount === 0) break  // Baidu returned nothing — truly end of results
 
       // Incrementally save this page's new results so partial crawls (timeout/captcha) still persist
       if (onPageResults && results.length > (page * 10)) {
