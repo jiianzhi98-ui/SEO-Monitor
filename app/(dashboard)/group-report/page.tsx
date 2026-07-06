@@ -509,18 +509,8 @@ export default function GroupReportPage() {
           {activeTabId === 'competitors' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {/* Group selector (shown only when multiple groups) */}
-                  {groups.length > 1 && (
-                    <div className="flex items-center gap-1">
-                      {groups.map(g => (
-                        <button key={g.id} onClick={() => setCompetitorGroupId(g.id)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${competitorGroupId === g.id ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300 hover:text-orange-600'}`}>
-                          {g.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-700">追踪竞品</span>
                   {competitorDomains.length > 0 && <span className="text-xs text-gray-400">{competitorDomains.length} 个竞品站</span>}
                 </div>
                 {canSeeAll && (
