@@ -59,6 +59,8 @@ export default function IndexPagesPage() {
   const [manualDomain, setManualDomain] = useState('')
   const [manualCrawling, setManualCrawling] = useState(false)
   const [manualMsg, setManualMsg] = useState<string | null>(null)
+  const [manualCookie, setManualCookie] = useState('')
+  const [showCookieInput, setShowCookieInput] = useState(false)
 
   // Load all sites
   useEffect(() => {
@@ -150,7 +152,7 @@ export default function IndexPagesPage() {
       const res = await fetch('/api/sites/index-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain }),
+        body: JSON.stringify({ domain, cookie: manualCookie.trim() || undefined }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -227,26 +229,49 @@ export default function IndexPagesPage() {
 
       {/* Manual supplemental crawl — for domains not yet fully indexed */}
       {isAdmin && (
-        <div className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-gray-50 rounded-xl border border-gray-100">
-          <span className="text-xs text-gray-400 shrink-0">补充抓取：</span>
-          <input
-            type="text"
-            value={manualDomain}
-            onChange={e => setManualDomain(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !manualCrawling && handleManualCrawl()}
-            placeholder="输入域名（如 example.com）"
-            className="h-8 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 w-64"
-            disabled={manualCrawling}
-          />
-          <button
-            onClick={handleManualCrawl}
-            disabled={manualCrawling || !manualDomain.trim()}
-            className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40"
-          >
-            {manualCrawling ? '抓取中…' : '开始抓取'}
-          </button>
-          {manualMsg && <span className="text-xs text-gray-500">{manualMsg}</span>}
-          {!manualMsg && <span className="text-xs text-gray-300">对任意域名补充资料，不影响脱收标记</span>}
+        <div className="mb-5 p-3 bg-gray-50 rounded-xl border border-gray-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-400 shrink-0">补充抓取：</span>
+            <input
+              type="text"
+              value={manualDomain}
+              onChange={e => setManualDomain(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !manualCrawling && handleManualCrawl()}
+              placeholder="输入域名（如 example.com）"
+              className="h-8 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 w-64"
+              disabled={manualCrawling}
+            />
+            <button
+              onClick={handleManualCrawl}
+              disabled={manualCrawling || !manualDomain.trim()}
+              className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40"
+            >
+              {manualCrawling ? '抓取中…' : '开始抓取'}
+            </button>
+            <button
+              onClick={() => setShowCookieInput(v => !v)}
+              className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${showCookieInput ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
+            >
+              {manualCookie ? 'Cookie ✓' : 'Cookie'}
+            </button>
+            {manualMsg && <span className="text-xs text-gray-500">{manualMsg}</span>}
+            {!manualMsg && <span className="text-xs text-gray-300">对任意域名补充资料，不影响脱收标记</span>}
+          </div>
+          {showCookieInput && (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="text-xs text-gray-400 mb-1">
+                百度 Cookie（DevTools → Application → Cookies → baidu.com，全选复制 Name=Value 行贴入）
+              </div>
+              <textarea
+                value={manualCookie}
+                onChange={e => setManualCookie(e.target.value)}
+                placeholder="BAIDUID=xxx; BDUSS=xxx; COOKIE_SESSION=xxx; ..."
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono resize-none"
+                disabled={manualCrawling}
+              />
+            </div>
+          )}
         </div>
       )}
 

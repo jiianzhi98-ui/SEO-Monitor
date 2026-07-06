@@ -30,6 +30,7 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const rawDomain = (body.domain || '').trim()
+  const baiduCookie = (body.cookie || '').trim()
   if (!rawDomain) return NextResponse.json({ error: '请输入域名' }, { status: 400 })
 
   // Normalize: strip protocol + www/m prefix
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
   let totalFound = 0
   let totalNew = 0
 
-  const { pages, failReason } = await fetchBaiduIndexPages(domain)
+  const { pages, failReason } = await fetchBaiduIndexPages(domain, undefined, baiduCookie || undefined)
 
   if (failReason === 'captcha' || failReason === 'http_error') {
     return NextResponse.json({ error: '百度返回安全验证或HTTP错误，抓取被拦截', failReason }, { status: 502 })

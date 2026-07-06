@@ -683,6 +683,7 @@ export type BaiduIndexFailReason = 'captcha' | 'no_content' | 'http_error' | 'em
 export async function fetchBaiduIndexPages(
   domain: string,
   onPageResults?: (batch: BaiduIndexedPage[]) => Promise<void>,
+  initialCookie?: string,
 ): Promise<{ pages: BaiduIndexedPage[]; failReason: BaiduIndexFailReason }> {
   const results: BaiduIndexedPage[] = []
   const seenUrls = new Set<string>()
@@ -690,16 +691,18 @@ export async function fetchBaiduIndexPages(
   const domainRoot = domain.replace(/^www\./i, '').toLowerCase()
   const datePattern = /^\d+(?:天|小时|分钟)前$|^昨天$|^\d{4}年\d{1,2}月\d{1,2}日$|^\d{4}-\d{2}-\d{2}$/
 
-  // Pre-fetch Baidu homepage to acquire session cookies (BAIDUID etc.)
-  let sessionCookie = ''
-  try {
-    const homeRes = await fetch('https://www.baidu.com/', {
-      headers: { ...getBrowserHeaders(), Referer: 'https://www.baidu.com/' },
-      signal: AbortSignal.timeout(8000),
-    })
-    const setCookies = homeRes.headers.getSetCookie?.() ?? []
-    sessionCookie = setCookies.map((c: string) => c.split(';')[0]).join('; ')
-  } catch { /* ignore — proceed without cookie */ }
+  // If user provided cookies, use them directly; otherwise pre-fetch Baidu homepage to acquire session cookies
+  let sessionCookie = initialCookie?.trim() ?? ''
+  if (!sessionCookie) {
+    try {
+      const homeRes = await fetch('https://www.baidu.com/', {
+        headers: { ...getBrowserHeaders(), Referer: 'https://www.baidu.com/' },
+        signal: AbortSignal.timeout(8000),
+      })
+      const setCookies = homeRes.headers.getSetCookie?.() ?? []
+      sessionCookie = setCookies.map((c: string) => c.split(';')[0]).join('; ')
+    } catch { /* ignore — proceed without cookie */ }
+  }
 
   let failReason: BaiduIndexFailReason = null
   let consecutiveDupPages = 0  // stop if Baidu keeps cycling same results
