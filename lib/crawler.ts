@@ -702,12 +702,13 @@ export async function fetchBaiduIndexPages(
   } catch { /* ignore — proceed without cookie */ }
 
   let failReason: BaiduIndexFailReason = null
+  let consecutiveDupPages = 0  // stop if Baidu keeps cycling same results
 
   // No time filter (gpc removed) to fetch ALL indexed pages.
   // Use pn=0/10/20/... for reliable pagination instead of findNextPageUrl.
   const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&si=${encodeURIComponent(domain)}&ct=2097152`
 
-  for (let page = 0; ; page++) {
+  for (let page = 0; page < 500; page++) {
     const pn = page * 10
     const currentUrl = pn === 0 ? baseUrl : `${baseUrl}&pn=${pn}`
     const referer = page === 0 ? 'https://www.baidu.com/' : `${baseUrl}&pn=${(page - 1) * 10}`
@@ -782,6 +783,14 @@ export async function fetchBaiduIndexPages(
       })
 
       if (rawCount === 0) break  // Baidu returned nothing — truly end of results
+
+      if (pageCount === 0) {
+        // All results on this page were duplicates — Baidu may be cycling
+        consecutiveDupPages++
+        if (consecutiveDupPages >= 3) break  // 3 consecutive all-dup pages → Baidu is looping, stop
+      } else {
+        consecutiveDupPages = 0
+      }
 
       // Incrementally save this page's new results so partial crawls (timeout/captcha) still persist
       if (onPageResults && results.length > (page * 10)) {
