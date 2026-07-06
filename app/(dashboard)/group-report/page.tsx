@@ -43,7 +43,7 @@ interface CompetitorData {
 }
 
 type Period = 'today' | 'week' | 'month' | 'custom'
-type ReportTab = 'competitors' | 'submissions' | 'outcomes' | 'rules'
+type ReportTab = 'submissions' | 'outcomes' | 'rules'
 type CompetitorInnerTab = 'keywords' | 'ranks'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -325,7 +325,8 @@ export default function GroupReportPage() {
   const canSeeAll = role === 'super' || role === 'admin'
 
   const [groups, setGroups] = useState<Group[]>([])
-  const [activeGroupId, setActiveGroupId] = useState('')
+  const [activeTabId, setActiveTabId] = useState<string>('competitors') // 'competitors' | groupId
+  const [competitorGroupId, setCompetitorGroupId] = useState<string>('')
   const [reportTab, setReportTab] = useState<ReportTab>('submissions')
   const [period, setPeriod] = useState<Period>('today')
   const [customStart, setCustomStart] = useState('')
@@ -350,22 +351,25 @@ export default function GroupReportPage() {
 
   useEffect(() => { setCompetitorDate(yesterday) }, [yesterday])
 
+  // Derived: activeGroupId is the selected group tab (empty when competitors tab active)
+  const activeGroupId = activeTabId !== 'competitors' ? activeTabId : ''
+
   // Load groups
   useEffect(() => {
     fetch('/api/task-groups').then(r => r.json()).then(d => {
       const g: Group[] = (d.groups || []).map((grp: Group) => ({ ...grp, competitor_domains: grp.competitor_domains || [] }))
       setGroups(g)
-      if (g.length > 0) setActiveGroupId(g[0].id)
+      if (g.length > 0) setCompetitorGroupId(g[0].id)
     }).finally(() => setGroupsLoading(false))
   }, [])
 
-  // When group changes: reset competitor domain
+  // When competitorGroupId changes: reset competitor domain to first of that group
   useEffect(() => {
-    const g = groups.find(gr => gr.id === activeGroupId)
+    const g = groups.find(gr => gr.id === competitorGroupId)
     const domains = g?.competitor_domains || []
     setActiveCompetitorDomain(domains.length > 0 ? domains[0] : '')
     setCompetitorData(null)
-  }, [activeGroupId, groups])
+  }, [competitorGroupId, groups])
 
   // Load competitor data
   useEffect(() => {
@@ -416,12 +420,12 @@ export default function GroupReportPage() {
   }
 
   async function saveCompetitorDomains(domains: string[]) {
-    await fetch(`/api/task-groups/${activeGroupId}/competitor-domains`, {
+    await fetch(`/api/task-groups/${competitorGroupId}/competitor-domains`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ competitor_domains: domains }),
     })
-    setGroups(prev => prev.map(g => g.id === activeGroupId ? { ...g, competitor_domains: domains } : g))
+    setGroups(prev => prev.map(g => g.id === competitorGroupId ? { ...g, competitor_domains: domains } : g))
     if (domains.length > 0) {
       if (!domains.includes(activeCompetitorDomain)) setActiveCompetitorDomain(domains[0])
     } else {
@@ -452,8 +456,9 @@ export default function GroupReportPage() {
   const pagedEntries = filteredEntries.slice(accordionPage * ACCORDION_PAGE_SIZE, (accordionPage + 1) * ACCORDION_PAGE_SIZE)
 
   const activeGroup = groups.find(g => g.id === activeGroupId)
+  const activeCompetitorGroup = groups.find(g => g.id === competitorGroupId)
   const hasData = report && (report.groupTotal?.total.count ?? report.members.reduce((s, m) => s + m.total.count, 0)) > 0
-  const competitorDomains = activeGroup?.competitor_domains || []
+  const competitorDomains = activeCompetitorGroup?.competitor_domains || []
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -467,39 +472,55 @@ export default function GroupReportPage() {
         <div className="flex items-center justify-center h-64 text-gray-400 text-sm">暂无分组</div>
       ) : (
         <div className="px-6 py-5 space-y-5">
-          {/* Group tabs */}
+          {/* Top-level tabs: 竞品追踪 | group1 | group2 | ... */}
           <div className="flex gap-1 border-b border-gray-200">
+            <button onClick={() => setActiveTabId('competitors')}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${activeTabId === 'competitors' ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+              竞品追踪
+            </button>
+            <div className="w-px bg-gray-200 my-1 mx-1" />
             {groups.map(g => (
-              <button key={g.id} onClick={() => setActiveGroupId(g.id)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${activeGroupId === g.id ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+              <button key={g.id} onClick={() => setActiveTabId(g.id)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTabId === g.id ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
                 {g.name}
               </button>
             ))}
           </div>
 
-          {/* Report type tabs */}
-          <div className="flex gap-0 border-b border-gray-100">
-            {([
-              ['competitors', '竞品追踪'],
-              ['submissions', '提交记录'],
-              ['outcomes', '成效追踪'],
-              ['rules', '规则中心'],
-            ] as [ReportTab, string][]).map(([tab, label]) => (
-              <button key={tab} onClick={() => setReportTab(tab)}
-                className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${reportTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-                {label}
-                {tab === 'outcomes' && <span className="ml-1.5 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">建设中</span>}
-                {tab === 'rules'    && <span className="ml-1.5 text-[10px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-full">建议</span>}
-              </button>
-            ))}
-          </div>
+          {/* Report sub-tabs — only shown when a group tab is active */}
+          {activeTabId !== 'competitors' && (
+            <div className="flex gap-0 border-b border-gray-100">
+              {([
+                ['submissions', '提交记录'],
+                ['outcomes', '成效追踪'],
+                ['rules', '规则中心'],
+              ] as [ReportTab, string][]).map(([tab, label]) => (
+                <button key={tab} onClick={() => setReportTab(tab)}
+                  className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${reportTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                  {label}
+                  {tab === 'outcomes' && <span className="ml-1.5 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">建设中</span>}
+                  {tab === 'rules'    && <span className="ml-1.5 text-[10px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-full">建议</span>}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* ── 竞品追踪 ── */}
-          {reportTab === 'competitors' && (
+          {activeTabId === 'competitors' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-700">追踪竞品</span>
+                <div className="flex items-center gap-3">
+                  {/* Group selector (shown only when multiple groups) */}
+                  {groups.length > 1 && (
+                    <div className="flex items-center gap-1">
+                      {groups.map(g => (
+                        <button key={g.id} onClick={() => setCompetitorGroupId(g.id)}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${competitorGroupId === g.id ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300 hover:text-orange-600'}`}>
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {competitorDomains.length > 0 && <span className="text-xs text-gray-400">{competitorDomains.length} 个竞品站</span>}
                 </div>
                 {canSeeAll && (
@@ -581,7 +602,7 @@ export default function GroupReportPage() {
           )}
 
           {/* ── 规则中心 ── */}
-          {reportTab === 'rules' && (
+          {activeTabId !== 'competitors' && reportTab === 'rules' && (
             <div className="space-y-4">
               <div className="bg-amber-50 border border-amber-100 rounded-xl px-5 py-3 text-sm text-amber-700">
                 以下为系统建议规则，基于现有数据表可实现。<br />
@@ -608,7 +629,7 @@ export default function GroupReportPage() {
           )}
 
           {/* ── 成效追踪 ── */}
-          {reportTab === 'outcomes' && (
+          {activeTabId !== 'competitors' && reportTab === 'outcomes' && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2.5 text-xs text-yellow-700">
                 <span className="font-bold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded text-[10px]">MOCK</span>
@@ -659,7 +680,7 @@ export default function GroupReportPage() {
           )}
 
           {/* ── 提交记录 ── */}
-          {reportTab === 'submissions' && (
+          {activeTabId !== 'competitors' && reportTab === 'submissions' && (
           <>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-gray-500 mr-1">时间范围：</span>
@@ -805,9 +826,9 @@ export default function GroupReportPage() {
       )}
 
       {/* Manage competitors modal */}
-      {showManageModal && activeGroup && (
+      {showManageModal && activeCompetitorGroup && (
         <ManageCompetitorsModal
-          groupName={activeGroup.name}
+          groupName={activeCompetitorGroup.name}
           initialDomains={competitorDomains}
           onSave={saveCompetitorDomains}
           onClose={() => setShowManageModal(false)}
