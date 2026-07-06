@@ -21,6 +21,7 @@ interface Site {
   friend_links: string[]
   is_enabled: boolean
   has_rank_data: boolean
+  has_rank_title: boolean
   created_at: string
 }
 
@@ -31,6 +32,7 @@ interface SiteTableProps {
   onDelete: (site: Site) => void
   onToggle: (site: Site) => void
   onToggleRank: (site: Site) => void
+  onToggleRankTitle: (site: Site) => void
 }
 
 const categoryLabel: Record<string, string> = {
@@ -49,7 +51,7 @@ const frequencyLabel: Record<string, string> = {
   daily: '每天',
 }
 
-export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank }: SiteTableProps) {
+export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank, onToggleRankTitle }: SiteTableProps) {
   const [page, setPage] = useState(0)
   const [sortCol, setSortCol] = useState<'isEnabled' | 'hasRankData' | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -109,6 +111,7 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
             <th className="table-th text-center">版本清洗</th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">关键词{sortIcons('isEnabled')}</div></th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">排名{sortIcons('hasRankData')}</div></th>
+            <th className="table-th text-center">竞品追踪</th>
             <th className="table-th text-right">操作</th>
           </tr>
         </thead>
@@ -155,6 +158,14 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
                   className={`relative w-9 h-[18px] rounded-full transition-colors ${site.has_rank_data ? 'bg-purple-500' : 'bg-gray-200'}`}
                 >
                   <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${site.has_rank_data ? 'translate-x-[18px]' : 'translate-x-0'}`} />
+                </button>
+              </td>
+              <td className="table-td text-center">
+                <button
+                  onClick={() => onToggleRankTitle(site)}
+                  className={`relative w-9 h-[18px] rounded-full transition-colors ${site.has_rank_title ? 'bg-orange-500' : 'bg-gray-200'}`}
+                >
+                  <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${site.has_rank_title ? 'translate-x-[18px]' : 'translate-x-0'}`} />
                 </button>
               </td>
               <td className="table-td text-right">

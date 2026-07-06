@@ -391,7 +391,7 @@ async function fetchRankdownPage(
   cookie = '',
   ua: string,
   isToday = false
-): Promise<{ keyword: string; volume: number; title: string }[]> {
+): Promise<{ keyword: string; volume: number; title: string; rank_position: number | null }[]> {
   const pageSuffix = page === 1 ? '' : `${page}/`
   const url = isToday
     ? `https://baidurank.aizhan.com/mobile/${domain}/rankdown/${rankPos}/${pageSuffix}`
@@ -409,14 +409,15 @@ async function fetchRankdownPage(
       return fetchRankdownPage(domain, rankPos, date, page, challengeCookie, ua, isToday)
     }
     const $ = cheerio.load(html)
-    const results: { keyword: string; volume: number; title: string }[] = []
+    const results: { keyword: string; volume: number; title: string; rank_position: number | null }[] = []
     $('tbody tr').each((_, tr) => {
       const keyword = $(tr).find('td.title a').first().text().trim()
+      const rank_position = parseRankPosition($(tr).find('td.ip').eq(0).text().trim())
       const volume = parseInt($(tr).find('td.ip').eq(2).text().trim(), 10) || 0
       // Title is the 6th column (index 5); falls back to last td
       const titleTd = $(tr).find('td').eq(5)
       const title = (titleTd.length ? titleTd : $(tr).find('td').last()).text().trim()
-      if (keyword) results.push({ keyword, volume, title })
+      if (keyword) results.push({ keyword, volume, title, rank_position })
     })
     return results
   } catch {
@@ -429,7 +430,7 @@ async function fetchRankdownPage(
 export async function fetchRankdownWithTitle(
   domain: string,
   date: string,
-): Promise<{ keyword: string; volume: number; title: string }[]> {
+): Promise<{ keyword: string; volume: number; title: string; rank_position: number | null }[]> {
   const ua = randomUA()
   const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
   const isToday = date === todayMY
@@ -440,7 +441,7 @@ export async function fetchRankdownWithTitle(
 
   const allResults = await Promise.all(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
-      const entries: { keyword: string; volume: number; title: string }[] = []
+      const entries: { keyword: string; volume: number; title: string; rank_position: number | null }[] = []
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankdownPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
         if (pageEntries.length === 0) break
@@ -451,13 +452,13 @@ export async function fetchRankdownWithTitle(
     })
   )
 
-  const seen = new Map<string, { volume: number; title: string }>()
+  const seen = new Map<string, { volume: number; title: string; rank_position: number | null }>()
   for (const e of allResults.flat()) {
     const cur = seen.get(e.keyword)
-    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title })
+    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title, rank_position: e.rank_position })
   }
   return Array.from(seen.entries())
-    .map(([keyword, { volume, title }]) => ({ keyword, volume, title }))
+    .map(([keyword, { volume, title, rank_position }]) => ({ keyword, volume, title, rank_position }))
     .sort((a, b) => b.volume - a.volume)
 }
 
@@ -470,7 +471,7 @@ async function fetchRankupPage(
   cookie = '',
   ua: string,
   isToday = false
-): Promise<{ keyword: string; volume: number; title: string }[]> {
+): Promise<{ keyword: string; volume: number; title: string; rank_position: number | null }[]> {
   const pageSuffix = page === 1 ? '' : `${page}/`
   const url = isToday
     ? `https://baidurank.aizhan.com/mobile/${domain}/rankup/${rankPos}/${pageSuffix}`
@@ -488,13 +489,14 @@ async function fetchRankupPage(
       return fetchRankupPage(domain, rankPos, date, page, challengeCookie, ua, isToday)
     }
     const $ = cheerio.load(html)
-    const results: { keyword: string; volume: number; title: string }[] = []
+    const results: { keyword: string; volume: number; title: string; rank_position: number | null }[] = []
     $('tbody tr').each((_, tr) => {
       const keyword = $(tr).find('td.title a').first().text().trim()
+      const rank_position = parseRankPosition($(tr).find('td.ip').eq(0).text().trim())
       const volume = parseInt($(tr).find('td.ip').eq(2).text().trim(), 10) || 0
       const titleTd = $(tr).find('td').eq(5)
       const title = (titleTd.length ? titleTd : $(tr).find('td').last()).text().trim()
-      if (keyword) results.push({ keyword, volume, title })
+      if (keyword) results.push({ keyword, volume, title, rank_position })
     })
     return results
   } catch {
@@ -506,7 +508,7 @@ async function fetchRankupPage(
 export async function fetchRankupWithTitle(
   domain: string,
   date: string,
-): Promise<{ keyword: string; volume: number; title: string }[]> {
+): Promise<{ keyword: string; volume: number; title: string; rank_position: number | null }[]> {
   const ua = randomUA()
   const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
   const isToday = date === todayMY
@@ -517,7 +519,7 @@ export async function fetchRankupWithTitle(
 
   const allResults = await Promise.all(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
-      const entries: { keyword: string; volume: number; title: string }[] = []
+      const entries: { keyword: string; volume: number; title: string; rank_position: number | null }[] = []
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankupPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
         if (pageEntries.length === 0) break
@@ -528,13 +530,13 @@ export async function fetchRankupWithTitle(
     })
   )
 
-  const seen = new Map<string, { volume: number; title: string }>()
+  const seen = new Map<string, { volume: number; title: string; rank_position: number | null }>()
   for (const e of allResults.flat()) {
     const cur = seen.get(e.keyword)
-    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title })
+    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title, rank_position: e.rank_position })
   }
   return Array.from(seen.entries())
-    .map(([keyword, { volume, title }]) => ({ keyword, volume, title }))
+    .map(([keyword, { volume, title, rank_position }]) => ({ keyword, volume, title, rank_position }))
     .sort((a, b) => b.volume - a.volume)
 }
 
