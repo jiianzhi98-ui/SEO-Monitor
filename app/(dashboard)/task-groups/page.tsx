@@ -615,7 +615,9 @@ export default function TaskGroupsPage() {
         const related = new Set<string>()
         for (const domain of w.sites) {
           const kwSet = wordLibRawKwMap.get(domain)
-          if (kwSet) kwSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
+          if (kwSet) kwSet.forEach(kw => {
+            if (kw.includes(w.keyword) || (w.keyword.includes(kw) && kw.length >= 2)) related.add(kw)
+          })
         }
         return { ...w, longTailCount: related.size }
       })

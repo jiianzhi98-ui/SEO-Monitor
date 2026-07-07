@@ -489,15 +489,16 @@ export default function HotRadarPage() {
     if (!data || !wordLibRawKwMap) return []
     const words = data.newWords.filter(w =>
       w.last_date !== today &&
-      (!dateFrom || !w.last_date || w.last_date >= dateFrom) &&
-      w.siteCount >= minSites
+      (!dateFrom || !w.last_date || w.last_date >= dateFrom)
     )
     return words
       .map(w => {
         const related = new Set<string>()
         for (const domain of w.sites) {
           const kwSet = wordLibRawKwMap.get(domain)
-          if (kwSet) kwSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
+          if (kwSet) kwSet.forEach(kw => {
+            if (kw.includes(w.keyword) || (w.keyword.includes(kw) && kw.length >= 2)) related.add(kw)
+          })
         }
         return { ...w, longTailCount: related.size }
       })
@@ -508,7 +509,7 @@ export default function HotRadarPage() {
         if (bp !== 0) return bp
         return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
       })
-  }, [data, today, yesterday, dateFrom, minSites, wordLibRawKwMap])
+  }, [data, today, yesterday, dateFrom, wordLibRawKwMap])
 
   const baseList = !filtered ? [] :
     activeTab === 'cross'   ? filtered.crossWords  :
