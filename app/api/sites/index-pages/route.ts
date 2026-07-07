@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, baidu_date_changed_at, reindexed_at', { count: 'exact' })
     .eq('site_id', siteId)
 
-  if (search) query = query.ilike('title', `%${search}%`)
+  if (search) query = query.or(`title.ilike.%${search}%,url.ilike.%${search}%`)
 
   // Apply time filter (based on baidu_date_str — stored as YYYY-MM-DD by crawler)
   if (timeFilter === 'near7') query = query.gte('baidu_date_str', getMY(-7))

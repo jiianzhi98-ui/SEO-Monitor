@@ -319,7 +319,7 @@ export default function IndexPagesPage() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="搜索标题…"
+                placeholder="搜索标题 / URL…"
                 className="h-8 pl-3 pr-8 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-green-500 w-48"
               />
               {search && (
