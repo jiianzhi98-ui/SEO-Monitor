@@ -664,7 +664,8 @@ function parseBaiduRelativeDate(text: string): string | null {
   const toDate = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 
   const daysAgo = text.match(/^(\d+)天前$/)
-  if (daysAgo) return toDate(nowMYT - parseInt(daysAgo[1]) * 86400000)
+  // Baidu uses ordinal counting: today=1, yesterday=2天前, day-before=3天前, so subtract N-1 days
+  if (daysAgo) return toDate(nowMYT - (parseInt(daysAgo[1]) - 1) * 86400000)
   if (/^\d+(?:小时|分钟)前$/.test(text)) return toDate(nowMYT)
   if (text === '昨天') return toDate(nowMYT - 86400000)
   const m1 = text.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)
