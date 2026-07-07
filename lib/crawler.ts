@@ -708,9 +708,9 @@ export async function fetchBaiduIndexPages(
   let consecutiveDupPages = 0
   let prevPageUrlSet = new Set<string>()  // URLs from the previous page for loop detection
 
-  // No time filter (gpc removed) to fetch ALL indexed pages.
-  // Use pn=0/10/20/... for reliable pagination instead of findNextPageUrl.
-  const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}&si=${encodeURIComponent(domain)}&ct=2097152`
+  // Plain site: query without ct/si parameters — matches what a user types in Baidu directly.
+  // ct=2097152 (original-content filter) and si= (site-search hint) both cap result depth.
+  const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}`
 
   for (let page = 0; page < 500; page++) {
     const pn = page * 10
