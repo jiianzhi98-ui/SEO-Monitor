@@ -60,6 +60,13 @@ function formatCardTime(iso: string): string {
   return `${mm}/${dd} ${hhmm}`
 }
 
+function formatCardDate(iso: string): string {
+  const d = toMyt(iso)
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  return `${mm}/${dd}`
+}
+
 function formatDuration(ms: number | null): string {
   if (!ms) return '-'
   if (ms < 1000) return `${ms}ms`
@@ -251,8 +258,8 @@ function RetryModal({ step, sites, onClose, onRefresh }: {
 const SELECT_CLS = 'text-xs border border-gray-200 rounded-md pl-2.5 pr-6 py-1 text-gray-600 bg-white cursor-pointer hover:border-gray-300 focus:outline-none appearance-none'
 
 type Row2Stats = {
-  rankPos: { succeeded: number; total: number; rows: number; date: string | null }
-  rankTitle: { succeeded: number; total: number; rows: number; date: string | null }
+  rankPos: { succeeded: number; total: number; rows: number; loggedAt: string | null }
+  rankTitle: { succeeded: number; total: number; rows: number; loggedAt: string | null }
   indexPages: ActivityLog | null
 }
 
@@ -265,8 +272,8 @@ export default function CrawlLogPage() {
 
   // Row 2 cards
   const [row2, setRow2] = useState<Row2Stats>({
-    rankPos: { succeeded: 0, total: 0, rows: 0, date: null },
-    rankTitle: { succeeded: 0, total: 0, rows: 0, date: null },
+    rankPos: { succeeded: 0, total: 0, rows: 0, loggedAt: null },
+    rankTitle: { succeeded: 0, total: 0, rows: 0, loggedAt: null },
     indexPages: null,
   })
 
@@ -350,6 +357,14 @@ export default function CrawlLogPage() {
       }
     }
 
+    // Get latest created_at for Card A (rank-positions) and Card B (rank-title)
+    const [{ data: rkTs }, { data: rtTs }] = await Promise.all([
+      supabase.from('site_keyword_ranks').select('created_at').eq('stat_date', today).order('created_at', { ascending: false }).limit(1),
+      supabase.from('site_rank_keywords').select('created_at').eq('stat_date', today).order('created_at', { ascending: false }).limit(1),
+    ])
+    const rkLoggedAt = (rkTs as { created_at: string }[] | null)?.[0]?.created_at ?? null
+    const rtLoggedAt = (rtTs as { created_at: string }[] | null)?.[0]?.created_at ?? null
+
     // Row 2 card C: index-pages latest activity_log (last 2 days in case run was yesterday night)
     const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString()
     const { data: ipLogs } = await supabase
@@ -363,8 +378,8 @@ export default function CrawlLogPage() {
     const latestIndexPages = ((ipLogs || []) as ActivityLog[])[0] ?? null
 
     setRow2({
-      rankPos: { succeeded: rkSucceeded, total: rkTotal, rows: rkRowCount, date: today },
-      rankTitle: { succeeded: rtSucceeded, total: rtTotal, rows: rtRowCount, date: today },
+      rankPos: { succeeded: rkSucceeded, total: rkTotal, rows: rkRowCount, loggedAt: rkLoggedAt },
+      rankTitle: { succeeded: rtSucceeded, total: rtTotal, rows: rtRowCount, loggedAt: rtLoggedAt },
       indexPages: latestIndexPages,
     })
 
@@ -680,9 +695,13 @@ export default function CrawlLogPage() {
                     <p className="font-semibold text-gray-900 text-sm">自站排名位置</p>
                     <p className="text-xs text-gray-400 mt-0.5">每日 07:30 MYT</p>
                   </div>
-                  <span className="text-xs text-gray-400 whitespace-nowrap">
-                    {row2.rankPos.date ?? '—'}
-                  </span>
+                  {row2.rankPos.loggedAt ? (
+                    <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                      {formatCardTime(row2.rankPos.loggedAt)} 执行
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">尚无记录</span>
+                  )}
                 </div>
                 {row2.rankPos.total > 0 ? (
                   <div className="mt-3">
@@ -703,9 +722,13 @@ export default function CrawlLogPage() {
                     <p className="font-semibold text-gray-900 text-sm">竞品排名标题</p>
                     <p className="text-xs text-gray-400 mt-0.5">每日 07:00 MYT</p>
                   </div>
-                  <span className="text-xs text-gray-400 whitespace-nowrap">
-                    {row2.rankTitle.date ?? '—'}
-                  </span>
+                  {row2.rankTitle.loggedAt ? (
+                    <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                      {formatCardTime(row2.rankTitle.loggedAt)} 执行
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">尚无记录</span>
+                  )}
                 </div>
                 {row2.rankTitle.total > 0 ? (
                   <div className="mt-3">
@@ -737,7 +760,7 @@ export default function CrawlLogPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-gray-400 whitespace-nowrap">
                         {cookieSet
-                          ? `已设置${cookieUpdatedAt ? '·' + formatCardTime(cookieUpdatedAt) : ''}`
+                          ? `已设置${cookieUpdatedAt ? '·' + formatCardDate(cookieUpdatedAt) : ''}`
                           : 'Cookie 未设置'}
                       </span>
                       <button
