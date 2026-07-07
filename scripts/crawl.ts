@@ -463,21 +463,19 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
     try {
       // Build crawl URL with gpc time filter (Baidu's internal re-indexing time, not page publish date).
       // SUPPLEMENT_CUSTOM_URL overrides entirely; SUPPLEMENT_PERIOD controls the window (monthly/weekly/daily).
-      // Omit ct=2097152 and si= to avoid DC-IP pagination cap (~4 pages).
+      // Include ct=2097152/si= to activate Baidu site-search mode for more complete results.
       const nowSec = Math.floor(Date.now() / 1000)
       const supplementCustomUrl = process.env.SUPPLEMENT_CUSTOM_URL
       let crawlUrl: string
       if (supplementCustomUrl) {
         const u = new URL(supplementCustomUrl)
         u.searchParams.delete('pn')
-        // Strip ct/si to avoid DC-IP pagination cap
-        u.searchParams.delete('ct')
-        u.searchParams.delete('si')
         crawlUrl = u.toString()
       } else {
         const period = process.env.SUPPLEMENT_PERIOD || 'monthly'
         const days = period === 'daily' ? 1 : period === 'weekly' ? 7 : 31
-        crawlUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&gpc=${encodeURIComponent(`stf=${nowSec - days * 86400},${nowSec}|stftype=1`)}&tfflag=1`
+        const gpc = encodeURIComponent(`stf=${nowSec - days * 86400},${nowSec}|stftype=1`)
+        crawlUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&ct=2097152&si=${encodeURIComponent(site.domain)}&fenlei=256&ie=utf-8&gpc=${gpc}&tfflag=1`
       }
       const { pages, failReason } = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie, crawlUrl)
 

@@ -45,8 +45,18 @@ export async function POST(req: Request) {
       const siteMatch = wd.match(/site:([^/\s]+)/i)
       if (!siteMatch) return NextResponse.json({ error: '无法从链接解析域名（wd 参数需包含 site:domain）' }, { status: 400 })
       domain = siteMatch[1]
-      url.searchParams.delete('pn')
-      customBaseUrl = url.toString()
+      // Keep semantically meaningful params; strip browser session noise (rsv_*, oq, etc.)
+      // Preserve ct/si/fenlei as they activate Baidu's site-search mode for more complete results.
+      const cleanUrl = new URL('https://www.baidu.com/s')
+      cleanUrl.searchParams.set('wd', wd)
+      const gpc = url.searchParams.get('gpc')
+      if (gpc) cleanUrl.searchParams.set('gpc', gpc)
+      if (url.searchParams.get('ct')) cleanUrl.searchParams.set('ct', url.searchParams.get('ct')!)
+      if (url.searchParams.get('si')) cleanUrl.searchParams.set('si', url.searchParams.get('si')!)
+      if (url.searchParams.get('fenlei')) cleanUrl.searchParams.set('fenlei', url.searchParams.get('fenlei')!)
+      if (url.searchParams.get('ie')) cleanUrl.searchParams.set('ie', url.searchParams.get('ie')!)
+      if (url.searchParams.get('tfflag')) cleanUrl.searchParams.set('tfflag', '1')
+      customBaseUrl = cleanUrl.toString()
     } catch {
       return NextResponse.json({ error: '链接格式不正确' }, { status: 400 })
     }
