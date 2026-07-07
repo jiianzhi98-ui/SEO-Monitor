@@ -95,7 +95,7 @@ const STEP_LABELS: Record<string, string> = {
 }
 
 const STEP_TIMES: Record<string, string> = {
-  keywords: '每日 03:00', rank: '每日 06:00', weight: '每日 05:00',
+  keywords: '每日 00:00', rank: '每日 02:00', weight: '每日 01:00',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -693,7 +693,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">自站排名位置</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 07:30 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 03:30 MYT</p>
                   </div>
                   {row2.rankPos.loggedAt ? (
                     <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
@@ -720,7 +720,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">竞品排名标题</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 07:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 02:00 MYT</p>
                   </div>
                   {row2.rankTitle.loggedAt ? (
                     <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
@@ -747,7 +747,7 @@ export default function CrawlLogPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">百度收录</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 08:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 04:00 MYT</p>
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
                     {row2.indexPages ? (

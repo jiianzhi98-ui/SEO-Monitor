@@ -2,8 +2,8 @@ name: Rank Positions (Own Sites)
 
 on:
   schedule:
-    # 23:30 UTC = 07:30 MYT — runs after rank-title finishes
-    - cron: '30 23 * * *'
+    # 19:30 UTC = 03:30 MYT — runs after rank-title finishes
+    - cron: '30 19 * * *'
   workflow_dispatch:
 
 jobs:
