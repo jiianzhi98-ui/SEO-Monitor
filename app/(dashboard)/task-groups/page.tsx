@@ -611,18 +611,18 @@ export default function TaskGroupsPage() {
     const newWordMap = new Map((radarData?.newWords || []).map(w => [w.keyword, w]))
     // Apply same prefix-grouping algorithm as competitor-daily
     const baseAggr = new Map<string, { sites: Set<string>; variants: Set<string> }>()
-    for (const [domain, kwSet] of wordLibRawKwMap) {
+    for (const [domain, kwSet] of Array.from(wordLibRawKwMap.entries())) {
       if (groupNewDomains.size && !groupNewDomains.has(domain)) continue
       const kws = Array.from(kwSet).sort((a, b) => a.length - b.length)
       const groups = new Map<string, Set<string>>()
       for (const k of kws) {
         let matched = false
-        for (const base of groups.keys()) {
+        for (const base of Array.from(groups.keys())) {
           if (k.startsWith(base) && k !== base) { groups.get(base)!.add(k); matched = true; break }
         }
         if (!matched) groups.set(k, new Set([k]))
       }
-      for (const [base, variants] of groups) {
+      for (const [base, variants] of Array.from(groups.entries())) {
         if (variants.size < 2) continue
         if (!baseAggr.has(base)) baseAggr.set(base, { sites: new Set(), variants: new Set() })
         const entry = baseAggr.get(base)!
