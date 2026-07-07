@@ -223,7 +223,7 @@ export default function HotRadarPage() {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('cross')
-  const [minSites, setMinSites]   = useState(2)
+  const [minSites, setMinSites]   = useState(1)
   const [minStreak, setMinStreak] = useState(2)
   const [filterSite, setFilterSite]       = useState('')
   const [filterKeyword, setFilterKeyword] = useState('')
@@ -496,9 +496,7 @@ export default function HotRadarPage() {
         const related = new Set<string>()
         for (const domain of w.sites) {
           const kwSet = wordLibRawKwMap.get(domain)
-          if (kwSet) kwSet.forEach(kw => {
-            if (kw.includes(w.keyword) || (w.keyword.includes(kw) && kw.length >= 2)) related.add(kw)
-          })
+          if (kwSet) kwSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
         }
         return { ...w, longTailCount: related.size }
       })
