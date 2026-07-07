@@ -48,8 +48,11 @@ export default function IndexPagesPage() {
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [urlSearch, setUrlSearch] = useState('')
+  const [debouncedUrlSearch, setDebouncedUrlSearch] = useState('')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc' | ''>('')
   const [pageSize, setPageSize] = useState(10)
 
   // Crawl modal
@@ -87,7 +90,12 @@ export default function IndexPagesPage() {
     return () => clearTimeout(t)
   }, [search])
 
-  useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, timeFilter, statusFilter, pageSize])
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedUrlSearch(urlSearch), 400)
+    return () => clearTimeout(t)
+  }, [urlSearch])
+
+  useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, debouncedUrlSearch, timeFilter, statusFilter, sortDir, pageSize])
 
   const fetchPages = useCallback(async () => {
     if (!activeSiteId) { setRows([]); setTotal(0); return }
@@ -100,6 +108,8 @@ export default function IndexPagesPage() {
         timeFilter,
         statusFilter,
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(debouncedUrlSearch ? { urlSearch: debouncedUrlSearch } : {}),
+        ...(sortDir ? { sortDir } : {}),
       })
       const res = await fetch(`/api/sites/index-pages?${params}`)
       const data = await res.json()
@@ -107,7 +117,7 @@ export default function IndexPagesPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeSiteId, page, pageSize, debouncedSearch, timeFilter, statusFilter])
+  }, [activeSiteId, page, pageSize, debouncedSearch, debouncedUrlSearch, timeFilter, statusFilter, sortDir])
 
   useEffect(() => { fetchPages() }, [fetchPages])
 
@@ -285,7 +295,7 @@ export default function IndexPagesPage() {
       {activeSiteId && (
         <>
           {/* Filters */}
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
               {(['all', 'near7', 'near30'] as TimeFilter[]).map(t => {
                 const labels: Record<TimeFilter, string> = { all: '全部', near7: '近7天', near30: '近30天' }
@@ -321,16 +331,24 @@ export default function IndexPagesPage() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="搜索标题 / URL…"
-                className="h-8 pl-3 pr-8 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-green-500 w-48"
+                placeholder="搜索标题…"
+                className="h-8 pl-3 pr-8 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-green-500 w-40"
               />
               {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+              )}
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                value={urlSearch}
+                onChange={e => setUrlSearch(e.target.value)}
+                placeholder="URL 搜索…"
+                className="h-8 pl-3 pr-8 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-green-500 w-44"
+              />
+              {urlSearch && (
+                <button onClick={() => setUrlSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
               )}
             </div>
 
@@ -353,7 +371,18 @@ export default function IndexPagesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[13%]">百度日期</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[13%]">
+                      <button
+                        onClick={() => setSortDir(d => d === 'asc' ? 'desc' : d === 'desc' ? '' : 'asc')}
+                        className="inline-flex items-center gap-1 hover:text-gray-800 transition-colors"
+                        title="点击切换百度日期排序"
+                      >
+                        百度日期
+                        <span className="text-xs">
+                          {sortDir === 'asc' ? '↑' : sortDir === 'desc' ? '↓' : '↕'}
+                        </span>
+                      </button>
+                    </th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500 w-[8%]">状态</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500 w-[38%]">页面标题</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500 w-[41%]">显示 URL</th>

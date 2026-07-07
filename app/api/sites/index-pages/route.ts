@@ -17,6 +17,8 @@ export async function GET(req: Request) {
   const rawPageSize = parseInt(searchParams.get('pageSize') || '10', 10)
   const PAGE_SIZE = ALLOWED_PAGE_SIZES.includes(rawPageSize) ? rawPageSize : 10
   const search = searchParams.get('search') || ''
+  const urlSearch = searchParams.get('urlSearch') || ''
+  const sortDir = searchParams.get('sortDir') || ''  // 'asc' | 'desc' | '' (default)
   const timeFilter = searchParams.get('timeFilter') || 'all'   // all | near7 | near30
   const statusFilter = searchParams.get('statusFilter') || 'all' // all | new | reindexed | disappeared | updated | active
 
@@ -48,7 +50,8 @@ export async function GET(req: Request) {
     .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, baidu_date_changed_at, reindexed_at', { count: 'exact' })
     .eq('site_id', siteId)
 
-  if (search) query = query.or(`title.ilike.%${search}%,url.ilike.%${search}%`)
+  if (search) query = query.ilike('title', `%${search}%`)
+  if (urlSearch) query = query.ilike('url', `%${urlSearch}%`)
 
   // Apply time filter (based on baidu_date_str — stored as YYYY-MM-DD by crawler)
   if (timeFilter === 'near7') query = query.gte('baidu_date_str', getMY(-7))
@@ -68,16 +71,23 @@ export async function GET(req: Request) {
   }
   // 'all': no status filter
 
-  // Order: disappeared pages sink to bottom when showing all; otherwise recency first
-  if (statusFilter === 'all' && timeFilter === 'all') {
-    query = query
-      .order('disappeared_date', { ascending: true, nullsFirst: true })
-      .order('first_seen_date', { ascending: false })
-      .order('baidu_date_str', { ascending: false, nullsFirst: false })
+  // Order: if sortDir set, sort by baidu_date_str; otherwise default to recency
+  const sinkDisappeared = statusFilter === 'all' && timeFilter === 'all'
+  if (sortDir === 'asc' || sortDir === 'desc') {
+    const ascending = sortDir === 'asc'
+    if (sinkDisappeared) query = query.order('disappeared_date', { ascending: true, nullsFirst: true })
+    query = query.order('baidu_date_str', { ascending, nullsFirst: false })
   } else {
-    query = query
-      .order('first_seen_date', { ascending: false })
-      .order('baidu_date_str', { ascending: false, nullsFirst: false })
+    if (sinkDisappeared) {
+      query = query
+        .order('disappeared_date', { ascending: true, nullsFirst: true })
+        .order('first_seen_date', { ascending: false })
+        .order('baidu_date_str', { ascending: false, nullsFirst: false })
+    } else {
+      query = query
+        .order('first_seen_date', { ascending: false })
+        .order('baidu_date_str', { ascending: false, nullsFirst: false })
+    }
   }
 
   query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
