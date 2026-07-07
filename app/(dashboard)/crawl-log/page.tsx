@@ -726,7 +726,7 @@ export default function CrawlLogPage() {
                     <p className="font-semibold text-gray-900 text-sm">百度收录</p>
                     <p className="text-xs text-gray-400 mt-0.5">每日 08:00 MYT</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-end gap-0.5">
                     {row2.indexPages ? (
                       <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
                         {formatCardTime(row2.indexPages.logged_at)} 执行
@@ -734,12 +734,19 @@ export default function CrawlLogPage() {
                     ) : (
                       <span className="text-xs text-gray-400">尚无记录</span>
                     )}
-                    <button
-                      onClick={() => { setShowCookieModal(true); setCookieSaveMsg('') }}
-                      className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-2 py-0.5 hover:border-blue-200 whitespace-nowrap"
-                    >
-                      更新 Cookie
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {cookieSet
+                          ? `已设置${cookieUpdatedAt ? '·' + formatCardTime(cookieUpdatedAt) : ''}`
+                          : 'Cookie 未设置'}
+                      </span>
+                      <button
+                        onClick={() => { setShowCookieModal(true); setCookieSaveMsg('') }}
+                        className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-2 py-0.5 hover:border-blue-200 whitespace-nowrap"
+                      >
+                        更新 Cookie
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {row2.indexPages ? (
@@ -755,11 +762,6 @@ export default function CrawlLogPage() {
                 ) : (
                   <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
                 )}
-                <p className="text-xs text-gray-400 mt-2">
-                  {cookieSet
-                    ? `Cookie 已设置${cookieUpdatedAt ? ' · ' + formatCardTime(cookieUpdatedAt) : ''}`
-                    : 'Cookie 未设置'}
-                </p>
               </div>
 
             </div>
