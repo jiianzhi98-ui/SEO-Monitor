@@ -192,9 +192,26 @@ export default function IndexPagesPage() {
     <div className="p-6 max-w-6xl mx-auto">
 
       {/* Header */}
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold text-gray-900">收录页面追踪</h1>
-        <p className="text-sm text-gray-500 mt-1">追踪百度收录的具体页面，记录首次发现时间</p>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">收录页面追踪</h1>
+          <p className="text-sm text-gray-500 mt-1">追踪百度收录的具体页面，记录首次发现时间</p>
+        </div>
+        {isAdmin && (
+          triggered ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">已触发，抓取中…</span>
+              <button onClick={() => setTriggered(false)} className="text-xs text-gray-400 hover:text-gray-600">重置</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setTriggerMsg(null); setShowCrawlModal(true) }}
+              className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              手动重抓
+            </button>
+          )
+        )}
       </div>
 
       {/* Domain tabs + controls */}
@@ -260,32 +277,6 @@ export default function IndexPagesPage() {
               </div>
             )}
           </>
-        )}
-        <div className="flex-1" />
-        {activeSite && isAdmin && (
-          <div className="flex items-center gap-2">
-            {triggered ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
-                  已触发，抓取中…
-                </span>
-                <button
-                  onClick={() => setTriggered(false)}
-                  className="text-xs text-gray-400 hover:text-gray-600"
-                  title="重置状态"
-                >
-                  重置
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => { setTriggerMsg(null); setShowCrawlModal(true) }}
-                className="h-8 px-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-              >
-                手动重抓
-              </button>
-            )}
-          </div>
         )}
       </div>
 
