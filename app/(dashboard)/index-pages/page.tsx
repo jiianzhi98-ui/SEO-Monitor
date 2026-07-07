@@ -67,9 +67,9 @@ export default function IndexPagesPage() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('near7')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
-  const [toggling, setToggling] = useState(false)
   const [crawling, setCrawling] = useState(false)
   const [crawlMsg, setCrawlMsg] = useState<string | null>(null)
+  const [showAddDropdown, setShowAddDropdown] = useState(false)
 
   // Supplemental crawl (Baidu URL or plain domain)
   const [suppInput, setSuppInput] = useState('')
@@ -129,19 +129,32 @@ export default function IndexPagesPage() {
   const trackedSites = sites.filter(s => s.has_index_pages)
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
-  async function handleToggle() {
-    if (!activeSite || !isAdmin) return
-    setToggling(true)
-    const newVal = !activeSite.has_index_pages
+  async function handleEnableTracking(siteId: string) {
     const res = await fetch('/api/sites/index-pages', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteId: activeSite.id, enabled: newVal }),
+      body: JSON.stringify({ siteId, enabled: true }),
     })
     if (res.ok) {
-      setSites(prev => prev.map(s => s.id === activeSite.id ? { ...s, has_index_pages: newVal } : s))
+      setSites(prev => prev.map(s => s.id === siteId ? { ...s, has_index_pages: true } : s))
+      setActiveSiteId(siteId)
+      setShowAddDropdown(false)
     }
-    setToggling(false)
+  }
+
+  async function handleDisableTracking(siteId: string) {
+    const res = await fetch('/api/sites/index-pages', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteId, enabled: false }),
+    })
+    if (res.ok) {
+      setSites(prev => prev.map(s => s.id === siteId ? { ...s, has_index_pages: false } : s))
+      if (activeSiteId === siteId) {
+        const next = sites.find(s => s.has_index_pages && s.id !== siteId)
+        setActiveSiteId(next?.id ?? '')
+      }
+    }
   }
 
   function parseCookie(raw: string): string {
@@ -258,37 +271,69 @@ export default function IndexPagesPage() {
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {sitesLoading ? (
           <div className="h-8 w-48 bg-gray-100 rounded-lg animate-pulse" />
-        ) : trackedSites.length === 0 ? (
-          <p className="text-sm text-gray-400">暂无开启追踪的站点，请先在网站管理中开启</p>
         ) : (
-          trackedSites.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setActiveSiteId(s.id)}
-              className={`h-8 px-3 rounded-lg text-sm font-medium transition-colors ${
-                activeSiteId === s.id
-                  ? 'bg-green-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {s.domain}
-            </button>
-          ))
+          <>
+            {trackedSites.map(s => (
+              <div key={s.id} className="relative group">
+                <button
+                  onClick={() => setActiveSiteId(s.id)}
+                  className={`h-8 pl-3 pr-7 rounded-lg text-sm font-medium transition-colors ${
+                    activeSiteId === s.id
+                      ? 'bg-green-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {s.domain}
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDisableTracking(s.id) }}
+                    title="停止追踪"
+                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity ${
+                      activeSiteId === s.id ? 'text-white/70 hover:text-white' : 'text-gray-400 hover:text-gray-700'
+                    }`}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+            {isAdmin && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowAddDropdown(v => !v)}
+                  title="新增追踪域名"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-sm font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors"
+                >
+                  +
+                </button>
+                {showAddDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowAddDropdown(false)} />
+                    <div className="absolute left-0 top-9 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[180px] max-h-72 overflow-y-auto">
+                      {sites.filter(s => !s.has_index_pages).length === 0 ? (
+                        <p className="text-xs text-gray-400 px-3 py-2">所有站点已开启追踪</p>
+                      ) : (
+                        sites.filter(s => !s.has_index_pages).map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => handleEnableTracking(s.id)}
+                            className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            {s.domain}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
         <div className="flex-1" />
         {activeSite && isAdmin && (
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleToggle}
-              disabled={toggling}
-              className={`h-8 px-3 rounded-lg text-sm font-medium transition-colors ${
-                activeSite.has_index_pages
-                  ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {toggling ? '…' : activeSite.has_index_pages ? '● 已开启追踪' : '○ 开启追踪'}
-            </button>
             <button
               onClick={handleCrawl}
               disabled={crawling}
