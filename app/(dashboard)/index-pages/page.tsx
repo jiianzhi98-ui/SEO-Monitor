@@ -33,6 +33,22 @@ const PAGE_SIZE = 10
 type TimeFilter = 'all' | 'near7' | 'near30'
 type StatusFilter = 'all' | 'new' | 'reindexed' | 'disappeared' | 'updated' | 'active'
 
+function parseBaiduUrlInput(input: string): { baiduUrl: string; domain: string } | null {
+  const trimmed = input.trim()
+  try {
+    const url = new URL(trimmed)
+    if (!url.hostname.includes('baidu.com')) return null
+    const wd = url.searchParams.get('wd') || ''
+    const siteMatch = wd.match(/site:([^/\s]+)/i)
+    if (!siteMatch) return null
+    const domain = siteMatch[1]
+    url.searchParams.delete('pn')
+    return { baiduUrl: url.toString(), domain }
+  } catch {
+    return null
+  }
+}
+
 export default function IndexPagesPage() {
   const { role } = useUser()
   const isAdmin = role === 'super' || role === 'admin'
@@ -55,10 +71,10 @@ export default function IndexPagesPage() {
   const [crawling, setCrawling] = useState(false)
   const [crawlMsg, setCrawlMsg] = useState<string | null>(null)
 
-  // Manual supplemental crawl by domain
-  const [manualDomain, setManualDomain] = useState('')
-  const [manualCrawling, setManualCrawling] = useState(false)
-  const [manualMsg, setManualMsg] = useState<string | null>(null)
+  // Supplemental crawl (Baidu URL or plain domain)
+  const [suppInput, setSuppInput] = useState('')
+  const [suppCrawling, setSuppCrawling] = useState(false)
+  const [suppMsg, setSuppMsg] = useState<string | null>(null)
   const [manualCookie, setManualCookie] = useState('')
   const [showCookieInput, setShowCookieInput] = useState(false)
 
@@ -71,13 +87,21 @@ export default function IndexPagesPage() {
     })
   }, [])
 
-  // Debounce search input
+  // Auto-select first tracked site on load
+  useEffect(() => {
+    if (!activeSiteId && !sitesLoading) {
+      const first = sites.find(s => s.has_index_pages)
+      if (first) setActiveSiteId(first.id)
+    }
+  }, [sites, sitesLoading, activeSiteId])
+
+  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 400)
     return () => clearTimeout(t)
   }, [search])
 
-  // Reset page when filters change
+  // Reset page on filter change
   useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, timeFilter, statusFilter])
 
   const fetchPages = useCallback(async () => {
@@ -102,6 +126,7 @@ export default function IndexPagesPage() {
   useEffect(() => { fetchPages() }, [fetchPages])
 
   const activeSite = sites.find(s => s.id === activeSiteId)
+  const trackedSites = sites.filter(s => s.has_index_pages)
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   async function handleToggle() {
@@ -161,99 +186,131 @@ export default function IndexPagesPage() {
     setCrawling(false)
   }
 
-  async function handleManualCrawl() {
-    const domain = manualDomain.trim().replace(/^https?:\/\/(www\.|m\.)?/, '').replace(/\/$/, '')
-    if (!domain) return
-    setManualCrawling(true)
-    setManualMsg(null)
+  async function handleSuppCrawl() {
+    const input = suppInput.trim()
+    if (!input) return
+    setSuppCrawling(true)
+    setSuppMsg(null)
+    const parsed = parseBaiduUrlInput(input)
+    const body = parsed
+      ? { baiduUrl: parsed.baiduUrl, cookie: parseCookie(manualCookie) || undefined }
+      : { domain: input.replace(/^https?:\/\/(www\.|m\.)?/, '').replace(/\/$/, ''), cookie: parseCookie(manualCookie) || undefined }
     try {
       const res = await fetch('/api/sites/index-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain, cookie: parseCookie(manualCookie) || undefined }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (res.ok) {
         const truncNote = data.truncated ? '（被拦截，不完整）' : ''
-        setManualMsg(`发现 ${data.found} 条，新增 ${data.newCount} 条 (${data.domain})${truncNote}`)
-        setManualDomain('')
+        setSuppMsg(`发现 ${data.found} 条，新增 ${data.newCount} 条 (${data.domain})${truncNote}`)
+        setSuppInput('')
         if (activeSiteId) await fetchPages()
       } else {
-        setManualMsg(data.error || '抓取失败')
+        setSuppMsg(data.error || '抓取失败')
       }
     } catch {
-      setManualMsg('请求失败')
+      setSuppMsg('请求失败')
     }
-    setManualCrawling(false)
+    setSuppCrawling(false)
   }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">收录页面追踪</h1>
-        <p className="text-sm text-gray-500 mt-1">追踪百度收录的具体页面，记录首次发现时间</p>
+
+      {/* Header: title left + supplemental crawl right */}
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="shrink-0">
+          <h1 className="text-xl font-semibold text-gray-900">收录页面追踪</h1>
+          <p className="text-sm text-gray-500 mt-1">追踪百度收录的具体页面，记录首次发现时间</p>
+        </div>
+        {isAdmin && (
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={suppInput}
+                onChange={e => setSuppInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !suppCrawling && handleSuppCrawl()}
+                placeholder="粘贴百度链接或输入域名"
+                className="h-8 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 w-72"
+                disabled={suppCrawling}
+              />
+              <button
+                onClick={handleSuppCrawl}
+                disabled={suppCrawling || !suppInput.trim()}
+                className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+              >
+                {suppCrawling ? '抓取中…' : '补充抓取'}
+              </button>
+            </div>
+            {suppMsg ? (
+              <span className="text-xs text-gray-500">{suppMsg}</span>
+            ) : (
+              <span className="text-xs text-gray-300">对任意域名补充资料，不影响脱收标记</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Site selector + controls */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
+      {/* Domain tabs + active site controls */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         {sitesLoading ? (
-          <div className="h-9 w-48 bg-gray-100 rounded-lg animate-pulse" />
+          <div className="h-8 w-48 bg-gray-100 rounded-lg animate-pulse" />
+        ) : trackedSites.length === 0 ? (
+          <p className="text-sm text-gray-400">暂无开启追踪的站点，请先在网站管理中开启</p>
         ) : (
-          <select
-            value={activeSiteId}
-            onChange={e => setActiveSiteId(e.target.value)}
-            className="h-9 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          >
-            <option value="">— 选择站点 —</option>
-            {sites.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.domain}{s.has_index_pages ? ' ●' : ''}
-              </option>
-            ))}
-          </select>
+          trackedSites.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSiteId(s.id)}
+              className={`h-8 px-3 rounded-lg text-sm font-medium transition-colors ${
+                activeSiteId === s.id
+                  ? 'bg-green-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {s.domain}
+            </button>
+          ))
         )}
-
-        {/* Toggle tracking */}
+        <div className="flex-1" />
         {activeSite && isAdmin && (
-          <button
-            onClick={handleToggle}
-            disabled={toggling}
-            className={`h-9 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeSite.has_index_pages
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {toggling ? '…' : activeSite.has_index_pages ? '● 已开启追踪' : '○ 开启追踪'}
-          </button>
-        )}
-
-        {/* Manual crawl */}
-        {activeSite && isAdmin && (
-          <>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggle}
+              disabled={toggling}
+              className={`h-8 px-3 rounded-lg text-sm font-medium transition-colors ${
+                activeSite.has_index_pages
+                  ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {toggling ? '…' : activeSite.has_index_pages ? '● 已开启追踪' : '○ 开启追踪'}
+            </button>
             <button
               onClick={handleCrawl}
               disabled={crawling}
-              className="h-9 px-4 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+              className="h-8 px-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
             >
               {crawling ? '抓取中…' : '手动重抓'}
             </button>
             <button
               onClick={() => setShowCookieInput(v => !v)}
-              className={`h-9 px-3 rounded-lg text-xs font-medium border transition-colors ${showCookieInput ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
+              className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${showCookieInput ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
             >
               {manualCookie ? 'Cookie ✓' : 'Cookie'}
             </button>
-          </>
-        )}
-
-        {crawlMsg && (
-          <span className="text-sm text-gray-500">{crawlMsg}</span>
+          </div>
         )}
       </div>
 
-      {/* Cookie input for manual crawl */}
+      {crawlMsg && (
+        <p className="text-sm text-gray-500 mb-3">{crawlMsg}</p>
+      )}
+
+      {/* Cookie input */}
       {isAdmin && activeSite && showCookieInput && (
         <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-200">
           <div className="text-xs text-amber-700 mb-1">
@@ -270,38 +327,10 @@ export default function IndexPagesPage() {
         </div>
       )}
 
-      {/* Manual supplemental crawl — for domains not yet fully indexed */}
-      {isAdmin && (
-        <div className="mb-5 p-3 bg-gray-50 rounded-xl border border-gray-100">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-gray-400 shrink-0">补充抓取：</span>
-            <input
-              type="text"
-              value={manualDomain}
-              onChange={e => setManualDomain(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !manualCrawling && handleManualCrawl()}
-              placeholder="输入域名（如 example.com）"
-              className="h-8 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 w-64"
-              disabled={manualCrawling}
-            />
-            <button
-              onClick={handleManualCrawl}
-              disabled={manualCrawling || !manualDomain.trim()}
-              className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40"
-            >
-              {manualCrawling ? '抓取中…' : '开始抓取'}
-            </button>
-            {manualMsg && <span className="text-xs text-gray-500">{manualMsg}</span>}
-            {!manualMsg && <span className="text-xs text-gray-300">对任意域名补充资料，不影响脱收标记</span>}
-          </div>
-        </div>
-      )}
-
       {activeSiteId && (
         <>
           {/* Filters */}
           <div className="flex items-center gap-3 mb-4">
-            {/* Time filter tabs */}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
               {(['all', 'near7', 'near30'] as TimeFilter[]).map(t => {
                 const labels: Record<TimeFilter, string> = { all: '全部', near7: '近7天', near30: '近30天' }
@@ -319,7 +348,6 @@ export default function IndexPagesPage() {
               })}
             </div>
 
-            {/* Status filter select */}
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as StatusFilter)}
@@ -333,7 +361,6 @@ export default function IndexPagesPage() {
               <option value="active">已收录</option>
             </select>
 
-            {/* Search */}
             <div className="relative">
               <input
                 type="text"

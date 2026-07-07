@@ -684,6 +684,7 @@ export async function fetchBaiduIndexPages(
   domain: string,
   onPageResults?: (batch: BaiduIndexedPage[]) => Promise<void>,
   initialCookie?: string,
+  customBaseUrl?: string,
 ): Promise<{ pages: BaiduIndexedPage[]; failReason: BaiduIndexFailReason }> {
   const results: BaiduIndexedPage[] = []
   const seenUrls = new Set<string>()
@@ -708,9 +709,9 @@ export async function fetchBaiduIndexPages(
   let consecutiveDupPages = 0
   let prevPageUrlSet = new Set<string>()  // URLs from the previous page for loop detection
 
-  // Plain site: query without ct/si parameters — matches what a user types in Baidu directly.
-  // ct=2097152 (original-content filter) and si= (site-search hint) both cap result depth.
-  const baseUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}`
+  // Use caller-supplied URL (e.g. a specific Baidu search with gpc/ct filters) when provided;
+  // otherwise plain site: query without extra params — matches what a user types in Baidu.
+  const baseUrl = customBaseUrl ?? `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${domain}`)}`
 
   for (let page = 0; page < 500; page++) {
     const pn = page * 10

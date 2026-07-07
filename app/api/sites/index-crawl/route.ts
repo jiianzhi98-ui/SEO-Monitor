@@ -30,12 +30,31 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const rawDomain = (body.domain || '').trim()
+  const rawBaiduUrl = (body.baiduUrl || '').trim()
   const baiduCookie = (body.cookie || '').trim()
-  if (!rawDomain) return NextResponse.json({ error: '请输入域名' }, { status: 400 })
+  if (!rawDomain && !rawBaiduUrl) return NextResponse.json({ error: '请输入域名或百度链接' }, { status: 400 })
 
-  // Normalize: strip protocol + www/m prefix
-  const domain = rawDomain.replace(/^https?:\/\/(www\.|m\.)?/, '').replace(/\/$/, '')
-  if (!domain) return NextResponse.json({ error: '域名格式不正确' }, { status: 400 })
+  let domain: string
+  let customBaseUrl: string | undefined
+
+  if (rawBaiduUrl) {
+    // Parse domain and strip pn from the Baidu URL (pn is handled by pagination)
+    try {
+      const url = new URL(rawBaiduUrl)
+      const wd = url.searchParams.get('wd') || ''
+      const siteMatch = wd.match(/site:([^/\s]+)/i)
+      if (!siteMatch) return NextResponse.json({ error: '无法从链接解析域名（wd 参数需包含 site:domain）' }, { status: 400 })
+      domain = siteMatch[1]
+      url.searchParams.delete('pn')
+      customBaseUrl = url.toString()
+    } catch {
+      return NextResponse.json({ error: '链接格式不正确' }, { status: 400 })
+    }
+  } else {
+    // Plain domain input
+    domain = rawDomain.replace(/^https?:\/\/(www\.|m\.)?/, '').replace(/\/$/, '')
+    if (!domain) return NextResponse.json({ error: '域名格式不正确' }, { status: 400 })
+  }
 
   // Find matching site: exact match first, then suffix match (e.g. "sjwyx.com" matches "m.sjwyx.com")
   const { data: exactSites } = await service.from('sites').select('id, domain').eq('domain', domain).limit(1)
@@ -75,7 +94,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const { pages, failReason } = await fetchBaiduIndexPages(domain, saveBatch, baiduCookie || undefined)
+  const { pages, failReason } = await fetchBaiduIndexPages(domain, saveBatch, baiduCookie || undefined, customBaseUrl)
 
   if (failReason === 'captcha' || failReason === 'http_error') {
     if (totalFound > 0) {
