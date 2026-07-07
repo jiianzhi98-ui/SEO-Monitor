@@ -48,9 +48,9 @@ export async function GET(req: Request) {
 
   if (search) query = query.ilike('title', `%${search}%`)
 
-  // Apply time filter (based on first_seen_date)
-  if (timeFilter === 'near7') query = query.gte('first_seen_date', getMY(-7))
-  else if (timeFilter === 'near30') query = query.gte('first_seen_date', getMY(-30))
+  // Apply time filter (based on baidu_date_str — stored as YYYY-MM-DD by crawler)
+  if (timeFilter === 'near7') query = query.gte('baidu_date_str', getMY(-7))
+  else if (timeFilter === 'near30') query = query.gte('baidu_date_str', getMY(-30))
 
   // Apply status filter
   if (statusFilter === 'new') {

@@ -378,7 +378,7 @@ export default function IndexPagesPage() {
           <div className="flex items-center gap-3 mb-4">
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
               {(['all', 'near7', 'near30'] as TimeFilter[]).map(t => {
-                const labels: Record<TimeFilter, string> = { all: '全部', near7: '近7天', near30: '近30天' }
+                const labels: Record<TimeFilter, string> = { all: '全部时间', near7: '百度日期近7天', near30: '百度日期近30天' }
                 return (
                   <button
                     key={t}
