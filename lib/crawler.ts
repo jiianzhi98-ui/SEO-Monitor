@@ -796,7 +796,7 @@ export async function fetchBaiduIndexPages(
       // Stop immediately if this page's URLs are all contained in the previous page's URLs —
       // Baidu is repeating the same last page (end-of-results cycling behaviour)
       if (thisPageUrlSet.size > 0 && prevPageUrlSet.size > 0) {
-        if ([...thisPageUrlSet].every(u => prevPageUrlSet.has(u))) break
+        if (Array.from(thisPageUrlSet).every(u => prevPageUrlSet.has(u))) break
       }
 
       if (pageCount === 0) {
