@@ -1,0 +1,43 @@
+name: 补充收录页面抓取
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: '站点域名（例如 sjwyx.com）'
+        required: true
+      period:
+        description: '时间范围 (monthly=31天 / weekly=7天 / daily=1天)'
+        required: true
+        default: 'monthly'
+        type: choice
+        options: [monthly, weekly, daily]
+      custom_url:
+        description: '自定义百度链接（留空则按时间段自动构建）'
+        required: false
+        default: ''
+
+jobs:
+  supplement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run supplement crawl
+        run: npx tsx scripts/crawl.ts --step=index-pages --group=0 --total-groups=1
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPPLEMENT_DOMAIN: ${{ inputs.domain }}
+          SUPPLEMENT_PERIOD: ${{ inputs.period }}
+          SUPPLEMENT_CUSTOM_URL: ${{ inputs.custom_url }}

@@ -29,25 +29,9 @@ interface IndexedPage {
 }
 
 const PAGE_SIZE = 10
-
 type TimeFilter = 'all' | 'near7' | 'near30'
 type StatusFilter = 'all' | 'new' | 'reindexed' | 'disappeared' | 'updated' | 'active'
-
-function parseBaiduUrlInput(input: string): { baiduUrl: string; domain: string } | null {
-  const trimmed = input.trim()
-  try {
-    const url = new URL(trimmed)
-    if (!url.hostname.includes('baidu.com')) return null
-    const wd = url.searchParams.get('wd') || ''
-    const siteMatch = wd.match(/site:([^/\s]+)/i)
-    if (!siteMatch) return null
-    const domain = siteMatch[1]
-    url.searchParams.delete('pn')
-    return { baiduUrl: url.toString(), domain }
-  } catch {
-    return null
-  }
-}
+type CrawlPeriod = 'monthly' | 'weekly' | 'daily'
 
 export default function IndexPagesPage() {
   const { role } = useUser()
@@ -64,19 +48,20 @@ export default function IndexPagesPage() {
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('near7')
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('near30')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
-  const [crawling, setCrawling] = useState(false)
-  const [crawlMsg, setCrawlMsg] = useState<string | null>(null)
-  const [showAddDropdown, setShowAddDropdown] = useState(false)
+  // Crawl modal
+  const [showCrawlModal, setShowCrawlModal] = useState(false)
+  const [crawlPeriod, setCrawlPeriod] = useState<CrawlPeriod>('monthly')
+  const [crawlCustomUrl, setCrawlCustomUrl] = useState('')
+  const [crawlCookie, setCrawlCookie] = useState('')
+  const [triggering, setTriggering] = useState(false)
+  const [triggered, setTriggered] = useState(false)
+  const [triggerMsg, setTriggerMsg] = useState<string | null>(null)
 
-  // Supplemental crawl (Baidu URL or plain domain)
-  const [suppInput, setSuppInput] = useState('')
-  const [suppCrawling, setSuppCrawling] = useState(false)
-  const [suppMsg, setSuppMsg] = useState<string | null>(null)
-  const [manualCookie, setManualCookie] = useState('')
-  const [showCookieInput, setShowCookieInput] = useState(false)
+  // Site management dropdown
+  const [showAddDropdown, setShowAddDropdown] = useState(false)
 
   // Load all sites
   useEffect(() => {
@@ -87,7 +72,7 @@ export default function IndexPagesPage() {
     })
   }, [])
 
-  // Auto-select first tracked site on load
+  // Auto-select first tracked site
   useEffect(() => {
     if (!activeSiteId && !sitesLoading) {
       const first = sites.find(s => s.has_index_pages)
@@ -101,7 +86,6 @@ export default function IndexPagesPage() {
     return () => clearTimeout(t)
   }, [search])
 
-  // Reset page on filter change
   useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, timeFilter, statusFilter])
 
   const fetchPages = useCallback(async () => {
@@ -175,99 +159,45 @@ export default function IndexPagesPage() {
     return trimmed
   }
 
-  async function handleCrawl() {
-    if (!activeSite) return
-    setCrawling(true)
-    setCrawlMsg('抓取中，可能需要几分钟…')
+  async function handleTrigger() {
+    if (!activeSite || triggering) return
+    setTriggering(true)
+    setTriggerMsg(null)
     try {
-      const res = await fetch('/api/sites/index-crawl', {
+      const res = await fetch('/api/sites/trigger-supplement-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: activeSite.domain, cookie: parseCookie(manualCookie) || undefined }),
+        body: JSON.stringify({
+          domain: activeSite.domain,
+          period: crawlPeriod,
+          customUrl: crawlCustomUrl.trim() || undefined,
+          cookie: crawlCookie.trim() ? parseCookie(crawlCookie) : undefined,
+        }),
       })
       const data = await res.json()
       if (res.ok) {
-        const truncNote = data.truncated ? '（被拦截，抓取不完整）' : ''
-        setCrawlMsg(`完成，发现 ${data.found} 条，新增 ${data.newCount} 条${truncNote}`)
-        await fetchPages()
+        setTriggered(true)
+        setShowCrawlModal(false)
+        setCrawlCustomUrl('')
       } else {
-        setCrawlMsg(data.error || '抓取失败')
+        setTriggerMsg(data.error || '触发失败')
       }
     } catch {
-      setCrawlMsg('请求失败')
+      setTriggerMsg('请求失败')
     }
-    setCrawling(false)
-  }
-
-  async function handleSuppCrawl() {
-    const input = suppInput.trim()
-    if (!input) return
-    setSuppCrawling(true)
-    setSuppMsg(null)
-    const parsed = parseBaiduUrlInput(input)
-    const body = parsed
-      ? { baiduUrl: parsed.baiduUrl, cookie: parseCookie(manualCookie) || undefined }
-      : { domain: input.replace(/^https?:\/\/(www\.|m\.)?/, '').replace(/\/$/, ''), cookie: parseCookie(manualCookie) || undefined }
-    try {
-      const res = await fetch('/api/sites/index-crawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        const truncNote = data.truncated ? '（被拦截，不完整）' : ''
-        setSuppMsg(`发现 ${data.found} 条，新增 ${data.newCount} 条 (${data.domain})${truncNote}`)
-        setSuppInput('')
-        if (activeSiteId) await fetchPages()
-      } else {
-        setSuppMsg(data.error || '抓取失败')
-      }
-    } catch {
-      setSuppMsg('请求失败')
-    }
-    setSuppCrawling(false)
+    setTriggering(false)
   }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
 
-      {/* Header: title left + supplemental crawl right */}
-      <div className="flex items-start justify-between gap-4 mb-5">
-        <div className="shrink-0">
-          <h1 className="text-xl font-semibold text-gray-900">收录页面追踪</h1>
-          <p className="text-sm text-gray-500 mt-1">追踪百度收录的具体页面，记录首次发现时间</p>
-        </div>
-        {isAdmin && (
-          <div className="flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={suppInput}
-                onChange={e => setSuppInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !suppCrawling && handleSuppCrawl()}
-                placeholder="粘贴百度链接或输入域名"
-                className="h-8 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 w-72"
-                disabled={suppCrawling}
-              />
-              <button
-                onClick={handleSuppCrawl}
-                disabled={suppCrawling || !suppInput.trim()}
-                className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40 whitespace-nowrap"
-              >
-                {suppCrawling ? '抓取中…' : '补充抓取'}
-              </button>
-            </div>
-            {suppMsg ? (
-              <span className="text-xs text-gray-500">{suppMsg}</span>
-            ) : (
-              <span className="text-xs text-gray-300">对任意域名补充资料，不影响脱收标记</span>
-            )}
-          </div>
-        )}
+      {/* Header */}
+      <div className="mb-5">
+        <h1 className="text-xl font-semibold text-gray-900">收录页面追踪</h1>
+        <p className="text-sm text-gray-500 mt-1">追踪百度收录的具体页面，记录首次发现时间</p>
       </div>
 
-      {/* Domain tabs + active site controls */}
+      {/* Domain tabs + controls */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {sitesLoading ? (
           <div className="h-8 w-48 bg-gray-100 rounded-lg animate-pulse" />
@@ -334,43 +264,30 @@ export default function IndexPagesPage() {
         <div className="flex-1" />
         {activeSite && isAdmin && (
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleCrawl}
-              disabled={crawling}
-              className="h-8 px-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
-            >
-              {crawling ? '抓取中…' : '手动重抓'}
-            </button>
-            <button
-              onClick={() => setShowCookieInput(v => !v)}
-              className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${showCookieInput ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
-            >
-              {manualCookie ? 'Cookie ✓' : 'Cookie'}
-            </button>
+            {triggered ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
+                  已触发，抓取中…
+                </span>
+                <button
+                  onClick={() => setTriggered(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                  title="重置状态"
+                >
+                  重置
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setTriggerMsg(null); setShowCrawlModal(true) }}
+                className="h-8 px-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                手动重抓
+              </button>
+            )}
           </div>
         )}
       </div>
-
-      {crawlMsg && (
-        <p className="text-sm text-gray-500 mb-3">{crawlMsg}</p>
-      )}
-
-      {/* Cookie input */}
-      {isAdmin && activeSite && showCookieInput && (
-        <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-200">
-          <div className="text-xs text-amber-700 mb-1">
-            百度 Cookie（DevTools → Application → Cookies → baidu.com，全选复制 Name=Value 行贴入）
-          </div>
-          <textarea
-            value={manualCookie}
-            onChange={e => setManualCookie(e.target.value)}
-            placeholder="BAIDUID=xxx; BDUSS=xxx; COOKIE_SESSION=xxx; ..."
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg border border-amber-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono resize-none"
-            disabled={crawling}
-          />
-        </div>
-      )}
 
       {activeSiteId && (
         <>
@@ -437,7 +354,7 @@ export default function IndexPagesPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <p className="text-sm">暂无数据</p>
-                {isAdmin && <p className="text-xs mt-1">请先开启追踪并手动重抓</p>}
+                {isAdmin && <p className="text-xs mt-1">请先点击手动重抓</p>}
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -513,6 +430,122 @@ export default function IndexPagesPage() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {/* Crawl Modal */}
+      {showCrawlModal && activeSite && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/30" onClick={() => !triggering && setShowCrawlModal(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">手动重抓</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">触发 GitHub Actions，不受 Vercel 超时限制</p>
+                </div>
+                <button
+                  onClick={() => setShowCrawlModal(false)}
+                  disabled={triggering}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-40"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="px-5 pb-5 space-y-4">
+                {/* Domain (read-only) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">站点</label>
+                  <div className="h-8 px-3 flex items-center rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-500">
+                    {activeSite.domain}
+                  </div>
+                </div>
+
+                {/* Period selector */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">抓取范围</label>
+                  <div className="flex gap-2">
+                    {(['monthly', 'weekly', 'daily'] as CrawlPeriod[]).map(p => {
+                      const labels: Record<CrawlPeriod, string> = { monthly: '近一个月', weekly: '近一周', daily: '近一天' }
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => setCrawlPeriod(p)}
+                          className={`flex-1 h-9 rounded-lg text-sm font-medium transition-colors border ${
+                            crawlPeriod === p
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                          }`}
+                        >
+                          {labels[p]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {crawlCustomUrl.trim() && (
+                    <p className="text-xs text-amber-500 mt-1">提供了自定义链接，以上范围选项将被忽略</p>
+                  )}
+                </div>
+
+                {/* Custom Baidu URL (optional) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    百度链接（可选，填入则忽略范围选项）
+                  </label>
+                  <input
+                    type="text"
+                    value={crawlCustomUrl}
+                    onChange={e => setCrawlCustomUrl(e.target.value)}
+                    placeholder="https://www.baidu.com/s?wd=site:sjwyx.com&gpc=…"
+                    className="w-full h-8 px-3 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    disabled={triggering}
+                  />
+                </div>
+
+                {/* Cookie */}
+                <details className="group">
+                  <summary className="text-xs font-medium text-gray-500 cursor-pointer select-none list-none flex items-center gap-1 hover:text-gray-700">
+                    <span className="transition-transform group-open:rotate-90">▶</span>
+                    Cookie（可选）
+                    {crawlCookie.trim() && <span className="ml-1 text-amber-500">✓ 已填入</span>}
+                  </summary>
+                  <textarea
+                    value={crawlCookie}
+                    onChange={e => setCrawlCookie(e.target.value)}
+                    placeholder="BAIDUID=xxx; BDUSS=xxx; ..."
+                    rows={3}
+                    className="mt-2 w-full px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono resize-none"
+                    disabled={triggering}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">填入后会保存到服务器设置，下次自动抓取也会使用</p>
+                </details>
+
+                {triggerMsg && (
+                  <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{triggerMsg}</p>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => setShowCrawlModal(false)}
+                    disabled={triggering}
+                    className="flex-1 h-9 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-40"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleTrigger}
+                    disabled={triggering}
+                    className="flex-1 h-9 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {triggering ? '提交中…' : '开始抓取'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </>
       )}
     </div>

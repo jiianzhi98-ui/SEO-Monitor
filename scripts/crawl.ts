@@ -461,11 +461,25 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
     try {
-      // gpc applies Baidu's internal "indexed within N days" filter — not page publish date.
+      // Build crawl URL with gpc time filter (Baidu's internal re-indexing time, not page publish date).
+      // SUPPLEMENT_CUSTOM_URL overrides entirely; SUPPLEMENT_PERIOD controls the window (monthly/weekly/daily).
       // Omit ct=2097152 and si= to avoid DC-IP pagination cap (~4 pages).
       const nowSec = Math.floor(Date.now() / 1000)
-      const monthlyUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&gpc=${encodeURIComponent(`stf=${nowSec - 31 * 86400},${nowSec}|stftype=1`)}&tfflag=1`
-      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie, monthlyUrl)
+      const supplementCustomUrl = process.env.SUPPLEMENT_CUSTOM_URL
+      let crawlUrl: string
+      if (supplementCustomUrl) {
+        const u = new URL(supplementCustomUrl)
+        u.searchParams.delete('pn')
+        // Strip ct/si to avoid DC-IP pagination cap
+        u.searchParams.delete('ct')
+        u.searchParams.delete('si')
+        crawlUrl = u.toString()
+      } else {
+        const period = process.env.SUPPLEMENT_PERIOD || 'monthly'
+        const days = period === 'daily' ? 1 : period === 'weekly' ? 7 : 31
+        crawlUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&gpc=${encodeURIComponent(`stf=${nowSec - days * 86400},${nowSec}|stftype=1`)}&tfflag=1`
+      }
+      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie, crawlUrl)
 
       if (pages.length === 0) {
         const reasonMap: Record<string, string> = {
@@ -636,7 +650,9 @@ async function main() {
     const aid = await activityStart(supabase, { ...logBase, step: 'index-pages' })
     const { data: cookieSetting } = await supabase.from('app_settings').select('value').eq('key', 'baidu_index_cookie').maybeSingle()
     const baiduCookie = (cookieSetting as { value: string } | null)?.value ?? undefined
-    await runIndexPages(sites.filter(s => s.has_index_pages), today, aid, baiduCookie)
+    const supplementDomain = process.env.SUPPLEMENT_DOMAIN
+    const indexSites = sites.filter(s => s.has_index_pages && (!supplementDomain || s.domain === supplementDomain))
+    await runIndexPages(indexSites, today, aid, baiduCookie)
   }
 
   console.log(`\n${'✓'.repeat(60)}`)
