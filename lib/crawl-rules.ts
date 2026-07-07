@@ -75,7 +75,7 @@ export const CRAWL_RULES: RuleSection[] = [
     items: [
       { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 20 * * * UTC = 04:00 MYT)，5个 matrix job 并行；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
       { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）' },
-      { label: '抓取方式', text: '百度 site:domain 搜索（无时间过滤，抓全量收录页面），pn=0/10/20... 翻页，无页数上限；停止条件：空页、被拦截、或当前页 URL 集合完全包含于上一页（整页相同则立即停）；页间延迟 1.5-3 秒（有 Cookie），4-7 秒（无 Cookie）；站间延迟 10 秒' },
+      { label: '抓取方式', text: '百度 site:domain 搜索，带近31天 gpc 时间过滤（gpc=stf={now-31d},{now}|stftype=1 + tfflag=1），过滤依据是百度内部重新收录时间而非页面发布日期；不带 ct=2097152/si= 以避免服务器IP被限页；pn=0/10/20... 翻页，无页数上限；停止条件：空页、被拦截、或整页URL相同立即停；页间延迟 1.5-3 秒（有 Cookie），4-7 秒（无 Cookie）；站间延迟 10 秒' },
       { label: '去重', text: '按 (site_id, url) 唯一索引 upsert；新页面写入 first_seen_date=today（DB trigger 保护，UPDATE 时不覆盖）；已知页面更新 last_seen_date=today；抓完后仅将 last_seen_date 在近30天内但本次未出现的页面标记 disappeared_date=today（30天可观测窗口：超出范围的历史页面不作脱收判定，因月度抓取不能代表其是否还被收录）；重新出现则清 disappeared_date 为 null' },
       { label: '写入表', text: 'site_indexed_pages（url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date）；500条/批写入' },
       { label: '风险', text: '百度对 GitHub Actions IP 有反爬限制，若返回 "百度安全验证" 页则自动停止该站抓取；empty 状态表示疑似被拦截' },
