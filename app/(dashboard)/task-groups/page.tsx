@@ -607,26 +607,40 @@ export default function TaskGroupsPage() {
   }, [radarData, yesterday, groupNewDomains])
 
   const wordLibWords = useMemo((): WordLibEntry[] => {
-    if (!radarData || !wordLibRawKwMap) return []
-    let words = radarData.newWords.filter(w => w.last_date !== today)
-    if (groupNewDomains.size) words = words.filter(w => w.sites.some(s => groupNewDomains.has(s)))
-    return words
-      .map(w => {
-        const related = new Set<string>()
-        for (const domain of w.sites) {
-          const kwSet = wordLibRawKwMap.get(domain)
-          if (kwSet) kwSet.forEach(kw => { if (kw.includes(w.keyword)) related.add(kw) })
+    if (!wordLibRawKwMap) return []
+    const newWordMap = new Map((radarData?.newWords || []).map(w => [w.keyword, w]))
+    // Apply same prefix-grouping algorithm as competitor-daily
+    const baseAggr = new Map<string, { sites: Set<string>; variants: Set<string> }>()
+    for (const [domain, kwSet] of wordLibRawKwMap) {
+      if (groupNewDomains.size && !groupNewDomains.has(domain)) continue
+      const kws = Array.from(kwSet).sort((a, b) => a.length - b.length)
+      const groups = new Map<string, Set<string>>()
+      for (const k of kws) {
+        let matched = false
+        for (const base of groups.keys()) {
+          if (k.startsWith(base) && k !== base) { groups.get(base)!.add(k); matched = true; break }
         }
-        return { ...w, longTailCount: related.size }
+        if (!matched) groups.set(k, new Set([k]))
+      }
+      for (const [base, variants] of groups) {
+        if (variants.size < 2) continue
+        if (!baseAggr.has(base)) baseAggr.set(base, { sites: new Set(), variants: new Set() })
+        const entry = baseAggr.get(base)!
+        entry.sites.add(domain)
+        variants.forEach(v => entry.variants.add(v))
+      }
+    }
+    return Array.from(baseAggr.entries())
+      .map(([kw, { sites, variants }]) => {
+        const nw = newWordMap.get(kw)
+        return {
+          keyword: kw, longTailCount: variants.size, siteCount: sites.size,
+          sites: Array.from(sites), count: variants.size,
+          last_date: nw?.last_date || '', first_date: nw?.first_date || '',
+        }
       })
-      .filter(w => w.longTailCount > 1)
-      .sort((a, b) => {
-        if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
-        const bp = badgePriority(a.first_date, a.last_date, yesterday) - badgePriority(b.first_date, b.last_date, yesterday)
-        if (bp !== 0) return bp
-        return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
-      })
-  }, [radarData, today, yesterday, wordLibRawKwMap, groupNewDomains])
+      .sort((a, b) => b.longTailCount - a.longTailCount || b.siteCount - a.siteCount)
+  }, [wordLibRawKwMap, radarData, groupNewDomains])
 
   // ── Detail modal data ───────────────────────────────────────────────────────
 
@@ -815,7 +829,7 @@ export default function TaskGroupsPage() {
           const { data: raw } = await (supabase.from('raw_keywords') as any)
             .select('site_id, keyword')
             .in('site_id', siteIds)
-            .ilike('keyword', `%${keyword}%`)
+            .ilike('keyword', `${keyword}%`)
             .gte('content_date', since)
           const bySite = new Map<string, Set<string>>()
           for (const r of (raw || [])) {
@@ -900,7 +914,7 @@ export default function TaskGroupsPage() {
   useEffect(() => { setWordLibRawKwMap(null) }, [radarData])
 
   useEffect(() => {
-    if (rightTab !== 'wordLib' || wordLibRawKwMap !== null || wordLibRawLoading || !radarLoaded || !radarData) return
+    if (rightTab !== 'wordLib' || wordLibRawKwMap !== null || wordLibRawLoading) return
     setWordLibRawLoading(true);
     (async () => {
       try {
@@ -912,21 +926,13 @@ export default function TaskGroupsPage() {
           idMap = new Map((siteData || []).map((s: { id: string; domain: string }) => [s.id, s.domain]))
           setSiteIdMap(idMap)
         }
-        const domainToId = new Map(Array.from(idMap.entries()).map(([id, d]) => [d, id]))
-        const allSiteIds = new Set<string>()
-        for (const w of radarData.newWords) {
-          if (w.last_date === today) continue
-          for (const domain of w.sites) {
-            const id = domainToId.get(domain)
-            if (id) allSiteIds.add(id)
-          }
-        }
-        if (!allSiteIds.size) { setWordLibRawKwMap(new Map()); return }
+        const allSiteIds = Array.from(idMap.keys())
+        if (!allSiteIds.length) { setWordLibRawKwMap(new Map()); return }
         const since = getMYDate(-30)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: raw } = await (supabase.from('raw_keywords') as any)
           .select('site_id, keyword')
-          .in('site_id', Array.from(allSiteIds))
+          .in('site_id', allSiteIds)
           .gte('content_date', since)
           .limit(100000)
         const domainKwMap = new Map<string, Set<string>>()
@@ -941,7 +947,7 @@ export default function TaskGroupsPage() {
         setWordLibRawLoading(false)
       }
     })()
-  }, [rightTab, radarLoaded, radarData, siteIdMap, today]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rightTab, siteIdMap]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!activeGroupId || selectedDate !== today) return
