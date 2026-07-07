@@ -121,6 +121,17 @@ export default function IndexPagesPage() {
 
   useEffect(() => { fetchPages() }, [fetchPages])
 
+  const sortIcons = () => {
+    const isAsc = sortDir === 'asc'
+    const isDesc = sortDir === 'desc'
+    return (
+      <span className="flex flex-col items-center gap-px select-none">
+        <svg onClick={() => setSortDir(d => d === 'asc' ? '' : 'asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isAsc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 0L8 5H0Z"/></svg>
+        <svg onClick={() => setSortDir(d => d === 'desc' ? '' : 'desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor" className={`cursor-pointer ${isDesc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}><path d="M4 5L0 0H8Z"/></svg>
+      </span>
+    )
+  }
+
   const activeSite = sites.find(s => s.id === activeSiteId)
   const trackedSites = sites.filter(s => s.has_index_pages)
   const totalPages = Math.ceil(total / pageSize)
@@ -371,32 +382,25 @@ export default function IndexPagesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[13%]">
-                      <button
-                        onClick={() => setSortDir(d => d === 'asc' ? 'desc' : d === 'desc' ? '' : 'asc')}
-                        className="inline-flex items-center gap-1 hover:text-gray-800 transition-colors"
-                        title="点击切换百度日期排序"
-                      >
-                        百度日期
-                        <span className="text-xs">
-                          {sortDir === 'asc' ? '↑' : sortDir === 'desc' ? '↓' : '↕'}
-                        </span>
-                      </button>
+                    <th className="text-center px-3 py-2 font-medium text-gray-500 w-[13%]">
+                      <div className="flex items-center justify-center gap-1">
+                        百度日期{sortIcons()}
+                      </div>
                     </th>
-                    <th className="text-center px-3 py-3 font-medium text-gray-500 w-[8%]">状态</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[38%]">页面标题</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500 w-[41%]">显示 URL</th>
+                    <th className="text-center px-3 py-2 font-medium text-gray-500 w-[8%]">状态</th>
+                    <th className="text-left px-4 py-2 font-medium text-gray-500 w-[38%]">页面标题</th>
+                    <th className="text-left px-4 py-2 font-medium text-gray-500 w-[41%]">显示 URL</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {rows.map(row => (
                     <tr key={row.id} className={`transition-colors group ${row.is_disappeared ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
-                      <td className="px-3 py-3 text-center">
+                      <td className="px-3 py-2 text-center">
                         {row.baidu_date_str ? (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${row.is_disappeared ? 'text-red-400 bg-red-50' : 'text-blue-600 bg-blue-50'}`}>{row.baidu_date_str}</span>
                         ) : <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="px-3 py-3 text-center">
+                      <td className="px-3 py-2 text-center">
                         {row.is_new ? (
                           <span className="inline-block text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">新发现</span>
                         ) : row.is_reindexed ? (
@@ -409,7 +413,7 @@ export default function IndexPagesPage() {
                           <span className="inline-block text-xs text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap">已收录</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2">
                         <div className={`font-medium line-clamp-1 ${row.is_disappeared ? 'text-gray-400 line-through decoration-red-300' : 'text-gray-800 group-hover:text-green-700'}`}>
                           {row.title || '—'}
                         </div>
@@ -420,7 +424,7 @@ export default function IndexPagesPage() {
                           <div className="text-xs text-red-300 mt-0.5">脱收于 {row.disappeared_date}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2">
                         <div className="text-xs text-gray-400 font-mono line-clamp-2 break-all">{row.url}</div>
                       </td>
                     </tr>
