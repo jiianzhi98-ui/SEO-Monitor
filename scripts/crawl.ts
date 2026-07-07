@@ -461,7 +461,13 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
     try {
-      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie)
+      // Use Baidu's 31-day time filter (gpc parameter) so we only track recently indexed pages.
+      // ct=2097152 = original-content filter; gpc = stf={start},{end}|stftype=1 (Unix seconds).
+      const nowSec = Math.floor(Date.now() / 1000)
+      const startSec = nowSec - 31 * 24 * 3600
+      const gpc = encodeURIComponent(`stf=${startSec},${nowSec}|stftype=1`)
+      const monthlyUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&ct=2097152&si=${encodeURIComponent(site.domain)}&gpc=${gpc}&tfflag=1`
+      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie, monthlyUrl)
 
       if (pages.length === 0) {
         const reasonMap: Record<string, string> = {
