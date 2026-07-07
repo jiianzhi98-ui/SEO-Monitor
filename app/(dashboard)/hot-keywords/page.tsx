@@ -241,7 +241,9 @@ export default function HotRadarPage() {
   const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
   const [wordLibRawKwMap, setWordLibRawKwMap] = useState<Map<string, Map<string, string>> | null>(null)
   const [wordLibRawLoading, setWordLibRawLoading] = useState(false)
-  const [dateFrom, setDateFrom] = useState('')
+  const [sortCol, setSortCol]           = useState('')
+  const [sortDir, setSortDir]           = useState<'asc'|'desc'|''>('')
+  const [wordLibMinSites, setWordLibMinSites] = useState(1)
 
   const today     = useMemo(() => getMYDate(),    [])
   const yesterday = useMemo(() => getMYDate(-1),  [])
@@ -414,8 +416,8 @@ export default function HotRadarPage() {
 
   const filtered = useMemo(() => {
     if (!data) return null
-    const nw = data.newWords.filter(w => w.siteCount >= minSites && (!dateFrom || !w.last_date || w.last_date >= dateFrom))
-    const rw = data.rankWords.filter(w => w.siteCount >= minSites && (!dateFrom || !w.last_date || w.last_date >= dateFrom))
+    const nw = data.newWords.filter(w => w.siteCount >= minSites)
+    const rw = data.rankWords.filter(w => w.siteCount >= minSites)
 
     const nwMap = new Map(nw.map(w => [w.keyword, w]))
     const rwMap = new Map(rw.map(w => [w.keyword, w]))
@@ -447,9 +449,9 @@ export default function HotRadarPage() {
       newWords:    sortByDate(nw, yesterday, (a, b) => b.count - a.count || b.siteCount - a.siteCount),
       rankWords:   sortByDate(rw, yesterday, (a, b) => b.volume - a.volume || b.siteCount - a.siteCount),
       crossWords:  sortByDate(cw, yesterday, (a, b) => (b.volume ?? 0) - (a.volume ?? 0)),
-      streakWords: (data.streakWords || []).filter(w => !dateFrom || !w.last_date || w.last_date >= dateFrom),
+      streakWords: data.streakWords || [],
     }
-  }, [data, minSites, yesterday, dateFrom])
+  }, [data, minSites, yesterday])
 
   const filteredStreakWords = useMemo((): StreakGrouped[] => {
     if (!filtered) return []
@@ -523,12 +525,12 @@ export default function HotRadarPage() {
           last_date, first_date,
         }
       })
-      .filter(w => !dateFrom || !w.last_date || w.last_date >= dateFrom)
+      .filter(w => w.siteCount >= wordLibMinSites)
       .sort((a, b) => {
         if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
         return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
       })
-  }, [wordLibRawKwMap, dateFrom, today])
+  }, [wordLibRawKwMap, wordLibMinSites, today])
 
   const baseList = !filtered ? [] :
     activeTab === 'cross'   ? filtered.crossWords  :
@@ -538,26 +540,64 @@ export default function HotRadarPage() {
     filteredStreakWords
 
   const activeList = useMemo(() => {
-    type AnyEntry = CrossEntry | WordEntry | RankEntry | StreakGrouped
-    let list = baseList as AnyEntry[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let list = [...(baseList as any[])]
     if (filterSite.trim()) {
       const fs = filterSite.trim().toLowerCase()
-      list = list.filter(w => {
-        if ('domains' in w) return (w as StreakGrouped).domains.some(d => d.toLowerCase().includes(fs))
-        return 'sites' in w ? (w as { sites: string[] }).sites.some(s => s.toLowerCase().includes(fs)) : true
+      list = list.filter((w: any) => {
+        if ('domains' in w) return w.domains.some((d: string) => d.toLowerCase().includes(fs))
+        return w.sites ? w.sites.some((s: string) => s.toLowerCase().includes(fs)) : true
       })
     }
     if (filterKeyword.trim()) {
       const kw = filterKeyword.trim().toLowerCase()
-      list = list.filter(w => w.keyword.toLowerCase().includes(kw))
+      list = list.filter((w: any) => w.keyword.toLowerCase().includes(kw))
+    }
+    if (sortCol && sortDir) {
+      list.sort((a: any, b: any) => {
+        let va: string | number = 0, vb: string | number = 0
+        switch (sortCol) {
+          case 'date':          va = a.last_date || ''; vb = b.last_date || ''; break
+          case 'volume':        va = a.volume ?? 0;     vb = b.volume ?? 0;     break
+          case 'count':         va = a.count ?? 0;      vb = b.count ?? 0;      break
+          case 'rankDays':      va = a.rankDays ?? 0;   vb = b.rankDays ?? 0;   break
+          case 'streak':        va = a.streak ?? 0;     vb = b.streak ?? 0;     break
+          case 'longTailCount': va = a.longTailCount ?? 0; vb = b.longTailCount ?? 0; break
+          case 'siteCount':     va = a.siteCount ?? 0;  vb = b.siteCount ?? 0;  break
+        }
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb as string) : (vb as string).localeCompare(va)
+        return sortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number)
+      })
     }
     return list
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseList, filterSite, filterKeyword])
+  }, [baseList, filterSite, filterKeyword, sortCol, sortDir])
 
   const pagedList = activeList.slice(page * pageSize, (page + 1) * pageSize)
 
-  function handleTabChange(tab: Tab) { setActiveTab(tab); setPage(0) }
+  function handleTabChange(tab: Tab) { setActiveTab(tab); setPage(0); setSortCol(''); setSortDir('') }
+
+  const sortIcons = (col: string) => {
+    const isAsc = sortCol === col && sortDir === 'asc'
+    const isDesc = sortCol === col && sortDir === 'desc'
+    const toggle = (dir: 'asc' | 'desc') => {
+      setSortCol(sortCol === col && sortDir === dir ? '' : col)
+      setSortDir(sortCol === col && sortDir === dir ? '' : dir)
+      setPage(0)
+    }
+    return (
+      <span className="inline-flex flex-col items-center gap-px select-none ml-0.5">
+        <svg onClick={() => toggle('asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor"
+          className={`cursor-pointer ${isAsc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>
+          <path d="M4 0L8 5H0Z"/>
+        </svg>
+        <svg onClick={() => toggle('desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor"
+          className={`cursor-pointer ${isDesc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>
+          <path d="M4 5L0 0H8Z"/>
+        </svg>
+      </span>
+    )
+  }
 
   function copyKeywords() {
     navigator.clipboard.writeText(activeList.map(w => w.keyword).join('\n'))
@@ -620,16 +660,6 @@ export default function HotRadarPage() {
             {/* Filter bar */}
             <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-400">日期从</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  max={today}
-                  onChange={e => { setDateFrom(e.target.value); setPage(0) }}
-                  className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none focus:border-green-400"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-400">站点</span>
                 <input type="text" value={filterSite}
                   onChange={e => { setFilterSite(e.target.value); setPage(0) }}
@@ -644,18 +674,18 @@ export default function HotRadarPage() {
                   className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none w-32" />
               </div>
               <div className="flex items-center gap-1.5">
-                {activeTab !== 'streak' ? (
+                {activeTab === 'wordLib' ? (
                   <>
                     <span className="text-xs text-gray-400">最少站点数</span>
-                    <select value={minSites} onChange={e => { setMinSites(Number(e.target.value)); setPage(0) }}
+                    <select value={wordLibMinSites} onChange={e => { setWordLibMinSites(Number(e.target.value)); setPage(0) }}
                       className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                      <option value={1}>1站</option>
                       <option value={2}>2站</option>
                       <option value={3}>3站</option>
                       <option value={4}>4站</option>
-                      <option value={5}>5站</option>
                     </select>
                   </>
-                ) : (
+                ) : activeTab === 'streak' ? (
                   <>
                     <span className="text-xs text-gray-400">最少上涨天数</span>
                     <select value={minStreak} onChange={e => { setMinStreak(Number(e.target.value)); setPage(0) }}
@@ -664,6 +694,17 @@ export default function HotRadarPage() {
                       <option value={3}>3天</option>
                       <option value={5}>5天</option>
                       <option value={7}>7天</option>
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-gray-400">最少站点数</span>
+                    <select value={minSites} onChange={e => { setMinSites(Number(e.target.value)); setPage(0) }}
+                      className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none">
+                      <option value={2}>2站</option>
+                      <option value={3}>3站</option>
+                      <option value={4}>4站</option>
+                      <option value={5}>5站</option>
                     </select>
                   </>
                 )}
@@ -702,10 +743,10 @@ export default function HotRadarPage() {
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="table-th">日期</th>
+                      <th className="table-th"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
                       <th className="table-th">关键词</th>
                       <th className="table-th text-center whitespace-nowrap">命中维度</th>
-                      <th className="table-th text-center whitespace-nowrap">搜索量</th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">搜索量{sortIcons('volume')}</span></th>
                       <th className="table-th whitespace-nowrap">共新增词</th>
                       <th className="table-th whitespace-nowrap">竞品涨排名</th>
                       <th className="table-th text-center">操作</th>
@@ -766,10 +807,10 @@ export default function HotRadarPage() {
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="table-th">日期</th>
+                      <th className="table-th"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
                       <th className="table-th">关键词</th>
-                      <th className="table-th text-center whitespace-nowrap">新增次数</th>
-                      <th className="table-th text-center whitespace-nowrap">站点数</th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">新增次数{sortIcons('count')}</span></th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">站点数{sortIcons('siteCount')}</span></th>
                       <th className="table-th">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
@@ -818,10 +859,10 @@ export default function HotRadarPage() {
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="table-th">日期</th>
+                      <th className="table-th"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
                       <th className="table-th">关键词</th>
-                      <th className="table-th text-center whitespace-nowrap">涨排次数</th>
-                      <th className="table-th text-center whitespace-nowrap">搜索量</th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">涨排次数{sortIcons('rankDays')}</span></th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">搜索量{sortIcons('volume')}</span></th>
                       <th className="table-th">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
@@ -869,10 +910,10 @@ export default function HotRadarPage() {
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="table-th">日期</th>
+                      <th className="table-th"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
                       <th className="table-th">关键词</th>
-                      <th className="table-th text-center whitespace-nowrap">上涨天数</th>
-                      <th className="table-th text-center whitespace-nowrap">搜索量</th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">上涨天数{sortIcons('streak')}</span></th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">搜索量{sortIcons('volume')}</span></th>
                       <th className="table-th whitespace-nowrap">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>
@@ -929,10 +970,10 @@ export default function HotRadarPage() {
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="table-th">日期</th>
+                      <th className="table-th"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
                       <th className="table-th">关键词</th>
-                      <th className="table-th text-center whitespace-nowrap">长尾词数</th>
-                      <th className="table-th text-center whitespace-nowrap">站点数</th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">长尾词数{sortIcons('longTailCount')}</span></th>
+                      <th className="table-th text-center whitespace-nowrap"><span className="inline-flex items-center justify-center gap-0.5">站点数{sortIcons('siteCount')}</span></th>
                       <th className="table-th">出现站点</th>
                       <th className="table-th text-center">操作</th>
                     </tr>

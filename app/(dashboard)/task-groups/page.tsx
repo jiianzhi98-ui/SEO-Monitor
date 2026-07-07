@@ -491,6 +491,8 @@ export default function TaskGroupsPage() {
   const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
   const [wordLibRawKwMap, setWordLibRawKwMap] = useState<Map<string, Map<string, string>> | null>(null)
   const [wordLibRawLoading, setWordLibRawLoading] = useState(false)
+  const [sortCol, setSortCol]           = useState('')
+  const [sortDir, setSortDir]           = useState<'asc'|'desc'|''>('')
 
   // Group management
   const [showCreate, setShowCreate] = useState(false)
@@ -1063,6 +1065,27 @@ export default function TaskGroupsPage() {
 
   // ── Right panel ─────────────────────────────────────────────────────────────
 
+  const sortIcons = (col: string) => {
+    const isAsc = sortCol === col && sortDir === 'asc'
+    const isDesc = sortCol === col && sortDir === 'desc'
+    const toggle = (dir: 'asc' | 'desc') => {
+      setSortCol(sortCol === col && sortDir === dir ? '' : col)
+      setSortDir(sortCol === col && sortDir === dir ? '' : dir)
+    }
+    return (
+      <span className="inline-flex flex-col items-center gap-px select-none ml-0.5">
+        <svg onClick={() => toggle('asc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor"
+          className={`cursor-pointer ${isAsc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>
+          <path d="M4 0L8 5H0Z"/>
+        </svg>
+        <svg onClick={() => toggle('desc')} viewBox="0 0 8 5" width="8" height="5" fill="currentColor"
+          className={`cursor-pointer ${isDesc ? 'text-blue-500' : 'text-gray-300 hover:text-gray-400'}`}>
+          <path d="M4 5L0 0H8Z"/>
+        </svg>
+      </span>
+    )
+  }
+
   function renderRightContent() {
     const pg = tabPage[rightTab]
 
@@ -1129,15 +1152,22 @@ export default function TaskGroupsPage() {
     if (!radarLoaded || radarLoading) return <Spinner />
 
     if (rightTab === 'cross') {
-      const slice = crossWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted_cross = sortCol && sortDir ? [...crossWords].sort((a: any, b: any) => {
+        const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'volume' ? (a.volume??0) : 0
+        const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'volume' ? (b.volume??0) : 0
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        return sortDir === 'asc' ? va - vb : vb - va
+      }) : crossWords
+      const slice = sorted_cross.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
           <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
               <th className="px-2 py-2 text-center font-medium w-24">命中维度</th>
-              <th className="px-2 py-2 text-center font-medium w-24">搜索量</th>
+              <th className="px-2 py-2 text-center font-medium w-24"><span className="inline-flex items-center justify-center gap-0.5">搜索量{sortIcons('volume')}</span></th>
               <th className="w-14" />
             </tr></thead>
             <tbody>
@@ -1159,21 +1189,28 @@ export default function TaskGroupsPage() {
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={crossWords.length} onPage={p => setPage('cross', p)} />
+          <Pager page={pg} total={sorted_cross.length} onPage={p => setPage('cross', p)} />
         </>
       )
     }
 
     if (rightTab === 'rank') {
-      const slice = rankWordsSorted.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted_rank = sortCol && sortDir ? [...rankWordsSorted].sort((a: any, b: any) => {
+        const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'volume' ? (a.volume??0) : sortCol === 'rankDays' ? (a.rankDays??0) : 0
+        const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'volume' ? (b.volume??0) : sortCol === 'rankDays' ? (b.rankDays??0) : 0
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        return sortDir === 'asc' ? va - vb : vb - va
+      }) : rankWordsSorted
+      const slice = sorted_rank.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
           <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-16">涨排次数</th>
-              <th className="px-2 py-2 text-center font-medium w-24">搜索量</th>
+              <th className="px-2 py-2 text-center font-medium w-16"><span className="inline-flex items-center justify-center gap-0.5">涨排次数{sortIcons('rankDays')}</span></th>
+              <th className="px-2 py-2 text-center font-medium w-24"><span className="inline-flex items-center justify-center gap-0.5">搜索量{sortIcons('volume')}</span></th>
               <th className="w-14" />
             </tr></thead>
             <tbody>
@@ -1190,21 +1227,28 @@ export default function TaskGroupsPage() {
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={rankWordsSorted.length} onPage={p => setPage('rank', p)} />
+          <Pager page={pg} total={sorted_rank.length} onPage={p => setPage('rank', p)} />
         </>
       )
     }
 
     if (rightTab === 'streak') {
-      const slice = streakWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted_streak = sortCol && sortDir ? [...streakWords].sort((a: any, b: any) => {
+        const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'volume' ? (a.volume??0) : sortCol === 'streak' ? (a.streak??0) : 0
+        const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'volume' ? (b.volume??0) : sortCol === 'streak' ? (b.streak??0) : 0
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        return sortDir === 'asc' ? va - vb : vb - va
+      }) : streakWords
+      const slice = sorted_streak.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
           <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-16">上涨天数</th>
-              <th className="px-2 py-2 text-center font-medium w-24">搜索量</th>
+              <th className="px-2 py-2 text-center font-medium w-16"><span className="inline-flex items-center justify-center gap-0.5">上涨天数{sortIcons('streak')}</span></th>
+              <th className="px-2 py-2 text-center font-medium w-24"><span className="inline-flex items-center justify-center gap-0.5">搜索量{sortIcons('volume')}</span></th>
               <th className="w-14" />
             </tr></thead>
             <tbody>
@@ -1221,21 +1265,28 @@ export default function TaskGroupsPage() {
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={streakWords.length} onPage={p => setPage('streak', p)} />
+          <Pager page={pg} total={sorted_streak.length} onPage={p => setPage('streak', p)} />
         </>
       )
     }
 
     if (rightTab === 'newWords') {
-      const slice = allNewWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted_new = sortCol && sortDir ? [...allNewWords].sort((a: any, b: any) => {
+        const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'count' ? (a.count??0) : sortCol === 'siteCount' ? (a.siteCount??0) : 0
+        const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'count' ? (b.count??0) : sortCol === 'siteCount' ? (b.siteCount??0) : 0
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        return sortDir === 'asc' ? va - vb : vb - va
+      }) : allNewWords
+      const slice = sorted_new.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
           <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">新增次数</th>
-              <th className="px-2 py-2 text-center font-medium w-14">站点数</th>
+              <th className="px-2 py-2 text-center font-medium w-20"><span className="inline-flex items-center justify-center gap-0.5">新增次数{sortIcons('count')}</span></th>
+              <th className="px-2 py-2 text-center font-medium w-14"><span className="inline-flex items-center justify-center gap-0.5">站点数{sortIcons('siteCount')}</span></th>
               <th className="w-14" />
             </tr></thead>
             <tbody>
@@ -1252,22 +1303,29 @@ export default function TaskGroupsPage() {
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={allNewWords.length} onPage={p => setPage('newWords', p)} />
+          <Pager page={pg} total={sorted_new.length} onPage={p => setPage('newWords', p)} />
         </>
       )
     }
 
     if (rightTab === 'wordLib') {
       if (wordLibRawLoading) return <Spinner />
-      const slice = wordLibWords.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted_wordLib = sortCol && sortDir ? [...wordLibWords].sort((a: any, b: any) => {
+        const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'longTailCount' ? (a.longTailCount??0) : sortCol === 'siteCount' ? (a.siteCount??0) : 0
+        const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'longTailCount' ? (b.longTailCount??0) : sortCol === 'siteCount' ? (b.siteCount??0) : 0
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        return sortDir === 'asc' ? va - vb : vb - va
+      }) : wordLibWords
+      const slice = sorted_wordLib.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
           <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-              <th className="px-3 py-2 text-left font-medium w-24">日期</th>
+              <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
               <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20">长尾词数</th>
-              <th className="px-2 py-2 text-center font-medium w-14">站点数</th>
+              <th className="px-2 py-2 text-center font-medium w-20"><span className="inline-flex items-center justify-center gap-0.5">长尾词数{sortIcons('longTailCount')}</span></th>
+              <th className="px-2 py-2 text-center font-medium w-14"><span className="inline-flex items-center justify-center gap-0.5">站点数{sortIcons('siteCount')}</span></th>
               <th className="w-14" />
             </tr></thead>
             <tbody>
@@ -1284,7 +1342,7 @@ export default function TaskGroupsPage() {
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={wordLibWords.length} onPage={p => setPage('wordLib', p)} />
+          <Pager page={pg} total={sorted_wordLib.length} onPage={p => setPage('wordLib', p)} />
         </>
       )
     }
@@ -1579,7 +1637,7 @@ export default function TaskGroupsPage() {
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="flex border-b border-gray-100 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
                   {RIGHT_TABS.map(([tab, label]) => (
-                    <button key={tab} onClick={() => setRightTab(tab)}
+                    <button key={tab} onClick={() => { setRightTab(tab); setSortCol(''); setSortDir('') }}
                       className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${rightTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
                       {label}
                     </button>
