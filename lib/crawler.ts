@@ -705,7 +705,8 @@ export async function fetchBaiduIndexPages(
   }
 
   let failReason: BaiduIndexFailReason = null
-  let consecutiveDupPages = 0  // stop if Baidu keeps cycling same results
+  let consecutiveDupPages = 0
+  let prevPageUrlSet = new Set<string>()  // URLs from the previous page for loop detection
 
   // No time filter (gpc removed) to fetch ALL indexed pages.
   // Use pn=0/10/20/... for reliable pagination instead of findNextPageUrl.
@@ -737,20 +738,24 @@ export async function fetchBaiduIndexPages(
 
       // Find titles first, then walk up to the nearest [mu] container.
       // This handles any nesting depth — sitelinks and regular results alike.
+      const thisPageUrlSet = new Set<string>()
       $('#content_left h3 a').each((_, titleEl) => {
         const $titleEl = $(titleEl)
         const titleText = $titleEl.text().replace(/\s+/g, ' ').trim()
         if (!titleText) return
         rawCount++  // count ALL results Baidu returned, even duplicates
-        if (seenTitles.has(titleText)) return
 
-        // Walk up to find the ancestor with the real URL in mu attribute
+        // Walk up to find the ancestor with the real URL in mu attribute (before dedup checks,
+        // so we can track all URLs on this page for loop detection)
         const $container = $titleEl.closest('[mu]')
         if (!$container.length) return
 
         const mu = ($container.attr('mu') || '').trim()
         if (!mu || !mu.toLowerCase().includes(domainRoot)) return
         const displayUrl = mu.replace(/^https?:\/\//i, '')
+        thisPageUrlSet.add(displayUrl)
+
+        if (seenTitles.has(titleText)) return
         if (seenUrls.has(displayUrl)) return
 
         seenUrls.add(displayUrl)
@@ -787,13 +792,20 @@ export async function fetchBaiduIndexPages(
 
       if (rawCount === 0) break  // Baidu returned nothing — truly end of results
 
+      // Stop immediately if this page's URLs are all contained in the previous page's URLs —
+      // Baidu is repeating the same last page (end-of-results cycling behaviour)
+      if (thisPageUrlSet.size > 0 && prevPageUrlSet.size > 0) {
+        if ([...thisPageUrlSet].every(u => prevPageUrlSet.has(u))) break
+      }
+
       if (pageCount === 0) {
-        // All results on this page were duplicates — Baidu may be cycling
+        // No new URLs and can't confirm looping via prev-page comparison — fallback counter
         consecutiveDupPages++
-        if (consecutiveDupPages >= 3) break  // 3 consecutive all-dup pages → Baidu is looping, stop
+        if (consecutiveDupPages >= 2) break
       } else {
         consecutiveDupPages = 0
       }
+      prevPageUrlSet = thisPageUrlSet
 
       // Incrementally save this page's new results so partial crawls (timeout/captcha) still persist
       if (onPageResults && results.length > (page * 10)) {
@@ -801,8 +813,8 @@ export async function fetchBaiduIndexPages(
         if (batch.length > 0) await onPageResults(batch)
       }
 
-      // Minimal delay when user-provided cookies are present (real session, far less risk of blocking)
-      await randomDelay(initialCookie ? 300 : 4000, initialCookie ? 500 : 7000)
+      // Human-like pacing to avoid Baidu rate limiting on deep pagination
+      await randomDelay(initialCookie ? 1500 : 4000, initialCookie ? 3000 : 7000)
     } catch {
       failReason = 'http_error'
       break
