@@ -29,7 +29,7 @@ interface IndexedPage {
 }
 
 const PAGE_SIZE = 10
-type TimeFilter = 'all' | 'near7' | 'near30'
+type TimeFilter = 'all'
 type StatusFilter = 'all' | 'new' | 'reindexed' | 'disappeared' | 'updated' | 'active'
 type CrawlPeriod = 'monthly' | 'weekly' | 'daily'
 
@@ -48,7 +48,7 @@ export default function IndexPagesPage() {
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('near30')
+  const [timeFilter] = useState<TimeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   // Crawl modal
@@ -284,23 +284,6 @@ export default function IndexPagesPage() {
         <>
           {/* Filters */}
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              {(['all', 'near7', 'near30'] as TimeFilter[]).map(t => {
-                const labels: Record<TimeFilter, string> = { all: '全部时间', near7: '百度日期近7天', near30: '百度日期近30天' }
-                return (
-                  <button
-                    key={t}
-                    onClick={() => setTimeFilter(t)}
-                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                      timeFilter === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {labels[t]}
-                  </button>
-                )
-              })}
-            </div>
-
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as StatusFilter)}
