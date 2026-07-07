@@ -239,7 +239,7 @@ export default function HotRadarPage() {
   const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
-  const [wordLibRawKwMap, setWordLibRawKwMap] = useState<Map<string, Set<string>> | null>(null)
+  const [wordLibRawKwMap, setWordLibRawKwMap] = useState<Map<string, Map<string, string>> | null>(null)
   const [wordLibRawLoading, setWordLibRawLoading] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
 
@@ -375,8 +375,6 @@ export default function HotRadarPage() {
     fetchWeights()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setWordLibRawKwMap(null) }, [data])
-
   useEffect(() => {
     if (activeTab !== 'wordLib' || wordLibRawKwMap !== null || wordLibRawLoading || !siteIdMap.size) return
     setWordLibRawLoading(true)
@@ -390,18 +388,21 @@ export default function HotRadarPage() {
     const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(db.from('raw_keywords') as any)
-      .select('site_id, keyword')
+      .select('site_id, keyword, content_date')
       .in('site_id', allSiteIds)
       .gte('content_date', since)
       .limit(100000)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data: raw }: { data: Array<{site_id: string; keyword: string}> | null }) => {
-        const domainKwMap = new Map<string, Set<string>>()
+      .then(({ data: raw }: { data: Array<{site_id: string; keyword: string; content_date: string}> | null }) => {
+        const domainKwMap = new Map<string, Map<string, string>>()
         for (const r of (raw || [])) {
           const domain = siteIdMap.get(r.site_id)
           if (!domain) continue
-          if (!domainKwMap.has(domain)) domainKwMap.set(domain, new Set())
-          domainKwMap.get(domain)!.add(r.keyword)
+          if (!domainKwMap.has(domain)) domainKwMap.set(domain, new Map())
+          const kwMap = domainKwMap.get(domain)!
+          const date = String(r.content_date || '').slice(0, 10)
+          const existing = kwMap.get(r.keyword) || ''
+          if (date > existing) kwMap.set(r.keyword, date)
         }
         setWordLibRawKwMap(domainKwMap)
       })
@@ -479,11 +480,18 @@ export default function HotRadarPage() {
 
   const wordLibWords = useMemo((): (WordEntry & { longTailCount: number })[] => {
     if (!wordLibRawKwMap) return []
-    const newWordMap = new Map((data?.newWords || []).map(w => [w.keyword, w]))
-    // Apply same prefix-grouping algorithm as competitor-daily
+    // Build global keyword → max content_date across all sites
+    const kwMaxDate = new Map<string, string>()
+    for (const [, kwMap] of Array.from(wordLibRawKwMap.entries())) {
+      for (const [kw, date] of Array.from(kwMap.entries())) {
+        const existing = kwMaxDate.get(kw) || ''
+        if (date > existing) kwMaxDate.set(kw, date)
+      }
+    }
+    // Prefix-grouping algorithm (same as competitor-daily)
     const baseAggr = new Map<string, { sites: Set<string>; variants: Set<string> }>()
-    for (const [domain, kwSet] of Array.from(wordLibRawKwMap.entries())) {
-      const kws = Array.from(kwSet).sort((a, b) => a.length - b.length)
+    for (const [domain, kwMap] of Array.from(wordLibRawKwMap.entries())) {
+      const kws = Array.from(kwMap.keys()).sort((a, b) => a.length - b.length)
       const groups = new Map<string, Set<string>>()
       for (const k of kws) {
         let matched = false
@@ -502,16 +510,25 @@ export default function HotRadarPage() {
     }
     return Array.from(baseAggr.entries())
       .map(([kw, { sites, variants }]) => {
-        const nw = newWordMap.get(kw)
+        // last_date = max content_date across all variants; first_date for badge logic
+        let last_date = ''
+        for (const v of Array.from(variants)) {
+          const d = kwMaxDate.get(v) || ''
+          if (d > last_date) last_date = d
+        }
+        const first_date = last_date === today ? today : ''
         return {
           keyword: kw, longTailCount: variants.size, siteCount: sites.size,
           sites: Array.from(sites), count: variants.size,
-          last_date: nw?.last_date || '', first_date: nw?.first_date || '',
+          last_date, first_date,
         }
       })
       .filter(w => !dateFrom || !w.last_date || w.last_date >= dateFrom)
-      .sort((a, b) => b.longTailCount - a.longTailCount || b.siteCount - a.siteCount)
-  }, [wordLibRawKwMap, data, dateFrom])
+      .sort((a, b) => {
+        if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
+        return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
+      })
+  }, [wordLibRawKwMap, dateFrom, today])
 
   const baseList = !filtered ? [] :
     activeTab === 'cross'   ? filtered.crossWords  :
