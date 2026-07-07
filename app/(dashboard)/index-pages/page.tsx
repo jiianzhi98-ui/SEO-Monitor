@@ -50,6 +50,7 @@ export default function IndexPagesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [pageSize, setPageSize] = useState(10)
 
   // Crawl modal
   const [showCrawlModal, setShowCrawlModal] = useState(false)
@@ -86,7 +87,7 @@ export default function IndexPagesPage() {
     return () => clearTimeout(t)
   }, [search])
 
-  useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, timeFilter, statusFilter])
+  useEffect(() => { setPage(0) }, [activeSiteId, debouncedSearch, timeFilter, statusFilter, pageSize])
 
   const fetchPages = useCallback(async () => {
     if (!activeSiteId) { setRows([]); setTotal(0); return }
@@ -95,6 +96,7 @@ export default function IndexPagesPage() {
       const params = new URLSearchParams({
         siteId: activeSiteId,
         page: String(page),
+        pageSize: String(pageSize),
         timeFilter,
         statusFilter,
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
@@ -105,13 +107,13 @@ export default function IndexPagesPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeSiteId, page, debouncedSearch, timeFilter, statusFilter])
+  }, [activeSiteId, page, pageSize, debouncedSearch, timeFilter, statusFilter])
 
   useEffect(() => { fetchPages() }, [fetchPages])
 
   const activeSite = sites.find(s => s.id === activeSiteId)
   const trackedSites = sites.filter(s => s.has_index_pages)
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const totalPages = Math.ceil(total / pageSize)
 
   async function handleEnableTracking(siteId: string) {
     const res = await fetch('/api/sites/index-pages', {
@@ -400,25 +402,37 @@ export default function IndexPagesPage() {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {total > 0 && (
             <div className="flex items-center justify-between mt-4">
-              <span className="text-sm text-gray-400">共 {total} 条 · 第 {page + 1}/{totalPages} 页</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="h-8 px-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span>每页</span>
+                <select
+                  value={pageSize}
+                  onChange={e => setPageSize(Number(e.target.value))}
+                  className="h-7 px-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
                 >
-                  上一页
-                </button>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="h-8 px-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
-                >
-                  下一页
-                </button>
+                  {[10, 20, 50].map(n => <option key={n} value={n}>{n} 条</option>)}
+                </select>
+                <span>共 {total} 条 · 第 {page + 1}/{totalPages} 页</span>
               </div>
+              {totalPages > 1 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="h-8 px-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+                  >
+                    上一页
+                  </button>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="h-8 px-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+                  >
+                    下一页
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </>

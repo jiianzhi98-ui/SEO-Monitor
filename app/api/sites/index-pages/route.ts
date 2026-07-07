@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 
-const PAGE_SIZE = 10
+const ALLOWED_PAGE_SIZES = [10, 20, 50]
 
-// GET /api/sites/index-pages?siteId=X&page=0&search=keyword&timeFilter=all|near7|near30&statusFilter=all|new|reindexed|disappeared|updated|active
+// GET /api/sites/index-pages?siteId=X&page=0&pageSize=10&search=keyword&timeFilter=all|near7|near30&statusFilter=all|new|reindexed|disappeared|updated|active
 export async function GET(req: Request) {
   const authClient = createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -14,6 +14,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const siteId = searchParams.get('siteId')
   const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10))
+  const rawPageSize = parseInt(searchParams.get('pageSize') || '10', 10)
+  const PAGE_SIZE = ALLOWED_PAGE_SIZES.includes(rawPageSize) ? rawPageSize : 10
   const search = searchParams.get('search') || ''
   const timeFilter = searchParams.get('timeFilter') || 'all'   // all | near7 | near30
   const statusFilter = searchParams.get('statusFilter') || 'all' // all | new | reindexed | disappeared | updated | active
