@@ -35,17 +35,38 @@ jobs:
             echo 'total=1' >> $GITHUB_OUTPUT
             echo "Single-site run ($SITE) → 1 group"
           else
+            # 根据 step 决定每组站点上限
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              STEP="${{ github.event.inputs.step }}"
+            elif [ "${{ github.event.schedule }}" = "0 15 * * *" ]; then
+              STEP="keywords"
+            elif [ "${{ github.event.schedule }}" = "0 16 * * *" ]; then
+              STEP="weight"
+            elif [ "${{ github.event.schedule }}" = "0 17 * * *" ]; then
+              STEP="rank"
+            elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
+              STEP="index-pages"
+            else
+              STEP="all"
+            fi
+            case "$STEP" in
+              keywords)    SPG=5 ;;
+              rank)        SPG=4 ;;
+              weight)      SPG=4 ;;
+              index-pages) SPG=1 ;;
+              *)           SPG=4 ;;
+            esac
             # 只计算至少有一个抓取开关打开的站点（is_enabled / has_rank_data / has_index_pages）
             COUNT=$(curl -sf \
               -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
               -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
               "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
               python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
-            TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/2)))")
+            TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/${SPG})))")
             MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
             echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
             echo "total=${TOTAL}" >> $GITHUB_OUTPUT
-            echo "Sites=${COUNT} → Groups=${TOTAL}: ${MATRIX}"
+            echo "Step=${STEP} SPG=${SPG} Sites=${COUNT} → Groups=${TOTAL}"
           fi
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
