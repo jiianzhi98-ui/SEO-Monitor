@@ -169,12 +169,18 @@ function groupBySite(rows: { id: string; site_id: string; url: string }[]) {
 
 async function main() {
   const today = getMalaysiaDate()
-  const baiduCookie = process.env.BAIDU_COOKIE || ''
   const recheck = process.env.RECHECK_DISAPPEARED === 'true'
   const start = Date.now()
 
+  // Read cookie from app_settings (saved via UI), fall back to env var
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: cookieSetting } = await (supabase.from('app_settings') as any)
+    .select('value').eq('key', 'baidu_index_cookie').maybeSingle()
+  const baiduCookie: string = (cookieSetting as { value: string } | null)?.value ?? process.env.BAIDU_COOKIE ?? ''
+
   console.log(`\n${'▶'.repeat(60)}`)
   console.log(`  Verify De-index  ${today}  mode=${recheck ? 'recheck-disappeared' : 'verify-pending'}`)
+  console.log(`  cookie=${baiduCookie ? `已加载（${baiduCookie.length} chars）` : '⚠ 无 cookie，可能被百度拦截'}`)
   console.log(`${'▶'.repeat(60)}\n`)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
