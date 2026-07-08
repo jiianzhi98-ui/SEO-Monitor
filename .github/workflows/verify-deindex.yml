@@ -11,9 +11,45 @@ on:
     - cron: '30 22 * * 5'  # 06:30 MYT every Saturday (UTC+8)
 
 jobs:
-  verify:
+  setup:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+      total: ${{ steps.gen.outputs.total }}
+    steps:
+      - name: Compute job matrix
+        id: gen
+        run: |
+          RECHECK="${{ github.event.inputs.recheck_disappeared || 'false' }}"
+          URLS_PER_JOB=20
+
+          if [ "$RECHECK" = "true" ]; then
+            COUNT=$(curl -sf \
+              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/site_indexed_pages?select=id&disappeared_date=not.is.null" | \
+              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+          else
+            COUNT=$(curl -sf \
+              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/site_indexed_pages?select=id&verify_needed=eq.true&disappeared_date=is.null" | \
+              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+          fi
+
+          TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/${URLS_PER_JOB})))")
+          MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
+          echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
+          echo "total=${TOTAL}" >> $GITHUB_OUTPUT
+          echo "mode=recheck=${RECHECK}  URLs=${COUNT}  jobs=${TOTAL}"
+
+  verify:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +63,7 @@ jobs:
         run: npm ci
 
       - name: Run verify-deindex
-        run: npx tsx scripts/verify-deindex.ts
+        run: npx tsx scripts/verify-deindex.ts --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }}
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
