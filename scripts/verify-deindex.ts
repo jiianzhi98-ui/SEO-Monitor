@@ -89,7 +89,8 @@ async function runVerifyPending(
   if (error) { console.error('  查询失败:', error.message); process.exit(1) }
   if (!rows || rows.length === 0) { console.log('  ✓ 没有待验证的 URL。'); return }
 
-  const slice = sliceForGroup(rows, group, totalGroups)
+  type Row = { id: string; site_id: string; url: string }
+  const slice = sliceForGroup(rows as Row[], group, totalGroups)
   if (slice.length === 0) { console.log(`  ✓ 本 job (${group}/${totalGroups}) 无分配 URL。`); return }
 
   console.log(`  待验证：共 ${rows.length} 个，本 job 处理 ${slice.length} 个（group=${group}）\n`)
@@ -143,7 +144,8 @@ async function runRecheckDisappeared(
   if (error) { console.error('  查询失败:', error.message); process.exit(1) }
   if (!rows || rows.length === 0) { console.log('  ✓ 没有已脱收的 URL。'); return }
 
-  const slice = sliceForGroup(rows, group, totalGroups)
+  type Row = { id: string; site_id: string; url: string }
+  const slice = sliceForGroup(rows as Row[], group, totalGroups)
   if (slice.length === 0) { console.log(`  ✓ 本 job (${group}/${totalGroups}) 无分配 URL。`); return }
 
   console.log(`  已脱收：共 ${rows.length} 个，本 job 处理 ${slice.length} 个（group=${group}）\n`)
@@ -188,17 +190,6 @@ function sliceForGroup<T>(arr: T[], group: number, totalGroups: number): T[] {
   return arr.slice(start, start + URLS_PER_JOB)
 }
 
-function groupBySite(rows: { id: string; site_id: string; url: string }[]) {
-  const map = new Map<string, { id: string; url: string }[]>()
-  for (const row of rows) {
-    if (!map.has(row.site_id)) map.set(row.site_id, [])
-    map.get(row.site_id)!.push({ id: row.id, url: row.url })
-  }
-  return map
-}
-
-// keep groupBySite compiled (used by runRecheckDisappeared's site grouping)
-void groupBySite
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
