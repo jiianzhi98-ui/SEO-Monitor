@@ -6,6 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+const cliArgs = process.argv.slice(2)
+const group = parseInt(cliArgs.find(a => a.startsWith('--group='))?.split('=')[1] ?? '0', 10)
+const totalGroups = parseInt(cliArgs.find(a => a.startsWith('--total-groups='))?.split('=')[1] ?? '1', 10)
+
 function getMalaysiaDate(offsetDays = 0): string {
   const ms = Date.now() + 8 * 60 * 60 * 1000 + offsetDays * 86400000
   return new Date(ms).toISOString().slice(0, 10)
@@ -45,14 +49,18 @@ async function main() {
     .eq('has_rank_title', true)
   if (sitesErr) throw sitesErr
 
-  const sites = (sitesRaw || []) as { id: string; domain: string }[]
+  const allSites = (sitesRaw || []) as { id: string; domain: string }[]
 
-  if (sites.length === 0) {
+  if (allSites.length === 0) {
     console.log('  没有开启排名追踪的站点，退出')
     return
   }
 
-  console.log(`  共 ${sites.length} 个站点: ${sites.map(s => s.domain).join(', ')}`)
+  const sites = totalGroups > 1
+    ? [...allSites].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
+    : allSites
+
+  console.log(`  共 ${allSites.length} 个站点，本组 ${sites.length} 个（group ${group + 1}/${totalGroups}）: ${sites.map(s => s.domain).join(', ')}`)
 
   const platforms: ('mobile' | 'pc')[] = ['mobile', 'pc']
   const types: ('rankup' | 'rankdown')[] = ['rankup', 'rankdown']

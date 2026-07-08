@@ -6,7 +6,7 @@ on:
       step:
         description: '抓取步骤'
         type: choice
-        options: [all, keywords, rank, weight, index-pages]
+        options: [all, keywords, rank, weight, index-pages, rank-title]
         default: all
       site:
         description: '单站域名（留空=全部站点，例如 y8l.com）'
@@ -16,6 +16,7 @@ on:
     - cron: '0 15 * * *'   # 23:00 MYT (target ~00:00 MYT after ~1h queue) — keywords
     - cron: '0 16 * * *'   # 00:00 MYT (target ~01:00 MYT after ~1h queue) — weight
     - cron: '0 17 * * *'   # 01:00 MYT (target ~02:00 MYT after ~1h queue) — rank
+    - cron: '0 18 * * *'   # 02:00 MYT — rank-title
     - cron: '0 20 * * *'   # 04:00 MYT — index-pages
 
 jobs:
@@ -44,6 +45,8 @@ jobs:
               STEP="weight"
             elif [ "${{ github.event.schedule }}" = "0 17 * * *" ]; then
               STEP="rank"
+            elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+              STEP="rank-title"
             elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
               STEP="index-pages"
             else
@@ -54,14 +57,23 @@ jobs:
               rank)        SPG=4 ;;
               weight)      SPG=4 ;;
               index-pages) SPG=1 ;;
+              rank-title)  SPG=2 ;;
               *)           SPG=4 ;;
             esac
-            # 只计算至少有一个抓取开关打开的站点（is_enabled / has_rank_data / has_index_pages）
-            COUNT=$(curl -sf \
-              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
-              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+            # rank-title 单独查询 has_rank_title=true 的站点；其余查询有任意抓取开关的站点
+            if [ "$STEP" = "rank-title" ]; then
+              COUNT=$(curl -sf \
+                -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+                -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+                "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&has_rank_title=eq.true" | \
+                python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+            else
+              COUNT=$(curl -sf \
+                -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+                -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+                "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
+                python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+            fi
             TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/${SPG})))")
             MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
             echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
@@ -102,6 +114,8 @@ jobs:
             STEP="weight"
           elif [ "${{ github.event.schedule }}" = "0 17 * * *" ]; then
             STEP="rank"
+          elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+            STEP="rank-title"
           elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
             STEP="index-pages"
           else
@@ -116,7 +130,11 @@ jobs:
           if [ -n "${{ github.event.inputs.site }}" ]; then
             SITE_ARG="--site=${{ github.event.inputs.site }}"
           fi
-          npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} $SITE_ARG
+          if [ "${{ steps.vars.outputs.step }}" = "rank-title" ]; then
+            npx tsx scripts/crawl-rank.ts --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }}
+          else
+            npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} $SITE_ARG
+          fi
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

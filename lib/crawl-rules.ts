@@ -84,9 +84,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'rank-title',
     title: '排名抓取（全站点）',
-    badge: 'rank-title-crawl.yml · GitHub Actions · 02:00 MYT（cron 18:00 UTC）',
+    badge: 'step=rank-title · daily-crawl.yml · GitHub Actions · 02:00 MYT（cron 18:00 UTC）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions rank-title-crawl.yml (cron 0 18 * * * UTC = 02:00 MYT)，单 job，无 matrix 分组；脚本：scripts/crawl-rank.ts' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 18 * * * UTC = 02:00 MYT)，动态 matrix job 并行（每2个站点1个job）；脚本：scripts/crawl-rank.ts；支持手动 workflow_dispatch 选 step=rank-title' },
       { label: '抓取对象', text: 'sites 表中 has_rank_title=true 的站点；动态读取，每次运行重新查询' },
       { label: '数据来源', text: '爱站 baidurank.aizhan.com，移动端（/mobile/）+ PC端（/baidu/），各抓涨入和跌出，共 4 个组合；含标题（title）和排名页 URL（url）' },
       { label: '并行策略', text: '排名段 1-5 同时并行，段内按页顺序，每页间隔 300ms；4 个组合顺序执行，组合间隔 2 秒；站点间间隔 60 秒' },
