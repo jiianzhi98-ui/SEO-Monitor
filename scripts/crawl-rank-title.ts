@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { fetchRankupWithTitle, fetchRankdownWithTitle } from '../lib/crawler'
+import { fetchRankupWithTitle, fetchRankdownWithTitle, fetchRankPositions } from '../lib/crawler'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,6 +55,9 @@ async function main() {
 
   console.log(`  共 ${sites.length} 个站点: ${sites.map(s => s.domain).join(', ')}`)
 
+  const platforms: ('mobile' | 'pc')[] = ['mobile', 'pc']
+  const types: ('rankup' | 'rankdown')[] = ['rankup', 'rankdown']
+
   let totalSaved = 0
   let totalFailed = 0
 
@@ -63,81 +66,97 @@ async function main() {
     console.log(`\n${'─'.repeat(50)}`)
     console.log(`  [${i + 1}/${sites.length}] ${domain}  (${ts()})`)
 
-    // Clear today's existing data for this site before re-inserting
+    // Clear today's existing data for this site (both platforms)
     await supabase.from('site_rank_keywords').delete()
-      .eq('site_id', siteId).eq('stat_date', today).eq('platform', 'mobile')
+      .eq('site_id', siteId).eq('stat_date', today)
 
+    // keyword_volume: collect best volume per keyword from mobile rankup only
     const kwVolumeMap = new Map<string, number>()
 
-    // ── rankup ─────────────────────────────────────────────────────────────────
-    try {
-      const entries = await fetchRankupWithTitle(domain, today)
-      if (entries.length === 0) {
-        console.log('    rankup   ⚠  无数据（疑似限流或无涨入词）')
-      } else {
-        const rows = entries.map(e => ({
-          site_id: siteId,
-          keyword: e.keyword,
-          stat_date: today,
-          type: 'rankup',
-          platform: 'mobile',
-          rank_position: e.rank_position,
-          volume: e.volume,
-          title: e.title || null,
-          url: e.url || null,
-        }))
-        for (const chunk of chunkArray(rows, 500)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('site_rank_keywords') as any)
-            .upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
-        }
-        for (const e of entries) {
-          if (e.volume > 0) {
-            const cur = kwVolumeMap.get(e.keyword) ?? 0
-            if (e.volume > cur) kwVolumeMap.set(e.keyword, e.volume)
+    for (const platform of platforms) {
+      for (const type of types) {
+        const label = `${platform}/${type}`
+        try {
+          let rows: {
+            site_id: string; keyword: string; stat_date: string
+            type: string; platform: string; rank_position: number | null
+            volume: number; title: string | null; url: string | null
+          }[]
+
+          if (platform === 'mobile') {
+            // Mobile: use WithTitle functions to capture ranking page title + url
+            const entries = type === 'rankup'
+              ? await fetchRankupWithTitle(domain, today)
+              : await fetchRankdownWithTitle(domain, today)
+
+            if (entries.length === 0) {
+              console.log(`    ${label.padEnd(16)} ⚠  无数据（疑似限流或无词）`)
+              await delay(2000)
+              continue
+            }
+
+            rows = entries.map(e => ({
+              site_id: siteId,
+              keyword: e.keyword,
+              stat_date: today,
+              type,
+              platform,
+              rank_position: e.rank_position,
+              volume: e.volume,
+              title: e.title || null,
+              url: e.url || null,
+            }))
+
+            // Collect keyword_volume from mobile rankup, volume > 0 only
+            if (type === 'rankup') {
+              for (const e of entries) {
+                if (e.volume > 0) {
+                  const cur = kwVolumeMap.get(e.keyword) ?? 0
+                  if (e.volume > cur) kwVolumeMap.set(e.keyword, e.volume)
+                }
+              }
+            }
+          } else {
+            // PC: use fetchRankPositions (no title/url, but covers all volume)
+            const entries = await fetchRankPositions(domain, today, type, 'pc')
+
+            if (entries.length === 0) {
+              console.log(`    ${label.padEnd(16)} ⚠  无数据（疑似限流或无词）`)
+              await delay(2000)
+              continue
+            }
+
+            rows = entries.map(e => ({
+              site_id: siteId,
+              keyword: e.keyword,
+              stat_date: today,
+              type,
+              platform,
+              rank_position: e.rank_position,
+              volume: e.volume,
+              title: null,
+              url: null,
+            }))
           }
+
+          for (const chunk of chunkArray(rows, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('site_rank_keywords') as any)
+              .upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
+          }
+
+          totalSaved += rows.length
+          console.log(`    ${label.padEnd(16)} ✓  ${rows.length} 条`)
+        } catch (e) {
+          console.error(`    ${label.padEnd(16)} ✗  ${e instanceof Error ? e.message : String(e)}`)
+          totalFailed++
         }
-        totalSaved += entries.length
-        console.log(`    rankup   ✓  ${entries.length} 条`)
+
+        await delay(2000)
       }
-    } catch (e) {
-      console.error(`    rankup   ✗  ${e instanceof Error ? e.message : String(e)}`)
-      totalFailed++
     }
 
-    await delay(2000)
-
-    // ── rankdown ───────────────────────────────────────────────────────────────
-    try {
-      const entries = await fetchRankdownWithTitle(domain, today)
-      if (entries.length === 0) {
-        console.log('    rankdown ⚠  无数据（疑似限流或无跌出词）')
-      } else {
-        const rows = entries.map(e => ({
-          site_id: siteId,
-          keyword: e.keyword,
-          stat_date: today,
-          type: 'rankdown',
-          platform: 'mobile',
-          rank_position: e.rank_position,
-          volume: e.volume,
-          title: e.title || null,
-          url: e.url || null,
-        }))
-        for (const chunk of chunkArray(rows, 500)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('site_rank_keywords') as any)
-            .upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
-        }
-        totalSaved += entries.length
-        console.log(`    rankdown ✓  ${entries.length} 条`)
-      }
-    } catch (e) {
-      console.error(`    rankdown ✗  ${e instanceof Error ? e.message : String(e)}`)
-      totalFailed++
-    }
-
-    // Upsert keyword_volume (rankup only, volume > 0)
+    // Upsert keyword_volume (mobile rankup only, volume > 0)
     if (kwVolumeMap.size > 0) {
       const volRows = Array.from(kwVolumeMap.entries()).map(([keyword, volume]) => ({
         keyword,
@@ -149,7 +168,7 @@ async function main() {
         await (supabase.from('keyword_volume') as any)
           .upsert(chunk, { onConflict: 'keyword' })
       }
-      console.log(`    keyword_volume ✓  更新 ${kwVolumeMap.size} 条`)
+      console.log(`    keyword_volume   ✓  更新 ${kwVolumeMap.size} 条`)
     }
 
     if (i < sites.length - 1) {
@@ -159,7 +178,7 @@ async function main() {
   }
 
   console.log(`\n${'✓'.repeat(60)}`)
-  console.log(`  完成  总词条=${totalSaved}  失败站=${totalFailed}  耗时=${elapsed(Date.now() - totalStart)}`)
+  console.log(`  完成  总词条=${totalSaved}  失败=${totalFailed}  耗时=${elapsed(Date.now() - totalStart)}`)
   console.log(`${'✓'.repeat(60)}\n`)
 }
 

@@ -448,7 +448,7 @@ export async function fetchRankdownWithTitle(
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankdownPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
         if (pageEntries.length === 0) break
-        entries.push(...pageEntries.filter(e => e.volume > 0))
+        entries.push(...pageEntries)
         if (page < 15) await new Promise((r) => setTimeout(r, 300))
       }
       return entries
@@ -527,7 +527,7 @@ export async function fetchRankupWithTitle(
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankupPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
         if (pageEntries.length === 0) break
-        entries.push(...pageEntries.filter(e => e.volume > 0))
+        entries.push(...pageEntries)
         if (page < 15) await new Promise((r) => setTimeout(r, 300))
       }
       return entries
