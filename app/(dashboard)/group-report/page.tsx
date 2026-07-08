@@ -761,18 +761,14 @@ export default function GroupReportPage() {
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                     <span className="font-medium">发现日期：</span>
-                    <input type="date" value={oFilterDiscoverStart} onChange={e => { setOFilterDiscoverStart(e.target.value); setOPage(0) }}
+                    <input type="date" value={oFilterDiscoverStart}
+                      onChange={e => { const v = e.target.value; setOFilterDiscoverStart(v); setOFilterDiscoverEnd(v); setOPage(0) }}
                       className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
-                    <span className="text-gray-300">~</span>
-                    <input type="date" value={oFilterDiscoverEnd} onChange={e => { setOFilterDiscoverEnd(e.target.value); setOPage(0) }}
-                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
-                    <span className="font-medium ml-3">提交日期：</span>
-                    <input type="date" value={oFilterSubmitStart} onChange={e => { setOFilterSubmitStart(e.target.value); setOPage(0) }}
-                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
-                    <span className="text-gray-300">~</span>
-                    <input type="date" value={oFilterSubmitEnd} onChange={e => { setOFilterSubmitEnd(e.target.value); setOPage(0) }}
+                    <span className="font-medium ml-2">提交日期：</span>
+                    <input type="date" value={oFilterSubmitStart}
+                      onChange={e => { const v = e.target.value; setOFilterSubmitStart(v); setOFilterSubmitEnd(v); setOPage(0) }}
                       className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
                   </div>
                 </div>
