@@ -579,10 +579,15 @@ async function main() {
   if (error) throw error
 
   const allSites = (sitesRaw || []) as SiteRecord[]
+  // 分组只用"至少有一个抓取开关打开"的站点，避免已停用站点占用分组名额
+  // siteFilter 单站模式不过滤（确保指定站点能进入本组）
+  const partitionBase = siteFilter
+    ? allSites
+    : allSites.filter(s => s.is_enabled || s.has_rank_data || s.has_index_pages)
   // 多组时按域名排序确保分组稳定；单组时随机打乱
   let sites = totalGroups > 1
-    ? [...allSites].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
-    : shuffle(allSites)
+    ? [...partitionBase].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
+    : shuffle(partitionBase)
 
   // 重试模式：只跑今日主抓取中 fail/empty 的站
   if (retryFailed && step !== 'all') {

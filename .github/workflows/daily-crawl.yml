@@ -35,11 +35,11 @@ jobs:
             echo 'total=1' >> $GITHUB_OUTPUT
             echo "Single-site run ($SITE) → 1 group"
           else
-            # 查询所有站点数量，每 5 个站点分配 1 个 job
+            # 只计算至少有一个抓取开关打开的站点（is_enabled / has_rank_data / has_index_pages）
             COUNT=$(curl -sf \
               -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
               -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id" | \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
               python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
             TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/5)))")
             MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
