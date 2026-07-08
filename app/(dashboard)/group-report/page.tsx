@@ -46,18 +46,24 @@ type Period = 'yesterday' | 'week' | 'month' | 'custom'
 type ReportTab = 'submissions' | 'outcomes' | 'rules'
 type CompetitorInnerTab = 'keywords' | 'ranks' | 'rules'
 
+interface OutcomeRow {
+  id: string; user_id: string; username: string
+  keyword: string; final_keyword: string | null
+  page_url: string | null; operation_type: string | null
+  search_volume: number; source: string
+  claimed_date: string; submitted_at: string | null
+  indexed: boolean; first_seen_date: string | null; disappeared_date: string | null
+  rank_keyword: string | null; rank_position: number | null; prev_rank: number | null
+  rank_change: number | null; rank_volume: number | null; rank_date: string | null
+  outcome: 'success' | 'fail' | 'pending'
+}
+interface OutcomeSummary { total: number; successCount: number; indexedCount: number; pendingCount: number }
+type OutcomeSortBy = 'claimed_date' | 'submitted_at' | 'search_volume' | 'rank_change' | 'rank_volume'
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const PERIOD_LABELS: Record<Period, string> = { yesterday: '昨日', week: '本周', month: '本月', custom: '自定义' }
 
-const MOCK_OUTCOMES = [
-  { member: 'Joanne',  date: '2026-06-10', keyword: '葫芦侠',          final_keyword: '葫芦侠官方下载',    op: '新增', url: 'https://www.sjwyx.com/ruanjian/1001.html', rank: '上涨 +14', indexed: '3天',   outcome: 'success' },
-  { member: 'Jackson', date: '2026-06-12', keyword: 'MT管理器',         final_keyword: 'MT管理器最新版',     op: '新增', url: 'https://www.sjwyx.com/ruanjian/1002.html', rank: '上涨 +6',  indexed: '5天',   outcome: 'success' },
-  { member: 'Joanne',  date: '2026-06-18', keyword: '好游快爆 下载安装', final_keyword: '好游快爆下载2024',   op: '更新', url: 'https://www.sjwyx.com/ruanjian/1003.html', rank: '无变化',   indexed: '已收录', outcome: 'fail' },
-  { member: 'Yanling', date: '2026-06-20', keyword: '蛋仔派对官服',      final_keyword: '蛋仔派对官方版下载', op: '新增', url: 'https://www.sjwyx.com/ruanjian/1004.html', rank: '追踪中',   indexed: '2天',   outcome: 'pending' },
-  { member: 'Jackson', date: '2026-06-22', keyword: 'CAPCUT',            final_keyword: 'CapCut剪映国际版', op: '更新', url: 'https://www.sjwyx.com/ruanjian/1005.html', rank: '上涨 +9',  indexed: '已收录', outcome: 'success' },
-  { member: 'Joanne',  date: '2026-06-25', keyword: '氪金兽',            final_keyword: '氪金兽手游下载',    op: '新增', url: 'https://www.sjwyx.com/ruanjian/1006.html', rank: '追踪中',   indexed: '未收录', outcome: 'pending' },
-]
 
 const SUGGESTED_RULES = [
   { name: '掉排名 30 天未更新',   condition: '同一关键词排名下滑 ≥ 5，且距上次提交更新操作 > 30 天',              action: '建议重新更新该页面内容',             metric: '通过 rank_changes + member_claimed_keywords 对比' },
@@ -338,6 +344,25 @@ export default function GroupReportPage() {
   const [filterUserId, setFilterUserId] = useState('all')
   const [groupsLoading, setGroupsLoading] = useState(true)
 
+  // Outcomes tab state
+  const [outcomes, setOutcomes] = useState<OutcomeRow[]>([])
+  const [outcomeSummary, setOutcomeSummary] = useState<OutcomeSummary | null>(null)
+  const [outcomesLoading, setOutcomesLoading] = useState(false)
+  const [oFilterDiscoverStart, setOFilterDiscoverStart] = useState('')
+  const [oFilterDiscoverEnd, setOFilterDiscoverEnd] = useState('')
+  const [oFilterSubmitStart, setOFilterSubmitStart] = useState('')
+  const [oFilterSubmitEnd, setOFilterSubmitEnd] = useState('')
+  const [oFilterMember, setOFilterMember] = useState('')
+  const [oFilterOp, setOFilterOp] = useState('')
+  const [oFilterKw, setOFilterKw] = useState('')
+  const [oFilterIndex, setOFilterIndex] = useState('')
+  const [oFilterRankKw, setOFilterRankKw] = useState('')
+  const [oFilterOutcome, setOFilterOutcome] = useState('')
+  const [oSortBy, setOSortBy] = useState<OutcomeSortBy>('claimed_date')
+  const [oSortDir, setOSortDir] = useState<'asc' | 'desc'>('desc')
+  const [oPage, setOPage] = useState(0)
+  const [oPageSize, setOPageSize] = useState(20)
+
   // Competitor tab state
   const [activeCompetitorDomain, setActiveCompetitorDomain] = useState('')
   const [competitorInnerTab, setCompetitorInnerTab] = useState<CompetitorInnerTab>('keywords')
@@ -410,6 +435,32 @@ export default function GroupReportPage() {
       })
       .finally(() => setLoading(false))
   }, [activeGroupId, period, customStart, customEnd])
+
+  // Load outcomes data
+  useEffect(() => {
+    if (!activeGroupId || reportTab !== 'outcomes') return
+    setOutcomesLoading(true)
+    setOutcomes([])
+    setOutcomeSummary(null)
+    setOPage(0)
+    const p = new URLSearchParams()
+    if (oFilterDiscoverStart) p.set('discoverStart', oFilterDiscoverStart)
+    if (oFilterDiscoverEnd)   p.set('discoverEnd',   oFilterDiscoverEnd)
+    if (oFilterSubmitStart)   p.set('submitStart',   oFilterSubmitStart)
+    if (oFilterSubmitEnd)     p.set('submitEnd',     oFilterSubmitEnd)
+    if (oFilterMember)        p.set('memberId',      oFilterMember)
+    if (oFilterOp)            p.set('opType',        oFilterOp)
+    if (oFilterKw)            p.set('keyword',       oFilterKw)
+    if (oFilterIndex)         p.set('indexed',       oFilterIndex)
+    if (oFilterRankKw)        p.set('rankKeyword',   oFilterRankKw)
+    if (oFilterOutcome)       p.set('outcome',       oFilterOutcome)
+    p.set('sortBy',  oSortBy)
+    p.set('sortDir', oSortDir)
+    fetch(`/api/task-groups/${activeGroupId}/outcomes?${p}`)
+      .then(r => r.json())
+      .then(d => { setOutcomes(d.rows || []); setOutcomeSummary(d.summary || null) })
+      .finally(() => setOutcomesLoading(false))
+  }, [activeGroupId, reportTab, oFilterDiscoverStart, oFilterDiscoverEnd, oFilterSubmitStart, oFilterSubmitEnd, oFilterMember, oFilterOp, oFilterKw, oFilterIndex, oFilterRankKw, oFilterOutcome, oSortBy, oSortDir])
 
   function toggleKey(key: string) {
     setExpandedKeys(prev => {
@@ -651,55 +702,203 @@ export default function GroupReportPage() {
           )}
 
           {/* ── 成效追踪 ── */}
-          {activeTabId !== 'competitors' && reportTab === 'outcomes' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2.5 text-xs text-yellow-700">
-                <span className="font-bold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded text-[10px]">MOCK</span>
-                以下为演示数据，展示成效追踪上线后的页面样式。真实数据需组员填写 URL + 最终词后自动统计。
-              </div>
-              <div className="grid grid-cols-4 gap-3">
-                {[
-                  { label: '已追踪动作', value: '6', sub: '近30天提交' },
-                  { label: '排名上涨',   value: '3', sub: '成效率 50%', color: 'text-green-600' },
-                  { label: '成功收录',   value: '5', sub: '收录率 83%', color: 'text-blue-600' },
-                  { label: '追踪中',     value: '2', sub: '未满30天' },
-                ].map(s => (
-                  <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-                    <div className={`text-2xl font-bold ${s.color ?? 'text-gray-800'}`}>{s.value}</div>
-                    <div className="text-xs font-medium text-gray-600 mt-0.5">{s.label}</div>
-                    <div className="text-[11px] text-gray-400">{s.sub}</div>
+          {activeTabId !== 'competitors' && reportTab === 'outcomes' && (() => {
+            const OCOLS = 'grid-cols-[72px_72px_70px_50px_minmax(120px,1fr)_64px_80px_68px_100px_64px_62px]'
+            const oTotal = outcomes.length
+            const oTotalPages = Math.max(1, Math.ceil(oTotal / oPageSize))
+            const pagedO = outcomes.slice(oPage * oPageSize, (oPage + 1) * oPageSize)
+            const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterDiscoverStart || oFilterDiscoverEnd || oFilterSubmitStart || oFilterSubmitEnd)
+            function OSort({ col, label, right }: { col: OutcomeSortBy; label: string; right?: boolean }) {
+              const active = oSortBy === col
+              return (
+                <button onClick={() => { if (active) setOSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setOSortBy(col); setOSortDir('desc') }; setOPage(0) }}
+                  className={`flex items-center gap-0.5 text-[11px] font-medium transition-colors ${right ? 'justify-end w-full' : ''} ${active ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                  {label}<span className="text-[10px]">{active ? (oSortDir === 'asc' ? '↑' : '↓') : '⇅'}</span>
+                </button>
+              )
+            }
+            return (
+              <div className="space-y-4">
+                {/* Filters */}
+                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canSeeAll && report?.members && report.members.length > 1 && (
+                      <select value={oFilterMember} onChange={e => { setOFilterMember(e.target.value); setOPage(0) }}
+                        className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                        <option value="">全部成员</option>
+                        {report.members.map(m => <option key={m.userId} value={m.userId}>{m.username}</option>)}
+                      </select>
+                    )}
+                    <select value={oFilterOp} onChange={e => { setOFilterOp(e.target.value); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                      <option value="">全部操作</option>
+                      <option value="新增">新增</option>
+                      <option value="更新">更新</option>
+                    </select>
+                    <select value={oFilterIndex} onChange={e => { setOFilterIndex(e.target.value); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                      <option value="">全部收录</option>
+                      <option value="has">已收录</option>
+                      <option value="none">未收录</option>
+                    </select>
+                    <select value={oFilterOutcome} onChange={e => { setOFilterOutcome(e.target.value); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                      <option value="">全部成效</option>
+                      <option value="success">有效</option>
+                      <option value="fail">无效</option>
+                      <option value="pending">追踪中</option>
+                    </select>
+                    <input value={oFilterKw} onChange={e => { setOFilterKw(e.target.value); setOPage(0) }}
+                      placeholder="搜索关键词 / 最终词…"
+                      className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 w-44" />
+                    <input value={oFilterRankKw} onChange={e => { setOFilterRankKw(e.target.value); setOPage(0) }}
+                      placeholder="搜索排名词…"
+                      className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 w-36" />
+                    {anyFilter && (
+                      <button onClick={() => { setOFilterMember(''); setOFilterOp(''); setOFilterIndex(''); setOFilterOutcome(''); setOFilterKw(''); setOFilterRankKw(''); setOFilterDiscoverStart(''); setOFilterDiscoverEnd(''); setOFilterSubmitStart(''); setOFilterSubmitEnd(''); setOPage(0) }}
+                        className="text-xs text-gray-400 hover:text-red-400 px-2 py-1.5 rounded border border-gray-200 hover:border-red-200 transition-colors">
+                        清除筛选
+                      </button>
+                    )}
                   </div>
-                ))}
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-                  <span className="text-sm font-semibold text-gray-700">动作成效明细</span>
-                  <span className="text-xs text-gray-400 ml-2">每条提交动作的排名与收录结果</span>
-                </div>
-                <div className="grid grid-cols-[80px_100px_1fr_100px_80px_70px_70px] gap-x-3 px-5 py-2 bg-gray-50/40 text-[11px] font-medium text-gray-400 border-b border-gray-100">
-                  <span>日期</span><span>成员</span><span>关键词 → 最终词</span><span>操作</span><span>排名变化</span><span>收录</span><span className="text-center">成效</span>
-                </div>
-                {MOCK_OUTCOMES.map((row, i) => (
-                  <div key={i} className="grid grid-cols-[80px_100px_1fr_100px_80px_70px_70px] gap-x-3 px-5 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors items-center">
-                    <span className="text-xs text-gray-400">{row.date.slice(5)}</span>
-                    <span className="text-xs text-gray-600 font-medium">{row.member}</span>
-                    <div className="min-w-0">
-                      <span className="text-xs text-gray-700 truncate block">{row.keyword}</span>
-                      <span className="text-[11px] text-green-600 truncate block">→ {row.final_keyword}</span>
-                    </div>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full w-fit ${row.op === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{row.op}</span>
-                    <span className={`text-xs font-medium ${row.rank.startsWith('上涨') ? 'text-green-600' : row.rank === '追踪中' ? 'text-gray-400' : 'text-red-400'}`}>{row.rank}</span>
-                    <span className={`text-xs ${row.indexed === '未收录' ? 'text-red-400' : 'text-gray-500'}`}>{row.indexed}</span>
-                    <div className="flex justify-center">
-                      {row.outcome === 'success' && <span className="text-[11px] bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
-                      {row.outcome === 'fail'    && <span className="text-[11px] bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">无效</span>}
-                      {row.outcome === 'pending' && <span className="text-[11px] bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
-                    </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <span className="font-medium">发现日期：</span>
+                    <input type="date" value={oFilterDiscoverStart} onChange={e => { setOFilterDiscoverStart(e.target.value); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                    <span className="text-gray-300">~</span>
+                    <input type="date" value={oFilterDiscoverEnd} onChange={e => { setOFilterDiscoverEnd(e.target.value); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                    <span className="font-medium ml-3">提交日期：</span>
+                    <input type="date" value={oFilterSubmitStart} onChange={e => { setOFilterSubmitStart(e.target.value); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                    <span className="text-gray-300">~</span>
+                    <input type="date" value={oFilterSubmitEnd} onChange={e => { setOFilterSubmitEnd(e.target.value); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
                   </div>
-                ))}
+                </div>
+
+                {/* Summary cards */}
+                {outcomeSummary && (
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: '已追踪动作', value: outcomeSummary.total, sub: '全部提交' },
+                      { label: '有效成效', value: outcomeSummary.successCount, sub: outcomeSummary.total ? `成效率 ${Math.round(outcomeSummary.successCount / outcomeSummary.total * 100)}%` : '—', color: 'text-green-600' },
+                      { label: '成功收录', value: outcomeSummary.indexedCount, sub: outcomeSummary.total ? `收录率 ${Math.round(outcomeSummary.indexedCount / outcomeSummary.total * 100)}%` : '—', color: 'text-blue-600' },
+                      { label: '追踪中', value: outcomeSummary.pendingCount, sub: '未满30天' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+                        <div className={`text-2xl font-bold ${(s as { color?: string }).color ?? 'text-gray-800'}`}>{s.value}</div>
+                        <div className="text-xs font-medium text-gray-600 mt-0.5">{s.label}</div>
+                        <div className="text-[11px] text-gray-400">{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Table */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+                    <span className="text-sm font-semibold text-gray-700">动作成效明细</span>
+                    <span className="text-xs text-gray-400 ml-2">每条提交动作的排名与收录结果</span>
+                  </div>
+                  {outcomesLoading ? <Spinner /> : oTotal === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                      <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-sm">{anyFilter ? '没有符合筛选条件的记录' : '暂无成效追踪数据'}</span>
+                      {!anyFilter && <span className="text-xs mt-1">请先提交带有页面URL和最终词的操作记录</span>}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[880px]`}>
+                          <OSort col="claimed_date" label="发现日期" />
+                          <OSort col="submitted_at" label="提交日期" />
+                          <span className="text-[11px] font-medium text-gray-400">成员</span>
+                          <span className="text-[11px] font-medium text-gray-400">操作</span>
+                          <span className="text-[11px] font-medium text-gray-400">关键词 → 最终词</span>
+                          <OSort col="search_volume" label="搜索量" right />
+                          <span className="text-[11px] font-medium text-gray-400">收录</span>
+                          <OSort col="rank_change" label="排名变化" right />
+                          <span className="text-[11px] font-medium text-gray-400">排名词</span>
+                          <OSort col="rank_volume" label="排名量" right />
+                          <span className="text-[11px] font-medium text-gray-400 text-center">成效</span>
+                        </div>
+                        <div className="divide-y divide-gray-50 min-w-[880px]">
+                          {pagedO.map(row => {
+                            const submitStr = row.submitted_at ? row.submitted_at.slice(5, 10).replace('-', '/') : '—'
+                            const rc = row.rank_change
+                            const rcStr = rc == null ? '—' : rc > 0 ? `+${rc}` : rc === 0 ? '持平' : `${rc}`
+                            const rcColor = rc == null ? 'text-gray-300' : rc > 0 ? 'text-green-600' : rc === 0 ? 'text-gray-400' : 'text-red-400'
+                            return (
+                              <div key={row.id} className={`grid ${OCOLS} gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center`}>
+                                <span className="text-xs text-gray-400">{row.claimed_date.slice(5).replace('-', '/')}</span>
+                                <span className="text-xs text-gray-400">{submitStr}</span>
+                                <span className="text-xs text-gray-600 font-medium truncate" title={row.username}>{row.username}</span>
+                                <span className={`text-[11px] px-1.5 py-0.5 rounded-full w-fit ${row.operation_type === '新增' ? 'bg-green-50 text-green-600' : row.operation_type === '更新' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                                  {row.operation_type ?? '—'}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs text-gray-700 truncate" title={row.keyword}>{row.keyword}</div>
+                                  {row.final_keyword
+                                    ? <div className="text-[11px] text-green-600 truncate" title={row.final_keyword}>→ {row.final_keyword}</div>
+                                    : <div className="text-[11px] text-gray-300">—</div>}
+                                </div>
+                                <div className="text-xs text-gray-600 tabular-nums text-right">{fmtVol(row.search_volume)}</div>
+                                <div>
+                                  {row.indexed
+                                    ? <span className="text-[11px] text-blue-600">{row.first_seen_date ? row.first_seen_date.slice(5).replace('-', '/') : '已收录'}</span>
+                                    : <span className="text-[11px] text-red-400">未收录</span>}
+                                </div>
+                                <div className={`text-xs font-medium tabular-nums text-right ${rcColor}`}>{rcStr}</div>
+                                <div className="min-w-0">
+                                  {row.rank_keyword
+                                    ? <>
+                                        <div className="text-[11px] text-gray-700 truncate" title={row.rank_keyword}>{row.rank_keyword}</div>
+                                        {row.rank_position != null && <div className="text-[10px] text-gray-400">第{row.rank_position}名</div>}
+                                      </>
+                                    : <span className="text-[11px] text-gray-300">—</span>}
+                                </div>
+                                <div className="text-xs text-gray-500 tabular-nums text-right">{row.rank_volume ? fmtVol(row.rank_volume) : '—'}</div>
+                                <div className="flex justify-center">
+                                  {row.outcome === 'success' && <span className="text-[11px] bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
+                                  {row.outcome === 'fail'    && <span className="text-[11px] bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">无效</span>}
+                                  {row.outcome === 'pending' && <span className="text-[11px] bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      {/* Pagination */}
+                      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/40">
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <span>第 {oPage * oPageSize + 1}–{Math.min((oPage + 1) * oPageSize, oTotal)} 条，共 {oTotal} 条</span>
+                          <span className="text-gray-200 mx-1">|</span>
+                          <span>每页</span>
+                          {([20, 40, 60] as const).map(n => (
+                            <button key={n} onClick={() => { setOPageSize(n); setOPage(0) }}
+                              className={`px-2 py-0.5 rounded border transition-colors ${oPageSize === n ? 'bg-green-500 text-white border-green-500' : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}>
+                              {n}
+                            </button>
+                          ))}
+                          <span>条</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button disabled={oPage === 0} onClick={() => setOPage(p => p - 1)}
+                            className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">上一页</button>
+                          <span className="text-xs text-gray-400 px-2">{oPage + 1} / {oTotalPages}</span>
+                          <button disabled={oPage >= oTotalPages - 1} onClick={() => setOPage(p => p + 1)}
+                            className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">下一页</button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* ── 提交记录 ── */}
           {activeTabId !== 'competitors' && reportTab === 'submissions' && (
