@@ -257,6 +257,19 @@ export default function IndexPagesPage() {
                 <button onClick={() => setVerifyMsg(null)} className="ml-2 text-gray-400 hover:text-gray-600">✕</button>
               </span>
             )}
+            {triggered ? (
+              <>
+                <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">已触发，抓取中…</span>
+                <button onClick={() => setTriggered(false)} className="text-xs text-gray-400 hover:text-gray-600">重置</button>
+              </>
+            ) : (
+              <button
+                onClick={() => { setTriggerMsg(null); setShowCrawlModal(true) }}
+                className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                手动重抓
+              </button>
+            )}
             <button
               onClick={() => handleTriggerVerify(false)}
               disabled={verifying}
@@ -275,19 +288,6 @@ export default function IndexPagesPage() {
             >
               脱收验证
             </button>
-            {triggered ? (
-              <>
-                <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">已触发，抓取中…</span>
-                <button onClick={() => setTriggered(false)} className="text-xs text-gray-400 hover:text-gray-600">重置</button>
-              </>
-            ) : (
-              <button
-                onClick={() => { setTriggerMsg(null); setShowCrawlModal(true) }}
-                className="h-8 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-              >
-                手动重抓
-              </button>
-            )}
           </div>
         )}
       </div>
