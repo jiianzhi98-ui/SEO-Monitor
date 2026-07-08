@@ -6,12 +6,14 @@ on:
       step:
         description: '重试步骤'
         type: choice
-        options: [keywords, weight, rank]
+        options: [keywords, weight, rank, rank-title, index-pages]
         default: keywords
   schedule:
-    - cron: '45 21 * * *'   # 05:45 MYT — keywords 重试
-    - cron: '0 22 * * *'    # 06:00 MYT — weight 重试
-    - cron: '15 22 * * *'   # 06:15 MYT — rank 重试
+    - cron: '0 20 * * *'    # 04:00 MYT — keywords 重试
+    - cron: '30 20 * * *'   # 04:30 MYT — weight 重试
+    - cron: '0 21 * * *'    # 05:00 MYT — rank 重试
+    - cron: '30 21 * * *'   # 05:30 MYT — rank-title 重试
+    - cron: '0 22 * * *'    # 06:00 MYT — index-pages 重试
 
 jobs:
   setup:
@@ -23,17 +25,48 @@ jobs:
       - name: Compute job matrix
         id: gen
         run: |
-          # 与主抓取保持相同分组数（同一过滤条件），确保 group 索引对应同一批站点
-          COUNT=$(curl -sf \
-            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
-            python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
-          TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/2)))")
+          # 与主抓取保持相同 SPG，确保 group 索引对应同一批站点
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STEP="${{ github.event.inputs.step }}"
+          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
+            STEP="keywords"
+          elif [ "${{ github.event.schedule }}" = "30 20 * * *" ]; then
+            STEP="weight"
+          elif [ "${{ github.event.schedule }}" = "0 21 * * *" ]; then
+            STEP="rank"
+          elif [ "${{ github.event.schedule }}" = "30 21 * * *" ]; then
+            STEP="rank-title"
+          elif [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then
+            STEP="index-pages"
+          else
+            STEP="keywords"
+          fi
+          case "$STEP" in
+            keywords)    SPG=5 ;;
+            rank)        SPG=4 ;;
+            weight)      SPG=4 ;;
+            index-pages) SPG=1 ;;
+            rank-title)  SPG=2 ;;
+            *)           SPG=4 ;;
+          esac
+          if [ "$STEP" = "rank-title" ]; then
+            COUNT=$(curl -sf \
+              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&has_rank_title=eq.true" | \
+              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+          else
+            COUNT=$(curl -sf \
+              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
+              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+          fi
+          TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/${SPG})))")
           MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "total=${TOTAL}" >> $GITHUB_OUTPUT
-          echo "Sites=${COUNT} → Groups=${TOTAL}: ${MATRIX}"
+          echo "Step=${STEP} SPG=${SPG} Sites=${COUNT} → Groups=${TOTAL}"
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -62,12 +95,16 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STEP="${{ github.event.inputs.step }}"
-          elif [ "${{ github.event.schedule }}" = "45 21 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
             STEP="keywords"
-          elif [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "30 20 * * *" ]; then
             STEP="weight"
-          elif [ "${{ github.event.schedule }}" = "15 22 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 21 * * *" ]; then
             STEP="rank"
+          elif [ "${{ github.event.schedule }}" = "30 21 * * *" ]; then
+            STEP="rank-title"
+          elif [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then
+            STEP="index-pages"
           else
             STEP="keywords"
           fi
@@ -75,7 +112,13 @@ jobs:
           echo "Retry step: $STEP (group ${{ matrix.group }}/${{ needs.setup.outputs.total }})"
 
       - name: Run retry crawl
-        run: npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} --retry-failed
+        run: |
+          if [ "${{ steps.vars.outputs.step }}" = "rank-title" ]; then
+            # rank-title 无失败记录机制，直接重跑本组
+            npx tsx scripts/crawl-rank.ts --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }}
+          else
+            npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} --retry-failed
+          fi
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

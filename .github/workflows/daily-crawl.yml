@@ -17,7 +17,7 @@ on:
     - cron: '0 16 * * *'   # 00:00 MYT (target ~01:00 MYT after ~1h queue) — weight
     - cron: '0 17 * * *'   # 01:00 MYT (target ~02:00 MYT after ~1h queue) — rank
     - cron: '0 18 * * *'   # 02:00 MYT — rank-title
-    - cron: '0 20 * * *'   # 04:00 MYT — index-pages
+    - cron: '0 19 * * *'   # 03:00 MYT — index-pages
 
 jobs:
   setup:
@@ -47,7 +47,7 @@ jobs:
               STEP="rank"
             elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
               STEP="rank-title"
-            elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
+            elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
               STEP="index-pages"
             else
               STEP="all"
@@ -116,7 +116,7 @@ jobs:
             STEP="rank"
           elif [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
             STEP="rank-title"
-          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
             STEP="index-pages"
           else
             STEP="all"

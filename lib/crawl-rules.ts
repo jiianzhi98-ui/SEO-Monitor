@@ -71,9 +71,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'index-pages',
     title: '收录页面追踪',
-    badge: 'step=index-pages · GitHub Actions · 目标 04:00 MYT（cron 20:00 UTC）',
+    badge: 'step=index-pages · GitHub Actions · 03:00 MYT（cron 19:00 UTC）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 20 * * * UTC = 04:00 MYT)，动态 matrix job 并行（每2个站点1个job）；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 19 * * * UTC = 03:00 MYT)，动态 matrix job 并行（每站一个job，SPG=1）；retry-crawl.yml (cron 0 22 UTC = 06:00 MYT) 自动补抓；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
       { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）' },
       { label: '抓取方式', text: '百度 site:domain 搜索，带近31天 gpc 时间过滤（gpc=stf={now-31d},{now}|stftype=1 + tfflag=1），过滤依据是百度内部重新收录时间而非页面发布日期；带 ct=2097152/si=domain/fenlei=256 开启百度站内搜索模式以获取更完整结果；pn=0/10/20... 翻页，无页数上限；停止条件：空页、被拦截、或整页URL相同立即停；页间延迟 1.5-3 秒（有 Cookie），4-7 秒（无 Cookie）；站间延迟 10 秒' },
       { label: '去重', text: '按 (site_id, url) 唯一索引 upsert；新页面写入 first_seen_date=today（DB trigger 保护，UPDATE 时不覆盖）；已知页面更新 last_seen_date=today；抓完后仅将 last_seen_date 在近30天内但本次未出现的页面标记 disappeared_date=today（30天可观测窗口：超出范围的历史页面不作脱收判定，因月度抓取不能代表其是否还被收录）；重新出现则清 disappeared_date 为 null' },
@@ -84,9 +84,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'rank-title',
     title: '排名抓取（全站点）',
-    badge: 'step=rank-title · daily-crawl.yml · GitHub Actions · 02:00 MYT（cron 18:00 UTC）',
+    badge: 'step=rank-title · daily-crawl.yml · GitHub Actions · 02:00 MYT（cron 18:00 UTC）；retry 05:30 MYT',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 18 * * * UTC = 02:00 MYT)，动态 matrix job 并行（每2个站点1个job）；脚本：scripts/crawl-rank.ts；支持手动 workflow_dispatch 选 step=rank-title' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 18 * * * UTC = 02:00 MYT)，动态 matrix job 并行（每2个站点1个job）；retry-crawl.yml (cron 30 21 UTC = 05:30 MYT) 全组重跑（无失败记录机制）；脚本：scripts/crawl-rank.ts；支持手动 workflow_dispatch 选 step=rank-title' },
       { label: '抓取对象', text: 'sites 表中 has_rank_title=true 的站点；动态读取，每次运行重新查询' },
       { label: '数据来源', text: '爱站 baidurank.aizhan.com，移动端（/mobile/）+ PC端（/baidu/），各抓涨入和跌出，共 4 个组合；含标题（title）和排名页 URL（url）' },
       { label: '并行策略', text: '排名段 1-5 同时并行，段内按页顺序，每页间隔 300ms；4 个组合顺序执行，组合间隔 2 秒；站点间间隔 60 秒' },
