@@ -101,9 +101,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'verify-deindex',
     title: '脱收验证',
-    badge: 'verify-deindex.yml · GitHub Actions · 每周三 03:00 MYT（cron 19:00 UTC 周二）',
+    badge: 'verify-deindex.yml · GitHub Actions · 每周六 06:30 MYT（cron 22:30 UTC 周五）',
     items: [
-      { label: '触发方式', text: '每周三 03:00 MYT（cron 0 19 * * 2 UTC）自动运行；也可 workflow_dispatch 手动触发；脚本：scripts/verify-deindex.ts' },
+      { label: '触发方式', text: '每周六 06:30 MYT（cron 30 22 * * 5 UTC）自动运行；也可 workflow_dispatch 手动触发；脚本：scripts/verify-deindex.ts' },
       { label: '处理对象', text: 'site_indexed_pages 中 verify_needed=true AND disappeared_date IS NULL 的所有 URL（由日常 index-pages 抓取在连续 2 次未见后标记）' },
       { label: '验证方式', text: '对每条 URL 执行 site:<url> 百度搜索；搜得到 → 清除 verify_needed（误报，仍在收录）；搜不到 → 写入 disappeared_date=today（确认脱收）；百度拦截/网络错误 → 跳过本 URL，下周再试' },
       { label: '限流保护', text: 'URL 之间固定间隔 4 秒；百度返回 captcha/no_content/http_error 时标记为跳过，不误判为脱收' },

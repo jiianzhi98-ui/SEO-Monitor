@@ -3,7 +3,7 @@ name: Verify De-indexed Pages
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '0 19 * * 2'   # 03:00 MYT every Wednesday (UTC+8)
+    - cron: '30 22 * * 5'  # 06:30 MYT every Saturday (UTC+8)
 
 jobs:
   verify:
