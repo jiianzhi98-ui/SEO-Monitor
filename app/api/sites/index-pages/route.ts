@@ -47,7 +47,7 @@ export async function GET(req: Request) {
 
   let query = service
     .from('site_indexed_pages')
-    .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, baidu_date_changed_at, reindexed_at', { count: 'exact' })
+    .select('id, url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, baidu_date_changed_at, reindexed_at, verify_needed, missed_count', { count: 'exact' })
     .eq('site_id', siteId)
 
   if (search) query = query.ilike('title', `%${search}%`)
@@ -66,21 +66,29 @@ export async function GET(req: Request) {
     query = query.not('disappeared_date', 'is', null)
   } else if (statusFilter === 'updated') {
     query = query.eq('baidu_date_changed_at', today).neq('first_seen_date', today).is('disappeared_date', null)
+  } else if (statusFilter === 'pending') {
+    query = query.eq('verify_needed', true).is('disappeared_date', null)
   } else if (statusFilter === 'active') {
-    query = query.is('disappeared_date', null)
+    query = query.is('disappeared_date', null).eq('verify_needed', false)
   }
   // 'all': no status filter
 
   // Order: if sortDir set, sort by baidu_date_str; otherwise default to recency
-  const sinkDisappeared = statusFilter === 'all' && timeFilter === 'all'
+  // Default ordering: active → pending-verify → disappeared (sunk to bottom)
+  const sinkSpecial = statusFilter === 'all' && timeFilter === 'all'
   if (sortDir === 'asc' || sortDir === 'desc') {
     const ascending = sortDir === 'asc'
-    if (sinkDisappeared) query = query.order('disappeared_date', { ascending: true, nullsFirst: true })
-    query = query.order('baidu_date_str', { ascending, nullsFirst: false })
-  } else {
-    if (sinkDisappeared) {
+    if (sinkSpecial) {
       query = query
         .order('disappeared_date', { ascending: true, nullsFirst: true })
+        .order('verify_needed', { ascending: true })
+    }
+    query = query.order('baidu_date_str', { ascending, nullsFirst: false })
+  } else {
+    if (sinkSpecial) {
+      query = query
+        .order('disappeared_date', { ascending: true, nullsFirst: true })
+        .order('verify_needed', { ascending: true })
         .order('first_seen_date', { ascending: false })
         .order('baidu_date_str', { ascending: false, nullsFirst: false })
     } else {
@@ -100,6 +108,7 @@ export async function GET(req: Request) {
     baidu_date_str: string | null; first_seen_date: string
     last_seen_date: string; disappeared_date: string | null
     baidu_date_changed_at: string | null; reindexed_at: string | null
+    verify_needed: boolean; missed_count: number
   }) => ({
     ...r,
     baidu_date_str: normalizeBaiduDate(r.baidu_date_str),
@@ -107,6 +116,7 @@ export async function GET(req: Request) {
     is_reindexed: r.reindexed_at === today,
     is_disappeared: !!r.disappeared_date,
     is_updated: r.baidu_date_changed_at === today && r.first_seen_date !== today && !r.disappeared_date,
+    is_pending_verify: r.verify_needed && !r.disappeared_date,
   }))
 
   return NextResponse.json({ rows, total: count ?? 0, page, pageSize: PAGE_SIZE })

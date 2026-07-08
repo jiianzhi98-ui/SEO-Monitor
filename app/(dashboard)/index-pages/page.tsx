@@ -22,15 +22,18 @@ interface IndexedPage {
   disappeared_date: string | null
   baidu_date_changed_at: string | null
   reindexed_at: string | null
+  verify_needed: boolean
+  missed_count: number
   is_new: boolean
   is_reindexed: boolean
   is_disappeared: boolean
   is_updated: boolean
+  is_pending_verify: boolean
 }
 
 const PAGE_SIZE = 10
 type TimeFilter = 'all' | 'near7' | 'near30'
-type StatusFilter = 'all' | 'new' | 'reindexed' | 'disappeared' | 'updated' | 'active'
+type StatusFilter = 'all' | 'new' | 'reindexed' | 'disappeared' | 'pending' | 'updated' | 'active'
 type CrawlPeriod = 'monthly' | 'weekly' | 'daily'
 
 export default function IndexPagesPage() {
@@ -333,6 +336,7 @@ export default function IndexPagesPage() {
               <option value="new">新发现</option>
               <option value="reindexed">再收录</option>
               <option value="disappeared">已脱收</option>
+              <option value="pending">待验证</option>
               <option value="updated">更新</option>
               <option value="active">已收录</option>
             </select>
@@ -394,7 +398,7 @@ export default function IndexPagesPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {rows.map(row => (
-                    <tr key={row.id} className={`transition-colors group ${row.is_disappeared ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
+                    <tr key={row.id} className={`transition-colors group ${row.is_disappeared ? 'bg-red-50/30 hover:bg-red-50/50' : row.is_pending_verify ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'hover:bg-gray-50'}`}>
                       <td className="px-3 py-2 text-center">
                         {row.baidu_date_str ? (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${row.is_disappeared ? 'text-red-400 bg-red-50' : 'text-blue-600 bg-blue-50'}`}>{row.baidu_date_str}</span>
@@ -407,6 +411,8 @@ export default function IndexPagesPage() {
                           <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full whitespace-nowrap">再收录</span>
                         ) : row.is_disappeared ? (
                           <span className="inline-block text-xs font-medium text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full whitespace-nowrap">已脱收</span>
+                        ) : row.is_pending_verify ? (
+                          <span className="inline-block text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full whitespace-nowrap">待验证</span>
                         ) : row.is_updated ? (
                           <span className="inline-block text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full whitespace-nowrap">更新</span>
                         ) : (
@@ -422,6 +428,9 @@ export default function IndexPagesPage() {
                         )}
                         {row.is_disappeared && (
                           <div className="text-xs text-red-300 mt-0.5">脱收于 {row.disappeared_date}</div>
+                        )}
+                        {row.is_pending_verify && (
+                          <div className="text-xs text-amber-400 mt-0.5">连续 {row.missed_count} 次未见，等待周六验证</div>
                         )}
                       </td>
                       <td className="px-4 py-2">
