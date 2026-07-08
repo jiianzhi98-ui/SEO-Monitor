@@ -391,12 +391,14 @@ async function fetchRankdownPage(
   page: number,
   cookie = '',
   ua: string,
-  isToday = false
+  isToday = false,
+  platform: 'mobile' | 'pc' = 'mobile'
 ): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
   const pageSuffix = page === 1 ? '' : `${page}/`
+  const prefix = platform === 'pc' ? 'baidu' : 'mobile'
   const reqUrl = isToday
-    ? `https://baidurank.aizhan.com/mobile/${domain}/rankdown/${rankPos}/${pageSuffix}`
-    : `https://baidurank.aizhan.com/mobile/${domain}/rankdown/${rankPos}/${date}/${pageSuffix}`
+    ? `https://baidurank.aizhan.com/${prefix}/${domain}/rankdown/${rankPos}/${pageSuffix}`
+    : `https://baidurank.aizhan.com/${prefix}/${domain}/rankdown/${rankPos}/${date}/${pageSuffix}`
   try {
     const headers: Record<string, string> = { ...getRankHeaders(ua) }
     if (cookie) headers['Cookie'] = cookie
@@ -407,7 +409,7 @@ async function fetchRankdownPage(
     if (cookieMatch) {
       const challengeCookie = cookieMatch[1].split(';')[0]
       if (challengeCookie === cookie) return []
-      return fetchRankdownPage(domain, rankPos, date, page, challengeCookie, ua, isToday)
+      return fetchRankdownPage(domain, rankPos, date, page, challengeCookie, ua, isToday, platform)
     }
     const $ = cheerio.load(html)
     const results: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
@@ -433,12 +435,14 @@ async function fetchRankdownPage(
 export async function fetchRankdownWithTitle(
   domain: string,
   date: string,
+  platform: 'mobile' | 'pc' = 'mobile'
 ): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
   const ua = randomUA()
   const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
   const isToday = date === todayMY
+  const prefix = platform === 'pc' ? 'baidu' : 'mobile'
   const prefetchUrl = isToday
-    ? `https://baidurank.aizhan.com/mobile/${domain}/rankdown/1/`
+    ? `https://baidurank.aizhan.com/${prefix}/${domain}/rankdown/1/`
     : undefined
   const sharedCookie = await prefetchRankCookie(domain, 'rankdown', date, ua, prefetchUrl)
 
@@ -446,7 +450,7 @@ export async function fetchRankdownWithTitle(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
       const entries: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
       for (let page = 1; page <= 15; page++) {
-        const pageEntries = await fetchRankdownPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
+        const pageEntries = await fetchRankdownPage(domain, rankPos, date, page, sharedCookie, ua, isToday, platform)
         if (pageEntries.length === 0) break
         entries.push(...pageEntries)
         if (page < 15) await new Promise((r) => setTimeout(r, 300))
@@ -473,12 +477,14 @@ async function fetchRankupPage(
   page: number,
   cookie = '',
   ua: string,
-  isToday = false
+  isToday = false,
+  platform: 'mobile' | 'pc' = 'mobile'
 ): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
   const pageSuffix = page === 1 ? '' : `${page}/`
+  const prefix = platform === 'pc' ? 'baidu' : 'mobile'
   const reqUrl = isToday
-    ? `https://baidurank.aizhan.com/mobile/${domain}/rankup/${rankPos}/${pageSuffix}`
-    : `https://baidurank.aizhan.com/mobile/${domain}/rankup/${rankPos}/${date}/${pageSuffix}`
+    ? `https://baidurank.aizhan.com/${prefix}/${domain}/rankup/${rankPos}/${pageSuffix}`
+    : `https://baidurank.aizhan.com/${prefix}/${domain}/rankup/${rankPos}/${date}/${pageSuffix}`
   try {
     const headers: Record<string, string> = { ...getRankHeaders(ua) }
     if (cookie) headers['Cookie'] = cookie
@@ -489,7 +495,7 @@ async function fetchRankupPage(
     if (cookieMatch) {
       const challengeCookie = cookieMatch[1].split(';')[0]
       if (challengeCookie === cookie) return []
-      return fetchRankupPage(domain, rankPos, date, page, challengeCookie, ua, isToday)
+      return fetchRankupPage(domain, rankPos, date, page, challengeCookie, ua, isToday, platform)
     }
     const $ = cheerio.load(html)
     const results: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
@@ -512,12 +518,14 @@ async function fetchRankupPage(
 export async function fetchRankupWithTitle(
   domain: string,
   date: string,
+  platform: 'mobile' | 'pc' = 'mobile'
 ): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
   const ua = randomUA()
+  const prefix = platform === 'pc' ? 'baidu' : 'mobile'
   const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
   const isToday = date === todayMY
   const prefetchUrl = isToday
-    ? `https://baidurank.aizhan.com/mobile/${domain}/rankup/1/`
+    ? `https://baidurank.aizhan.com/${prefix}/${domain}/rankup/1/`
     : undefined
   const sharedCookie = await prefetchRankCookie(domain, 'rankup', date, ua, prefetchUrl)
 
@@ -525,7 +533,7 @@ export async function fetchRankupWithTitle(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
       const entries: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
       for (let page = 1; page <= 15; page++) {
-        const pageEntries = await fetchRankupPage(domain, rankPos, date, page, sharedCookie, ua, isToday)
+        const pageEntries = await fetchRankupPage(domain, rankPos, date, page, sharedCookie, ua, isToday, platform)
         if (pageEntries.length === 0) break
         entries.push(...pageEntries)
         if (page < 15) await new Promise((r) => setTimeout(r, 300))

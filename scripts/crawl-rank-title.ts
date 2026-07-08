@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { fetchRankupWithTitle, fetchRankdownWithTitle, fetchRankPositions } from '../lib/crawler'
+import { fetchRankupWithTitle, fetchRankdownWithTitle } from '../lib/crawler'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -83,60 +83,37 @@ async function main() {
             volume: number; title: string | null; url: string | null
           }[]
 
-          if (platform === 'mobile') {
-            // Mobile: use WithTitle functions to capture ranking page title + url
-            const entries = type === 'rankup'
-              ? await fetchRankupWithTitle(domain, today)
-              : await fetchRankdownWithTitle(domain, today)
+          // Both platforms use WithTitle functions (same page structure, /baidu/ for pc)
+          const entries = type === 'rankup'
+            ? await fetchRankupWithTitle(domain, today, platform)
+            : await fetchRankdownWithTitle(domain, today, platform)
 
-            if (entries.length === 0) {
-              console.log(`    ${label.padEnd(16)} ⚠  无数据（疑似限流或无词）`)
-              await delay(2000)
-              continue
-            }
+          if (entries.length === 0) {
+            console.log(`    ${label.padEnd(16)} ⚠  无数据（疑似限流或无词）`)
+            await delay(2000)
+            continue
+          }
 
-            rows = entries.map(e => ({
-              site_id: siteId,
-              keyword: e.keyword,
-              stat_date: today,
-              type,
-              platform,
-              rank_position: e.rank_position,
-              volume: e.volume,
-              title: e.title || null,
-              url: e.url || null,
-            }))
+          rows = entries.map(e => ({
+            site_id: siteId,
+            keyword: e.keyword,
+            stat_date: today,
+            type,
+            platform,
+            rank_position: e.rank_position,
+            volume: e.volume,
+            title: e.title || null,
+            url: e.url || null,
+          }))
 
-            // Collect keyword_volume from mobile rankup, volume > 0 only
-            if (type === 'rankup') {
-              for (const e of entries) {
-                if (e.volume > 0) {
-                  const cur = kwVolumeMap.get(e.keyword) ?? 0
-                  if (e.volume > cur) kwVolumeMap.set(e.keyword, e.volume)
-                }
+          // Collect keyword_volume from mobile rankup, volume > 0 only
+          if (platform === 'mobile' && type === 'rankup') {
+            for (const e of entries) {
+              if (e.volume > 0) {
+                const cur = kwVolumeMap.get(e.keyword) ?? 0
+                if (e.volume > cur) kwVolumeMap.set(e.keyword, e.volume)
               }
             }
-          } else {
-            // PC: use fetchRankPositions (no title/url, but covers all volume)
-            const entries = await fetchRankPositions(domain, today, type, 'pc')
-
-            if (entries.length === 0) {
-              console.log(`    ${label.padEnd(16)} ⚠  无数据（疑似限流或无词）`)
-              await delay(2000)
-              continue
-            }
-
-            rows = entries.map(e => ({
-              site_id: siteId,
-              keyword: e.keyword,
-              stat_date: today,
-              type,
-              platform,
-              rank_position: e.rank_position,
-              volume: e.volume,
-              title: null,
-              url: null,
-            }))
           }
 
           for (const chunk of chunkArray(rows, 500)) {
