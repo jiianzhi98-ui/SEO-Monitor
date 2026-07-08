@@ -33,9 +33,11 @@ async function checkUrlIndexed(
   domain: string,
   baiduCookie: string,
 ): Promise<boolean | null> {
-  const searchUrl =
-    `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${url}`)}` +
-    `&ct=2097152&si=${encodeURIComponent(domain)}&fenlei=256&ie=utf-8`
+  // Search the URL as plain text (same as manual Baidu search).
+  // Baidu's site:full-path operator is unreliable for specific URLs.
+  // fetchBaiduIndexPages already filters results by domain internally.
+  const urlText = url.replace(/^https?:\/\//i, '')
+  const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(urlText)}&fenlei=256&ie=utf-8`
 
   const { pages, failReason } = await fetchBaiduIndexPages(domain, undefined, baiduCookie, searchUrl)
 
@@ -43,7 +45,8 @@ async function checkUrlIndexed(
     return null
   }
 
-  return pages.some(p => p.url === url || p.url.startsWith(url + '/') || url.startsWith(p.url))
+  // p.url is stored without protocol (e.g. www.sjwyx.com/youxi/2871.html)
+  return pages.some(p => p.url === urlText || p.url.startsWith(urlText + '/') || urlText.startsWith(p.url))
 }
 
 // ── Mode A: verify pending (verify_needed=true, disappeared_date IS NULL) ─────
