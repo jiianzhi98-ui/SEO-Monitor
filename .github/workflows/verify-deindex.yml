@@ -1,0 +1,29 @@
+name: Verify De-indexed Pages
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 19 * * 2'   # 03:00 MYT every Wednesday (UTC+8)
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run verify-deindex
+        run: npx tsx scripts/verify-deindex.ts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BAIDU_COOKIE: ${{ secrets.BAIDU_COOKIE }}

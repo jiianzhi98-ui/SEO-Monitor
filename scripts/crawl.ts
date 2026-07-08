@@ -502,6 +502,8 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
             first_seen_date: today,      // preserved by DB trigger on UPDATE
             last_seen_date: today,
             disappeared_date: null,      // clear if was previously disappeared
+            missed_count: 0,             // reset grace-period counter on re-discovery
+            verify_needed: false,        // clear any pending verification
             updated_at: new Date().toISOString(),
           }))
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -514,27 +516,26 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
           newCount += inserted.filter(r => r.first_seen_date === today).length
         }
 
-        // Only mark disappeared during authoritative (monthly) crawls — supplement runs use a
+        // Only run missed-page logic during authoritative (monthly) crawls — supplement runs use a
         // narrower time window so absence from results does NOT mean the page was de-indexed.
         const isSupplementRun = !!(process.env.SUPPLEMENT_DOMAIN || process.env.SUPPLEMENT_PERIOD)
-        let disappearedCount = 0
+        let flaggedCount = 0
         if (!isSupplementRun) {
           const window30d = getMalaysiaDate(-30)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: disappeared } = await (supabase.from('site_indexed_pages') as any)
-            .update({ disappeared_date: today })
-            .eq('site_id', site.id)
-            .gte('last_seen_date', window30d)    // was seen within the observable window
-            .lt('last_seen_date', today)          // but not in today's crawl
-            .is('disappeared_date', null)
-            .select('id')
-          disappearedCount = (disappeared || []).length
+          // Increment missed_count for pages not seen today; flag verify_needed after 2 consecutive misses.
+          // Actual disappeared_date is set by the weekly verify-deindex job after URL-level confirmation.
+          const { data: flagged } = await supabase.rpc('mark_missed_index_pages', {
+            p_site_id: site.id,
+            p_window_start: window30d,
+            p_today: today,
+          })
+          flaggedCount = flagged ?? 0
         }
 
         totalNew += newCount
         ok++
-        console.log(`${prefix} ✓  发现=${String(pages.length).padStart(4)}  新增=${String(newCount).padStart(4)}  脱收=${String(disappearedCount).padStart(3)}`)
-        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条，脱收${disappearedCount}条` })
+        console.log(`${prefix} ✓  发现=${String(pages.length).padStart(4)}  新增=${String(newCount).padStart(4)}  待验证=${String(flaggedCount).padStart(3)}`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条，待验证${flaggedCount}条` })
       }
     } catch (e) {
       console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)
