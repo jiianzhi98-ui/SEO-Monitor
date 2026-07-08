@@ -64,6 +64,15 @@ type OutcomeSortBy = 'claimed_date' | 'submitted_at' | 'search_volume' | 'rank_c
 
 const PERIOD_LABELS: Record<Period, string> = { yesterday: '昨日', week: '本周', month: '本月', custom: '自定义' }
 
+const PREVIEW_OUTCOMES: OutcomeRow[] = [
+  { id:'p1', user_id:'u1', username:'Joanne',  keyword:'葫芦侠',           final_keyword:'葫芦侠官方下载',    page_url:'https://www.sjwyx.com/ruanjian/1001.html', operation_type:'新增', search_volume:8200, source:'竞品涨排名', claimed_date:'2026-06-10', submitted_at:'2026-06-10T09:00:00Z', indexed:true,  first_seen_date:'2026-06-13', disappeared_date:null, rank_keyword:'葫芦侠下载',       rank_position:5,  prev_rank:19, rank_change:14, rank_volume:6800, rank_date:'2026-07-07', outcome:'success' },
+  { id:'p2', user_id:'u2', username:'Jackson', keyword:'MT管理器',          final_keyword:'MT管理器最新版',    page_url:'https://www.sjwyx.com/ruanjian/1002.html', operation_type:'新增', search_volume:5500, source:'共新增词',   claimed_date:'2026-06-12', submitted_at:'2026-06-12T11:30:00Z', indexed:true,  first_seen_date:'2026-06-17', disappeared_date:null, rank_keyword:'MT管理器下载',      rank_position:8,  prev_rank:14, rank_change:6,  rank_volume:4200, rank_date:'2026-07-07', outcome:'success' },
+  { id:'p3', user_id:'u1', username:'Joanne',  keyword:'好游快爆 下载安装',  final_keyword:'好游快爆下载2024', page_url:'https://www.sjwyx.com/ruanjian/1003.html', operation_type:'更新', search_volume:3100, source:'交叉词',     claimed_date:'2026-06-18', submitted_at:'2026-06-18T14:00:00Z', indexed:true,  first_seen_date:'2026-05-10', disappeared_date:null, rank_keyword:null,               rank_position:null,prev_rank:null,rank_change:null,rank_volume:null, rank_date:null,          outcome:'fail' },
+  { id:'p4', user_id:'u3', username:'Yanling', keyword:'蛋仔派对官服',       final_keyword:'蛋仔派对官方版下载',page_url:'https://www.sjwyx.com/ruanjian/1004.html', operation_type:'新增', search_volume:12000,source:'竞品涨排名', claimed_date:'2026-07-01', submitted_at:'2026-07-01T10:00:00Z', indexed:true,  first_seen_date:'2026-07-04', disappeared_date:null, rank_keyword:null,               rank_position:null,prev_rank:null,rank_change:null,rank_volume:null, rank_date:null,          outcome:'pending' },
+  { id:'p5', user_id:'u2', username:'Jackson', keyword:'CAPCUT',             final_keyword:'CapCut剪映国际版',  page_url:'https://www.sjwyx.com/ruanjian/1005.html', operation_type:'更新', search_volume:9800, source:'连续上涨词', claimed_date:'2026-06-22', submitted_at:'2026-06-22T08:00:00Z', indexed:true,  first_seen_date:'2026-04-15', disappeared_date:null, rank_keyword:'capcut下载',        rank_position:3,  prev_rank:12, rank_change:9,  rank_volume:7500, rank_date:'2026-07-07', outcome:'success' },
+  { id:'p6', user_id:'u1', username:'Joanne',  keyword:'氪金兽',             final_keyword:'氪金兽手游下载',   page_url:'https://www.sjwyx.com/ruanjian/1006.html', operation_type:'新增', search_volume:2200, source:'更新词库',   claimed_date:'2026-07-03', submitted_at:'2026-07-03T16:00:00Z', indexed:false, first_seen_date:null,         disappeared_date:null, rank_keyword:null,               rank_position:null,prev_rank:null,rank_change:null,rank_volume:null, rank_date:null,          outcome:'pending' },
+]
+
 
 const SUGGESTED_RULES = [
   { name: '掉排名 30 天未更新',   condition: '同一关键词排名下滑 ≥ 5，且距上次提交更新操作 > 30 天',              action: '建议重新更新该页面内容',             metric: '通过 rank_changes + member_claimed_keywords 对比' },
@@ -705,9 +714,12 @@ export default function GroupReportPage() {
           {activeTabId !== 'competitors' && reportTab === 'outcomes' && (() => {
             const OCOLS = 'grid-cols-[72px_72px_70px_50px_minmax(120px,1fr)_64px_80px_68px_100px_64px_62px]'
             const oTotal = outcomes.length
-            const oTotalPages = Math.max(1, Math.ceil(oTotal / oPageSize))
-            const pagedO = outcomes.slice(oPage * oPageSize, (oPage + 1) * oPageSize)
             const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterDiscoverStart || oFilterDiscoverEnd || oFilterSubmitStart || oFilterSubmitEnd)
+            const isPreview = oTotal === 0 && !anyFilter && !outcomesLoading
+            const displayData = isPreview ? PREVIEW_OUTCOMES : outcomes
+            const displayTotal = displayData.length
+            const oTotalPages = Math.max(1, Math.ceil(displayTotal / oPageSize))
+            const pagedO = displayData.slice(oPage * oPageSize, (oPage + 1) * oPageSize)
             function OSort({ col, label, right }: { col: OutcomeSortBy; label: string; right?: boolean }) {
               const active = oSortBy === col
               return (
@@ -797,16 +809,21 @@ export default function GroupReportPage() {
                     <span className="text-sm font-semibold text-gray-700">动作成效明细</span>
                     <span className="text-xs text-gray-400 ml-2">每条提交动作的排名与收录结果</span>
                   </div>
-                  {outcomesLoading ? <Spinner /> : oTotal === 0 ? (
+                  {outcomesLoading ? <Spinner /> : (oTotal === 0 && anyFilter) ? (
                     <div className="flex flex-col items-center justify-center py-16 text-gray-300">
                       <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
-                      <span className="text-sm">{anyFilter ? '没有符合筛选条件的记录' : '暂无成效追踪数据'}</span>
-                      {!anyFilter && <span className="text-xs mt-1">请先提交带有页面URL和最终词的操作记录</span>}
+                      <span className="text-sm">没有符合筛选条件的记录</span>
                     </div>
                   ) : (
                     <>
+                      {isPreview && (
+                        <div className="flex items-center gap-2 mx-4 my-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+                          <span className="font-bold bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded text-[10px] flex-shrink-0">样例</span>
+                          以下为演示数据，帮助你预览页面效果。真实数据将在组员提交带 URL + 最终词的操作后自动显示。
+                        </div>
+                      )}
                       <div className="overflow-x-auto">
                         <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[880px]`}>
                           <OSort col="claimed_date" label="发现日期" />
@@ -870,7 +887,7 @@ export default function GroupReportPage() {
                       {/* Pagination */}
                       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/40">
                         <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <span>第 {oPage * oPageSize + 1}–{Math.min((oPage + 1) * oPageSize, oTotal)} 条，共 {oTotal} 条</span>
+                          <span>第 {oPage * oPageSize + 1}–{Math.min((oPage + 1) * oPageSize, displayTotal)} 条，共 {displayTotal} 条{isPreview ? '（样例）' : ''}</span>
                           <span className="text-gray-200 mx-1">|</span>
                           <span>每页</span>
                           {([20, 40, 60] as const).map(n => (
