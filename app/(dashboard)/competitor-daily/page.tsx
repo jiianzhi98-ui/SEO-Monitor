@@ -437,20 +437,20 @@ export default function CompetitorDailyPage() {
       const useNewTable = site.hasRankTitle
       if (fetchCounts) {
         const baseUp = useNewTable
-          ? supabase.from('site_rank_keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup').eq('platform', 'mobile').gt('volume', 0)
+          ? supabase.from('site_keyword_ranks').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup').eq('platform', 'mobile').gt('volume', 0)
           : supabase.from('rank_changes').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankup')
         const baseDown = useNewTable
-          ? supabase.from('site_rank_keywords').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown').eq('platform', 'mobile').gt('volume', 0)
+          ? supabase.from('site_keyword_ranks').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown').eq('platform', 'mobile').gt('volume', 0)
           : supabase.from('rank_changes').select('id', { count: 'exact', head: true }).eq('site_id', site.site_id).eq('stat_date', date).eq('type', 'rankdown')
         const basePage = useNewTable
-          ? supabase.from('site_rank_keywords').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).eq('platform', 'mobile').gt('volume', 0).order('volume', { ascending: false }).range(from, to)
+          ? supabase.from('site_keyword_ranks').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).eq('platform', 'mobile').gt('volume', 0).order('volume', { ascending: false }).range(from, to)
           : supabase.from('rank_changes').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).order('volume', { ascending: false }).range(from, to)
         const [upCount, downCount, pageRes] = await Promise.all([baseUp, baseDown, basePage])
         setRankCounts({ rankup: upCount.count ?? 0, rankdown: downCount.count ?? 0 })
         setRankPageData((pageRes.data || []) as RankEntry[])
       } else {
         const q = useNewTable
-          ? supabase.from('site_rank_keywords').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).eq('platform', 'mobile').gt('volume', 0).order('volume', { ascending: false }).range(from, to)
+          ? supabase.from('site_keyword_ranks').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).eq('platform', 'mobile').gt('volume', 0).order('volume', { ascending: false }).range(from, to)
           : supabase.from('rank_changes').select('keyword, volume').eq('site_id', site.site_id).eq('stat_date', date).eq('type', type).order('volume', { ascending: false }).range(from, to)
         const { data } = await q
         setRankPageData((data || []) as RankEntry[])
@@ -491,7 +491,7 @@ export default function CompetitorDailyPage() {
       const supabase = getBrowserClient()
       const since = getMalaysiaDate(-30)
       const q = site.hasRankTitle
-        ? supabase.from('site_rank_keywords').select('keyword, type, stat_date').eq('site_id', site.site_id).eq('platform', 'mobile').gt('volume', 0).gte('stat_date', since).limit(5000)
+        ? supabase.from('site_keyword_ranks').select('keyword, type, stat_date').eq('site_id', site.site_id).eq('platform', 'mobile').gt('volume', 0).gte('stat_date', since).limit(5000)
         : supabase.from('rank_changes').select('keyword, type, stat_date').eq('site_id', site.site_id).gte('stat_date', since).limit(5000)
       const { data } = await q
 
@@ -554,7 +554,7 @@ export default function CompetitorDailyPage() {
       const supabase = getBrowserClient()
       const since = getMalaysiaDate(-30)
       const q = site.hasRankTitle
-        ? supabase.from('site_rank_keywords').select('keyword, volume, type, stat_date').eq('site_id', site.site_id).eq('platform', 'mobile').gt('volume', 0).gte('stat_date', since).limit(5000)
+        ? supabase.from('site_keyword_ranks').select('keyword, volume, type, stat_date').eq('site_id', site.site_id).eq('platform', 'mobile').gt('volume', 0).gte('stat_date', since).limit(5000)
         : supabase.from('rank_changes').select('keyword, volume, type, stat_date').eq('site_id', site.site_id).gte('stat_date', since).limit(5000)
       const { data } = await q
 

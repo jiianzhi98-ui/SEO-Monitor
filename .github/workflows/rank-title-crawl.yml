@@ -1,8 +1,8 @@
-name: Rank Title Crawl (Competitor Sites)
+name: Rank Crawl (All Sites)
 
 on:
   schedule:
-    # 18:00 UTC = 02:00 MYT — runs after rank finishes
+    # 18:00 UTC = 02:00 MYT
     - cron: '0 18 * * *'
   workflow_dispatch:
 
@@ -21,8 +21,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Run rank title crawl
+      - name: Run rank crawl
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: npx tsx scripts/crawl-rank-title.ts
+        run: npx tsx scripts/crawl-rank.ts

@@ -465,7 +465,7 @@ export async function GET(request: Request) {
       if (site) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('site_rank_keywords') as any).delete().eq('site_id', site.id).eq('stat_date', today).eq('platform', 'mobile')
+          await (supabase.from('site_keyword_ranks') as any).delete().eq('site_id', site.id).eq('stat_date', today)
           const [upEntries, downEntries] = await Promise.all([
             fetchRankupWithTitle(site.domain, today),
             fetchRankdownWithTitle(site.domain, today),
@@ -476,7 +476,7 @@ export async function GET(request: Request) {
           ]
           for (const chunk of chunkArray(rows, 500)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('site_rank_keywords') as any).upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
+            await (supabase.from('site_keyword_ranks') as any).upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
           }
           const kwVol = upEntries.filter(e => e.volume > 0).map(e => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
           for (const chunk of chunkArray(kwVol, 500)) {

@@ -36,10 +36,9 @@ async function main() {
   const totalStart = Date.now()
 
   console.log(`\n${'▶'.repeat(60)}`)
-  console.log(`  RANK TITLE CRAWL (Competitor Sites)   日期=${today}   ${ts()} MYT`)
+  console.log(`  RANK CRAWL (All Sites)   日期=${today}   ${ts()} MYT`)
   console.log(`${'▶'.repeat(60)}`)
 
-  // Read sites with has_rank_title=true
   const { data: sitesRaw, error: sitesErr } = await supabase
     .from('sites')
     .select('id, domain')
@@ -49,7 +48,7 @@ async function main() {
   const sites = (sitesRaw || []) as { id: string; domain: string }[]
 
   if (sites.length === 0) {
-    console.log('  没有开启竞品追踪的站点，退出')
+    console.log('  没有开启排名追踪的站点，退出')
     return
   }
 
@@ -67,7 +66,7 @@ async function main() {
     console.log(`  [${i + 1}/${sites.length}] ${domain}  (${ts()})`)
 
     // Clear today's existing data for this site (both platforms)
-    await supabase.from('site_rank_keywords').delete()
+    await supabase.from('site_keyword_ranks').delete()
       .eq('site_id', siteId).eq('stat_date', today)
 
     // keyword_volume: collect best volume per keyword from mobile rankup only
@@ -77,13 +76,6 @@ async function main() {
       for (const type of types) {
         const label = `${platform}/${type}`
         try {
-          let rows: {
-            site_id: string; keyword: string; stat_date: string
-            type: string; platform: string; rank_position: number | null
-            volume: number; title: string | null; url: string | null
-          }[]
-
-          // Both platforms use WithTitle functions (same page structure, /baidu/ for pc)
           const entries = type === 'rankup'
             ? await fetchRankupWithTitle(domain, today, platform)
             : await fetchRankdownWithTitle(domain, today, platform)
@@ -94,17 +86,27 @@ async function main() {
             continue
           }
 
-          rows = entries.map(e => ({
+          const rows = entries.map(e => ({
             site_id: siteId,
             keyword: e.keyword,
             stat_date: today,
             type,
             platform,
             rank_position: e.rank_position,
+            prev_rank: e.prev_rank,
             volume: e.volume,
             title: e.title || null,
             url: e.url || null,
           }))
+
+          for (const chunk of chunkArray(rows, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('site_keyword_ranks') as any)
+              .upsert(chunk, { onConflict: 'site_id,keyword,stat_date,platform,type' })
+          }
+
+          totalSaved += rows.length
+          console.log(`    ${label.padEnd(16)} ✓  ${rows.length} 条`)
 
           // Collect keyword_volume from mobile rankup, volume > 0 only
           if (platform === 'mobile' && type === 'rankup') {
@@ -115,15 +117,6 @@ async function main() {
               }
             }
           }
-
-          for (const chunk of chunkArray(rows, 500)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('site_rank_keywords') as any)
-              .upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
-          }
-
-          totalSaved += rows.length
-          console.log(`    ${label.padEnd(16)} ✓  ${rows.length} 条`)
         } catch (e) {
           console.error(`    ${label.padEnd(16)} ✗  ${e instanceof Error ? e.message : String(e)}`)
           totalFailed++
@@ -136,9 +129,7 @@ async function main() {
     // Upsert keyword_volume (mobile rankup only, volume > 0)
     if (kwVolumeMap.size > 0) {
       const volRows = Array.from(kwVolumeMap.entries()).map(([keyword, volume]) => ({
-        keyword,
-        volume,
-        stat_date: today,
+        keyword, volume, stat_date: today,
       }))
       for (const chunk of chunkArray(volRows, 500)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -149,8 +140,8 @@ async function main() {
     }
 
     if (i < sites.length - 1) {
-      console.log(`    等待 45s 再抓下一个站点…`)
-      await delay(45000)
+      console.log(`    等待 60s 再抓下一个站点…`)
+      await delay(60000)
     }
   }
 

@@ -41,7 +41,7 @@ export async function GET(req: Request) {
 
   if (tab === 'ranks') {
     const { data: rows } = await service
-      .from('site_rank_keywords')
+      .from('site_keyword_ranks')
       .select('keyword, volume, rank_position, title, type')
       .eq('site_id', site.id)
       .eq('platform', 'mobile')

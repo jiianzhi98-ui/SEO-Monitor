@@ -352,7 +352,7 @@ export default function CrawlLogPage() {
       const { data: rtSiteData } = await supabase.from('sites').select('id').in('domain', Array.from(allRtDomains))
       const rtSiteIds = (rtSiteData || []).map((s: { id: string }) => s.id)
       for (const siteId of rtSiteIds) {
-        const { data: chk } = await supabase.from('site_rank_keywords').select('site_id').eq('site_id', siteId).eq('stat_date', today).eq('platform', 'mobile').limit(1)
+        const { data: chk } = await supabase.from('site_keyword_ranks').select('site_id').eq('site_id', siteId).eq('stat_date', today).limit(1)
         if (chk && chk.length > 0) rtSucceeded++
       }
     }
@@ -360,7 +360,7 @@ export default function CrawlLogPage() {
     // Get latest created_at for Card A (rank-positions) and Card B (rank-title)
     const [{ data: rkTs }, { data: rtTs }] = await Promise.all([
       supabase.from('site_keyword_ranks').select('created_at').eq('stat_date', today).order('created_at', { ascending: false }).limit(1),
-      supabase.from('site_rank_keywords').select('created_at').eq('stat_date', today).order('created_at', { ascending: false }).limit(1),
+      supabase.from('site_keyword_ranks').select('created_at').eq('stat_date', today).order('created_at', { ascending: false }).limit(1),
     ])
     const rkLoggedAt = (rkTs as { created_at: string }[] | null)?.[0]?.created_at ?? null
     const rtLoggedAt = (rtTs as { created_at: string }[] | null)?.[0]?.created_at ?? null

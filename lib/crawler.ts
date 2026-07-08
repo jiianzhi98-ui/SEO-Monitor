@@ -393,7 +393,7 @@ async function fetchRankdownPage(
   ua: string,
   isToday = false,
   platform: 'mobile' | 'pc' = 'mobile'
-): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
+): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[]> {
   const pageSuffix = page === 1 ? '' : `${page}/`
   const prefix = platform === 'pc' ? 'baidu' : 'mobile'
   const reqUrl = isToday
@@ -412,17 +412,18 @@ async function fetchRankdownPage(
       return fetchRankdownPage(domain, rankPos, date, page, challengeCookie, ua, isToday, platform)
     }
     const $ = cheerio.load(html)
-    const results: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
+    const results: { keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[] = []
     $('tbody tr').each((_, tr) => {
       const keyword = $(tr).find('td.title a').first().text().trim()
       const rank_position = parseRankPosition($(tr).find('td.ip').eq(0).text().trim())
+      const prev_rank = parseRankPosition($(tr).find('td.ip').eq(1).text().trim())
       const volume = parseInt($(tr).find('td.ip').eq(2).text().trim(), 10) || 0
       // Title is the 6th column (index 5); falls back to last td
       const titleTd = $(tr).find('td').eq(5)
       const title = (titleTd.length ? titleTd : $(tr).find('td').last()).text().trim()
       // URL is the href on the 标题 column anchor (second td.title in the row)
       const url = $(tr).find('td.title').last().find('a').first().attr('href') || ''
-      if (keyword) results.push({ keyword, volume, title, url, rank_position })
+      if (keyword) results.push({ keyword, volume, title, url, rank_position, prev_rank })
     })
     return results
   } catch {
@@ -436,7 +437,7 @@ export async function fetchRankdownWithTitle(
   domain: string,
   date: string,
   platform: 'mobile' | 'pc' = 'mobile'
-): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
+): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[]> {
   const ua = randomUA()
   const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
   const isToday = date === todayMY
@@ -448,7 +449,7 @@ export async function fetchRankdownWithTitle(
 
   const allResults = await Promise.all(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
-      const entries: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
+      const entries: { keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[] = []
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankdownPage(domain, rankPos, date, page, sharedCookie, ua, isToday, platform)
         if (pageEntries.length === 0) break
@@ -459,13 +460,13 @@ export async function fetchRankdownWithTitle(
     })
   )
 
-  const seen = new Map<string, { volume: number; title: string; url: string; rank_position: number | null }>()
+  const seen = new Map<string, { volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }>()
   for (const e of allResults.flat()) {
     const cur = seen.get(e.keyword)
-    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title, url: e.url, rank_position: e.rank_position })
+    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title, url: e.url, rank_position: e.rank_position, prev_rank: e.prev_rank })
   }
   return Array.from(seen.entries())
-    .map(([keyword, { volume, title, url, rank_position }]) => ({ keyword, volume, title, url, rank_position }))
+    .map(([keyword, { volume, title, url, rank_position, prev_rank }]) => ({ keyword, volume, title, url, rank_position, prev_rank }))
     .sort((a, b) => b.volume - a.volume)
 }
 
@@ -479,7 +480,7 @@ async function fetchRankupPage(
   ua: string,
   isToday = false,
   platform: 'mobile' | 'pc' = 'mobile'
-): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
+): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[]> {
   const pageSuffix = page === 1 ? '' : `${page}/`
   const prefix = platform === 'pc' ? 'baidu' : 'mobile'
   const reqUrl = isToday
@@ -498,15 +499,16 @@ async function fetchRankupPage(
       return fetchRankupPage(domain, rankPos, date, page, challengeCookie, ua, isToday, platform)
     }
     const $ = cheerio.load(html)
-    const results: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
+    const results: { keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[] = []
     $('tbody tr').each((_, tr) => {
       const keyword = $(tr).find('td.title a').first().text().trim()
       const rank_position = parseRankPosition($(tr).find('td.ip').eq(0).text().trim())
+      const prev_rank = parseRankPosition($(tr).find('td.ip').eq(1).text().trim())
       const volume = parseInt($(tr).find('td.ip').eq(2).text().trim(), 10) || 0
       const titleTd = $(tr).find('td').eq(5)
       const title = (titleTd.length ? titleTd : $(tr).find('td').last()).text().trim()
       const url = $(tr).find('td.title').last().find('a').first().attr('href') || ''
-      if (keyword) results.push({ keyword, volume, title, url, rank_position })
+      if (keyword) results.push({ keyword, volume, title, url, rank_position, prev_rank })
     })
     return results
   } catch {
@@ -519,7 +521,7 @@ export async function fetchRankupWithTitle(
   domain: string,
   date: string,
   platform: 'mobile' | 'pc' = 'mobile'
-): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null }[]> {
+): Promise<{ keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[]> {
   const ua = randomUA()
   const prefix = platform === 'pc' ? 'baidu' : 'mobile'
   const todayMY = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
@@ -531,7 +533,7 @@ export async function fetchRankupWithTitle(
 
   const allResults = await Promise.all(
     [1, 2, 3, 4, 5].map(async (rankPos) => {
-      const entries: { keyword: string; volume: number; title: string; url: string; rank_position: number | null }[] = []
+      const entries: { keyword: string; volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }[] = []
       for (let page = 1; page <= 15; page++) {
         const pageEntries = await fetchRankupPage(domain, rankPos, date, page, sharedCookie, ua, isToday, platform)
         if (pageEntries.length === 0) break
@@ -542,13 +544,13 @@ export async function fetchRankupWithTitle(
     })
   )
 
-  const seen = new Map<string, { volume: number; title: string; url: string; rank_position: number | null }>()
+  const seen = new Map<string, { volume: number; title: string; url: string; rank_position: number | null; prev_rank: number | null }>()
   for (const e of allResults.flat()) {
     const cur = seen.get(e.keyword)
-    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title, url: e.url, rank_position: e.rank_position })
+    if (!cur || e.volume > cur.volume) seen.set(e.keyword, { volume: e.volume, title: e.title, url: e.url, rank_position: e.rank_position, prev_rank: e.prev_rank })
   }
   return Array.from(seen.entries())
-    .map(([keyword, { volume, title, url, rank_position }]) => ({ keyword, volume, title, url, rank_position }))
+    .map(([keyword, { volume, title, url, rank_position, prev_rank }]) => ({ keyword, volume, title, url, rank_position, prev_rank }))
     .sort((a, b) => b.volume - a.volume)
 }
 
