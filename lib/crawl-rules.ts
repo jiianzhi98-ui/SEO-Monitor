@@ -20,7 +20,7 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '关键词抓取',
     badge: 'step=keywords · GitHub Actions · 目标 00:00 MYT（cron 23:00 MYT + 排队约 1h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 15 * * * UTC = 23:00 MYT 前一天)，动态 matrix job 并行（每5个站点1个job，由 setup job 查询当前站点总数自动计算），每组抓约5个站点；实际执行脚本：scripts/crawl.ts（非 /api/cron，两条路径）；GitHub runner 排队约1小时，实际执行约 00:00 MYT。失败/空站由 retry-crawl.yml (cron 45 21 UTC = 05:45 MYT) 自动补抓' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 15 * * * UTC = 23:00 MYT 前一天)，动态 matrix job 并行（每2个站点1个job，由 setup job 查询当前站点总数自动计算），每组抓约2个站点；实际执行脚本：scripts/crawl.ts（非 /api/cron，两条路径）；GitHub runner 排队约1小时，实际执行约 00:00 MYT。失败/空站由 retry-crawl.yml (cron 45 21 UTC = 05:45 MYT) 自动补抓' },
       { label: '抓取对象', text: '仅 is_enabled=true 且 list_url 已填写的站点；is_enabled 由用户在网站管理"关键词数据"开关控制，关闭后跳过关键词抓取但权重/排名照常运行' },
       { label: '频率规则', text: '所有站点均为 daily（每天）' },
       { label: '翻页策略', text: '最多3页；正式 GitHub Actions 抓取每页间隔随机等待10~15秒；单站手动重试跳过等待直接顺序翻页' },
@@ -35,7 +35,7 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '权重+收录',
     badge: 'step=weight · GitHub Actions · 目标 01:00 MYT（cron 00:00 MYT + 排队约 1h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 16 * * * UTC = 00:00 MYT 当天)，动态 matrix job 并行（每5个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 01:00 MYT。失败站由 retry-crawl.yml (cron 0 22 UTC = 06:00 MYT) 自动补抓' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 16 * * * UTC = 00:00 MYT 当天)，动态 matrix job 并行（每2个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 01:00 MYT。失败站由 retry-crawl.yml (cron 0 22 UTC = 06:00 MYT) 自动补抓' },
       { label: '数据来源', text: '爱站 aizhan.com，抓取 PC/移动权重、收录数、来路IP区间' },
       { label: '限流保护', text: '失败后等30秒重试，最多3次（共3次尝试，每次换新UA）；站点间隔3秒' },
       { label: '写入表', text: 'weight_history（pc/mobile权重+IP区间，按 site_id+record_date upsert）/ index_snapshots（收录数，按 site_id+snapshot_date upsert）' },
@@ -47,7 +47,7 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '排名变动',
     badge: 'step=rank · GitHub Actions · 目标 02:00 MYT（cron 01:00 MYT + 排队约 1h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 17 * * * UTC = 01:00 MYT 当天)，动态 matrix job 并行（每5个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 02:00 MYT。失败/空站由 retry-crawl.yml (cron 15 22 UTC = 06:15 MYT) 自动补抓' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 17 * * * UTC = 01:00 MYT 当天)，动态 matrix job 并行（每2个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 02:00 MYT。失败/空站由 retry-crawl.yml (cron 15 22 UTC = 06:15 MYT) 自动补抓' },
       { label: '抓取对象', text: '仅 is_enabled=true 且 has_rank_data=true 的站点；has_rank_data 由用户在网站管理手动开关，cron 不会自动修改该字段' },
       { label: '数据来源', text: '爱站移动端 baidurank.aizhan.com/mobile/…，抓涨入词与跌出词及搜索量' },
       { label: '并行策略', text: '排名段1-5同时并行，段内按页顺序，每页间隔300ms' },
@@ -73,7 +73,7 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '收录页面追踪',
     badge: 'step=index-pages · GitHub Actions · 目标 04:00 MYT（cron 20:00 UTC）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 20 * * * UTC = 04:00 MYT)，动态 matrix job 并行（每5个站点1个job）；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 20 * * * UTC = 04:00 MYT)，动态 matrix job 并行（每2个站点1个job）；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
       { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）' },
       { label: '抓取方式', text: '百度 site:domain 搜索，带近31天 gpc 时间过滤（gpc=stf={now-31d},{now}|stftype=1 + tfflag=1），过滤依据是百度内部重新收录时间而非页面发布日期；带 ct=2097152/si=domain/fenlei=256 开启百度站内搜索模式以获取更完整结果；pn=0/10/20... 翻页，无页数上限；停止条件：空页、被拦截、或整页URL相同立即停；页间延迟 1.5-3 秒（有 Cookie），4-7 秒（无 Cookie）；站间延迟 10 秒' },
       { label: '去重', text: '按 (site_id, url) 唯一索引 upsert；新页面写入 first_seen_date=today（DB trigger 保护，UPDATE 时不覆盖）；已知页面更新 last_seen_date=today；抓完后仅将 last_seen_date 在近30天内但本次未出现的页面标记 disappeared_date=today（30天可观测窗口：超出范围的历史页面不作脱收判定，因月度抓取不能代表其是否还被收录）；重新出现则清 disappeared_date 为 null' },

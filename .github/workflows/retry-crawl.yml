@@ -29,7 +29,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
             python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
-          TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/5)))")
+          TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/2)))")
           MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "total=${TOTAL}" >> $GITHUB_OUTPUT
