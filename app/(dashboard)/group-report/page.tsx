@@ -712,7 +712,7 @@ export default function GroupReportPage() {
 
           {/* ── 成效追踪 ── */}
           {activeTabId !== 'competitors' && reportTab === 'outcomes' && (() => {
-            const OCOLS = 'grid-cols-[72px_72px_70px_50px_minmax(120px,1fr)_64px_80px_96px_100px_64px_62px]'
+            const OCOLS = 'grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px]'
             const oTotal = outcomes.length
             const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterDiscoverStart || oFilterDiscoverEnd || oFilterSubmitStart || oFilterSubmitEnd)
             const isPreview = oTotal === 0 && !anyFilter && !outcomesLoading
@@ -828,45 +828,46 @@ export default function GroupReportPage() {
                         </div>
                       )}
                       <div className="overflow-x-auto">
-                        <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[880px]`}>
-                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center">发现日期{oSortIcons('claimed_date')}</span>
-                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center">提交日期{oSortIcons('submitted_at')}</span>
-                          <span className="text-[11px] font-medium text-gray-400">成员</span>
-                          <span className="text-[11px] font-medium text-gray-400">操作</span>
+                        <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[860px]`}>
+                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">发现日期{oSortIcons('claimed_date')}</span>
+                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">提交日期{oSortIcons('submitted_at')}</span>
+                          <span className="text-[11px] font-medium text-gray-400 text-center">成员</span>
+                          <span className="text-[11px] font-medium text-gray-400 text-center">操作</span>
                           <span className="text-[11px] font-medium text-gray-400">关键词 → 最终词</span>
-                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-end">搜索量{oSortIcons('search_volume')}</span>
-                          <span className="text-[11px] font-medium text-gray-400">收录</span>
-                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center">排名{oSortIcons('rank_change')}</span>
+                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">搜索量{oSortIcons('search_volume')}</span>
+                          <span className="text-[11px] font-medium text-gray-400 text-center">收录</span>
+                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">排名{oSortIcons('rank_change')}</span>
                           <span className="text-[11px] font-medium text-gray-400">排名词</span>
-                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-end">排名量{oSortIcons('rank_volume')}</span>
+                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">排名量{oSortIcons('rank_volume')}</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">成效</span>
                         </div>
-                        <div className="divide-y divide-gray-50 min-w-[880px]">
+                        <div className="divide-y divide-gray-50 min-w-[860px]">
                           {pagedO.map(row => {
                             const submitStr = row.submitted_at ? row.submitted_at.slice(5, 10).replace('-', '/') : '—'
                             const rc = row.rank_change
                             return (
                               <div key={row.id} className={`grid ${OCOLS} gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center`}>
-                                <span className="text-sm text-gray-500">{row.claimed_date.slice(5).replace('-', '/')}</span>
-                                <span className="text-sm text-gray-500">{submitStr}</span>
-                                <span className="text-sm text-gray-700 font-medium truncate" title={row.username}>{row.username}</span>
-                                <span className={`text-xs px-1.5 py-0.5 rounded-full w-fit ${row.operation_type === '新增' ? 'bg-green-50 text-green-600' : row.operation_type === '更新' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                                  {row.operation_type ?? '—'}
-                                </span>
+                                <span className="text-sm text-gray-500 text-center">{row.claimed_date.slice(5).replace('-', '/')}</span>
+                                <span className="text-sm text-gray-500 text-center">{submitStr}</span>
+                                <span className="text-sm text-gray-700 font-medium text-center truncate" title={row.username}>{row.username}</span>
+                                <div className="flex justify-center">
+                                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${row.operation_type === '新增' ? 'bg-green-50 text-green-600' : row.operation_type === '更新' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                                    {row.operation_type ?? '—'}
+                                  </span>
+                                </div>
                                 <div className="min-w-0">
                                   <div className="text-sm text-gray-800 truncate" title={row.keyword}>{row.keyword}</div>
                                   {row.final_keyword
                                     ? <div className="text-xs text-green-600 truncate" title={row.final_keyword}>→ {row.final_keyword}</div>
                                     : <div className="text-xs text-gray-300">—</div>}
                                 </div>
-                                <div className="text-sm text-gray-600 tabular-nums text-right">{fmtVol(row.search_volume)}</div>
-                                <div>
+                                <div className="text-sm text-gray-600 tabular-nums text-center">{fmtVol(row.search_volume)}</div>
+                                <div className="text-center">
                                   {row.indexed
                                     ? <span className="text-sm text-blue-600">{row.first_seen_date ? row.first_seen_date.slice(5).replace('-', '/') : '已收录'}</span>
                                     : <span className="text-sm text-red-400">未收录</span>}
                                 </div>
-                                {/* 排名列：当前名次 + 变化幅度 */}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center justify-center gap-1.5">
                                   {row.rank_position != null
                                     ? <span className="text-sm text-gray-700">第{row.rank_position}名</span>
                                     : <span className="text-sm text-gray-300">—</span>}
@@ -881,7 +882,7 @@ export default function GroupReportPage() {
                                     ? <div className="text-sm text-gray-700 truncate" title={row.rank_keyword}>{row.rank_keyword}</div>
                                     : <span className="text-sm text-gray-300">—</span>}
                                 </div>
-                                <div className="text-sm text-gray-500 tabular-nums text-right">{row.rank_volume ? fmtVol(row.rank_volume) : '—'}</div>
+                                <div className="text-sm text-gray-500 tabular-nums text-center">{row.rank_volume ? fmtVol(row.rank_volume) : '—'}</div>
                                 <div className="flex justify-center">
                                   {row.outcome === 'success' && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
                                   {row.outcome === 'fail'    && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">无效</span>}
