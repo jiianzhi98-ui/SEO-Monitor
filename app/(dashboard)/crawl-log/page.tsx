@@ -661,7 +661,7 @@ export default function CrawlLogPage() {
           </div>
 
           {/* Row 2: rank-title / index-pages */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
 
               {/* Card A — 排名抓取 */}
               <div className="card p-4">
@@ -727,7 +727,7 @@ export default function CrawlLogPage() {
                     </span>
                     <span className="text-sm text-gray-400">/{row2.indexPages.ok_count + row2.indexPages.empty_count + row2.indexPages.fail_count} 站成功</span>
                     {row2.indexPages.rows_written > 0 && (
-                      <p className="text-xs text-gray-400 mt-1">{row2.indexPages.rows_written.toLocaleString()} 新增页面</p>
+                      <span className="ml-2 text-xs text-gray-400">{row2.indexPages.rows_written.toLocaleString()} 新增页面</span>
                     )}
                   </div>
                 ) : (
