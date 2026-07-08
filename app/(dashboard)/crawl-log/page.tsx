@@ -258,8 +258,7 @@ function RetryModal({ step, sites, onClose, onRefresh }: {
 const SELECT_CLS = 'text-xs border border-gray-200 rounded-md pl-2.5 pr-6 py-1 text-gray-600 bg-white cursor-pointer hover:border-gray-300 focus:outline-none appearance-none'
 
 type Row2Stats = {
-  rankPos: { succeeded: number; total: number; rows: number; loggedAt: string | null }
-  rankTitle: { succeeded: number; total: number; rows: number; loggedAt: string | null }
+  rankTitle: { succeeded: number; total: number; loggedAt: string | null }
   indexPages: ActivityLog | null
 }
 
@@ -272,8 +271,7 @@ export default function CrawlLogPage() {
 
   // Row 2 cards
   const [row2, setRow2] = useState<Row2Stats>({
-    rankPos: { succeeded: 0, total: 0, rows: 0, loggedAt: null },
-    rankTitle: { succeeded: 0, total: 0, rows: 0, loggedAt: null },
+    rankTitle: { succeeded: 0, total: 0, loggedAt: null },
     indexPages: null,
   })
 
@@ -324,45 +322,25 @@ export default function CrawlLogPage() {
     }
     setTodayLogs(grouped)
 
-    // Row 2 card A + B: fetch task_groups once for both cards
-    const { data: taskGroupsData } = await supabase.from('task_groups').select('associated_domains, competitor_domains')
-    const allRkDomains = new Set<string>()
-    const allRtDomains = new Set<string>()
-    for (const g of (taskGroupsData || []) as { associated_domains: string[] | null; competitor_domains: string[] | null }[]) {
-      for (const d of g.associated_domains || []) { if (d?.trim()) allRkDomains.add(d.trim()) }
-      for (const d of g.competitor_domains || []) { if (d?.trim()) allRtDomains.add(d.trim()) }
+    // Row 2 rank-title card: all has_rank_title sites, count those with data today
+    const { data: rtSitesRaw } = await supabase.from('sites').select('id').eq('has_rank_title', true)
+    const rtSiteIds = (rtSitesRaw || []).map((s: { id: string }) => s.id)
+    const rtTotal = rtSiteIds.length
+    let rtSucceeded = 0
+    if (rtTotal > 0) {
+      const { data: rtToday } = await supabase
+        .from('site_keyword_ranks')
+        .select('site_id')
+        .eq('stat_date', today)
+        .in('site_id', rtSiteIds)
+      rtSucceeded = new Set((rtToday || []).map((r: { site_id: string }) => r.site_id)).size
     }
-
-    // Card A: own-site rank positions — total = associated_domains, succeeded = those with data today
-    let rkSucceeded = 0, rkTotal = 0, rkRowCount = 0
-    if (allRkDomains.size > 0) {
-      const { data: rkSiteData } = await supabase.from('sites').select('id').in('domain', Array.from(allRkDomains))
-      const rkSiteIds = (rkSiteData || []).map((s: { id: string }) => s.id)
-      rkTotal = rkSiteIds.length
-      for (const siteId of rkSiteIds) {
-        const { data: chk } = await supabase.from('site_keyword_ranks').select('site_id').eq('site_id', siteId).eq('stat_date', today).limit(1)
-        if (chk && chk.length > 0) rkSucceeded++
-      }
-    }
-
-    // Card B: competitor rank titles — total = competitor_domains across all task_groups
-    const rtTotal = allRtDomains.size
-    let rtSucceeded = 0, rtRowCount = 0
-    if (allRtDomains.size > 0) {
-      const { data: rtSiteData } = await supabase.from('sites').select('id').in('domain', Array.from(allRtDomains))
-      const rtSiteIds = (rtSiteData || []).map((s: { id: string }) => s.id)
-      for (const siteId of rtSiteIds) {
-        const { data: chk } = await supabase.from('site_keyword_ranks').select('site_id').eq('site_id', siteId).eq('stat_date', today).limit(1)
-        if (chk && chk.length > 0) rtSucceeded++
-      }
-    }
-
-    // Get latest created_at for Card A (rank-positions) and Card B (rank-title)
-    const [{ data: rkTs }, { data: rtTs }] = await Promise.all([
-      supabase.from('site_keyword_ranks').select('created_at').eq('stat_date', today).order('created_at', { ascending: false }).limit(1),
-      supabase.from('site_keyword_ranks').select('created_at').eq('stat_date', today).order('created_at', { ascending: false }).limit(1),
-    ])
-    const rkLoggedAt = (rkTs as { created_at: string }[] | null)?.[0]?.created_at ?? null
+    const { data: rtTs } = await supabase
+      .from('site_keyword_ranks')
+      .select('created_at')
+      .eq('stat_date', today)
+      .order('created_at', { ascending: false })
+      .limit(1)
     const rtLoggedAt = (rtTs as { created_at: string }[] | null)?.[0]?.created_at ?? null
 
     // Row 2 card C: index-pages latest activity_log (last 2 days in case run was yesterday night)
@@ -378,8 +356,7 @@ export default function CrawlLogPage() {
     const latestIndexPages = ((ipLogs || []) as ActivityLog[])[0] ?? null
 
     setRow2({
-      rankPos: { succeeded: rkSucceeded, total: rkTotal, rows: rkRowCount, loggedAt: rkLoggedAt },
-      rankTitle: { succeeded: rtSucceeded, total: rtTotal, rows: rtRowCount, loggedAt: rtLoggedAt },
+      rankTitle: { succeeded: rtSucceeded, total: rtTotal, loggedAt: rtLoggedAt },
       indexPages: latestIndexPages,
     })
 
@@ -683,43 +660,14 @@ export default function CrawlLogPage() {
             </div>
           </div>
 
-          {/* Row 2: rank-positions / rank-title / index-pages */}
-          <div>
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">专项任务状态</h2>
-            <div className="grid grid-cols-3 gap-4">
+          {/* Row 2: rank-title / index-pages */}
+          <div className="grid grid-cols-2 gap-4">
 
-              {/* Card A — 自站排名位置 */}
+              {/* Card A — 排名抓取 */}
               <div className="card p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">自站排名位置</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 03:30 MYT</p>
-                  </div>
-                  {row2.rankPos.loggedAt ? (
-                    <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
-                      {formatCardTime(row2.rankPos.loggedAt)} 执行
-                    </span>
-                  ) : (
-                    <span className="text-xs text-gray-400">尚无记录</span>
-                  )}
-                </div>
-                {row2.rankPos.total > 0 ? (
-                  <div className="mt-3">
-                    <span className={`text-2xl font-bold tabular-nums ${row2.rankPos.succeeded < row2.rankPos.total ? 'text-yellow-600' : 'text-green-700'}`}>
-                      {row2.rankPos.succeeded}
-                    </span>
-                    <span className="text-sm text-gray-400">/{row2.rankPos.total} 站成功</span>
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 mt-3">今日暂无记录</p>
-                )}
-              </div>
-
-              {/* Card B — 竞品排名标题 */}
-              <div className="card p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-semibold text-gray-900 text-sm">竞品排名标题</p>
+                    <p className="font-semibold text-gray-900 text-sm">排名抓取</p>
                     <p className="text-xs text-gray-400 mt-0.5">每日 02:00 MYT</p>
                   </div>
                   {row2.rankTitle.loggedAt ? (
@@ -742,12 +690,12 @@ export default function CrawlLogPage() {
                 )}
               </div>
 
-              {/* Card C — 百度收录 */}
+              {/* Card B — 百度收录 */}
               <div className="card p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">百度收录</p>
-                    <p className="text-xs text-gray-400 mt-0.5">每日 04:00 MYT</p>
+                    <p className="text-xs text-gray-400 mt-0.5">每日 03:00 MYT</p>
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
                     {row2.indexPages ? (
@@ -787,7 +735,6 @@ export default function CrawlLogPage() {
                 )}
               </div>
 
-            </div>
           </div>
 
           {/* Run log table */}
