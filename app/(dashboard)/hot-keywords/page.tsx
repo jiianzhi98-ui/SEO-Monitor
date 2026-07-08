@@ -239,8 +239,9 @@ export default function HotRadarPage() {
   const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
-  const [wordLibRawKwMap, setWordLibRawKwMap] = useState<Map<string, Map<string, string>> | null>(null)
-  const [wordLibRawLoading, setWordLibRawLoading] = useState(false)
+  const [wordLibData, setWordLibData] = useState<(WordEntry & { longTailCount: number })[]>([])
+  const [wordLibLoading, setWordLibLoading] = useState(false)
+  const [wordLibLoaded, setWordLibLoaded] = useState(false)
   const [sortCol, setSortCol]           = useState('')
   const [sortDir, setSortDir]           = useState<'asc'|'desc'|''>('')
   const [wordLibMinSites, setWordLibMinSites] = useState(1)
@@ -302,7 +303,7 @@ export default function HotRadarPage() {
     const db = getBrowserClient()
 
     if (activeTab === 'wordLib') {
-      const wordEntry = wordLibWords.find(w => w.keyword === keyword)
+      const wordEntry = wordLibData.find(w => w.keyword === keyword)
       const targetDomains = wordEntry?.sites || []
       const domainToId = new Map(Array.from(siteIdMap.entries()).map(([id, d]) => [d, id]))
       const siteIds = targetDomains.map(d => domainToId.get(d)).filter((id): id is string => !!id)
@@ -314,7 +315,7 @@ export default function HotRadarPage() {
             .select('site_id, keyword')
             .in('site_id', siteIds)
             .ilike('keyword', `${keyword}%`)
-            .gte('content_date', since)
+            .gte('discovered_at', since)
           const bySite = new Map<string, Set<string>>()
           for (const r of (raw || [])) {
             const domain = siteIdMap.get(r.site_id)
@@ -378,39 +379,30 @@ export default function HotRadarPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeTab !== 'wordLib' || wordLibRawKwMap !== null || wordLibRawLoading || !siteIdMap.size) return
-    setWordLibRawLoading(true)
+    if (activeTab !== 'wordLib' || wordLibLoaded || wordLibLoading) return
+    setWordLibLoading(true)
     const db = getBrowserClient()
-    const allSiteIds = Array.from(siteIdMap.keys())
-    if (!allSiteIds.length) {
-      setWordLibRawKwMap(new Map())
-      setWordLibRawLoading(false)
-      return
-    }
-    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(db.from('raw_keywords') as any)
-      .select('site_id, keyword, discovered_at')
-      .in('site_id', allSiteIds)
-      .gte('discovered_at', since)
-      .limit(300000)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data: raw }: { data: Array<{site_id: string; keyword: string; discovered_at: string}> | null }) => {
-        const domainKwMap = new Map<string, Map<string, string>>()
-        for (const r of (raw || [])) {
-          const domain = siteIdMap.get(r.site_id)
-          if (!domain) continue
-          if (!domainKwMap.has(domain)) domainKwMap.set(domain, new Map())
-          const kwMap = domainKwMap.get(domain)!
-          const date = String(r.discovered_at || '').slice(0, 10)
-          const existing = kwMap.get(r.keyword) || ''
-          if (date > existing) kwMap.set(r.keyword, date)
-        }
-        setWordLibRawKwMap(domainKwMap)
+    ;(db as any).rpc('get_wordlib_words')
+      .then(({ data }: { data: Array<{keyword: string; long_tail_count: number; site_count: number; sites: string[]; last_date: string}> | null }) => {
+        const t = today
+        setWordLibData((data || []).map(r => {
+          const last_date = String(r.last_date || '').slice(0, 10)
+          return {
+            keyword: r.keyword,
+            longTailCount: r.long_tail_count,
+            count: r.long_tail_count,
+            siteCount: r.site_count,
+            sites: r.sites || [],
+            last_date,
+            first_date: last_date === t ? t : '',
+          }
+        }))
+        setWordLibLoaded(true)
       })
-      .catch(() => { setWordLibRawKwMap(new Map()) })
-      .finally(() => { setWordLibRawLoading(false) })
-  }, [activeTab, siteIdMap]) // eslint-disable-line react-hooks/exhaustive-deps
+      .catch(() => { setWordLibData([]) })
+      .finally(() => { setWordLibLoading(false) })
+  }, [activeTab, wordLibLoaded, wordLibLoading, today])
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -480,66 +472,16 @@ export default function HotRadarPage() {
     })
   }, [filtered, minStreak, yesterday])
 
-  const wordLibWords = useMemo((): (WordEntry & { longTailCount: number })[] => {
-    if (!wordLibRawKwMap) return []
-
-    // Step 1: collect per-keyword site set + max date across ALL sites
-    const kwSites = new Map<string, Set<string>>()
-    const kwMaxDate = new Map<string, string>()
-    for (const [domain, kwMap] of Array.from(wordLibRawKwMap.entries())) {
-      for (const [kw, date] of Array.from(kwMap.entries())) {
-        if (!kwSites.has(kw)) kwSites.set(kw, new Set())
-        kwSites.get(kw)!.add(domain)
-        const existing = kwMaxDate.get(kw) || ''
-        if (date > existing) kwMaxDate.set(kw, date)
-      }
-    }
-
-    // Step 2: global prefix-group across all unique keywords (not per-site)
-    // This ensures Site A with "小黄人快跑" and Site B with "小黄人快跑下载"
-    // both appear under the same base — the old per-site algorithm excluded them
-    // when neither site alone had 2+ variants.
-    const allKws = Array.from(kwSites.keys()).sort((a, b) => a.length - b.length)
-    const globalGroups = new Map<string, Set<string>>()
-    for (const k of allKws) {
-      let matched = false
-      for (const base of Array.from(globalGroups.keys())) {
-        if (k.startsWith(base) && k !== base) { globalGroups.get(base)!.add(k); matched = true; break }
-      }
-      if (!matched) globalGroups.set(k, new Set([k]))
-    }
-
-    // Step 3: for each group with 2+ variants, collect ALL sites that have any variant
-    return Array.from(globalGroups.entries())
-      .filter(([, variants]) => variants.size >= 2)
-      .map(([kw, variants]) => {
-        const sites = new Set<string>()
-        let last_date = ''
-        for (const v of Array.from(variants)) {
-          const vSites = kwSites.get(v)
-          if (vSites) vSites.forEach(s => sites.add(s))
-          const d = kwMaxDate.get(v) || ''
-          if (d > last_date) last_date = d
-        }
-        const first_date = last_date === today ? today : ''
-        return {
-          keyword: kw, longTailCount: variants.size, siteCount: sites.size,
-          sites: Array.from(sites), count: variants.size,
-          last_date, first_date,
-        }
-      })
-      .filter(w => w.siteCount >= wordLibMinSites)
-      .sort((a, b) => {
-        if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
-        return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
-      })
-  }, [wordLibRawKwMap, wordLibMinSites, today])
+  const wordLibFiltered = useMemo(
+    () => wordLibData.filter(w => w.siteCount >= wordLibMinSites),
+    [wordLibData, wordLibMinSites]
+  )
 
   const baseList = !filtered ? [] :
     activeTab === 'cross'   ? filtered.crossWords  :
     activeTab === 'new'     ? filtered.newWords     :
     activeTab === 'rank'    ? filtered.rankWords    :
-    activeTab === 'wordLib' ? wordLibWords           :
+    activeTab === 'wordLib' ? wordLibFiltered          :
     filteredStreakWords
 
   const activeList = useMemo(() => {
@@ -952,7 +894,7 @@ export default function HotRadarPage() {
               )}
 
               {/* 更新词库：6列 */}
-              {activeTab === 'wordLib' && wordLibRawLoading && (
+              {activeTab === 'wordLib' && wordLibLoading && (
                 <div className="flex items-center justify-center py-16 text-gray-400 gap-3">
                   <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -961,7 +903,7 @@ export default function HotRadarPage() {
                   加载中...
                 </div>
               )}
-              {activeTab === 'wordLib' && !wordLibRawLoading && (
+              {activeTab === 'wordLib' && !wordLibLoading && (
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-24" />

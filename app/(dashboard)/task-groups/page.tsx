@@ -489,8 +489,9 @@ export default function TaskGroupsPage() {
   const [detailRankRows, setDetailRankRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [wordLibSiteKws, setWordLibSiteKws] = useState<{domain: string; keywords: string[]}[]>([])
-  const [wordLibRawKwMap, setWordLibRawKwMap] = useState<Map<string, Map<string, string>> | null>(null)
-  const [wordLibRawLoading, setWordLibRawLoading] = useState(false)
+  const [wordLibData, setWordLibData] = useState<WordLibEntry[]>([])
+  const [wordLibLoading, setWordLibLoading] = useState(false)
+  const [wordLibLoaded, setWordLibLoaded] = useState(false)
   const [sortCol, setSortCol]           = useState('')
   const [sortDir, setSortDir]           = useState<'asc'|'desc'|''>('')
 
@@ -609,56 +610,16 @@ export default function TaskGroupsPage() {
   }, [radarData, yesterday, groupNewDomains])
 
   const wordLibWords = useMemo((): WordLibEntry[] => {
-    if (!wordLibRawKwMap) return []
-
-    // Step 1: collect per-keyword site set + max date (respecting groupNewDomains filter)
-    const kwSites = new Map<string, Set<string>>()
-    const kwMaxDate = new Map<string, string>()
-    for (const [domain, kwMap] of Array.from(wordLibRawKwMap.entries())) {
-      if (groupNewDomains.size && !groupNewDomains.has(domain)) continue
-      for (const [kw, date] of Array.from(kwMap.entries())) {
-        if (!kwSites.has(kw)) kwSites.set(kw, new Set())
-        kwSites.get(kw)!.add(domain)
-        const existing = kwMaxDate.get(kw) || ''
-        if (date > existing) kwMaxDate.set(kw, date)
-      }
-    }
-
-    // Step 2: global prefix-group across all unique keywords (not per-site)
-    const allKws = Array.from(kwSites.keys()).sort((a, b) => a.length - b.length)
-    const globalGroups = new Map<string, Set<string>>()
-    for (const k of allKws) {
-      let matched = false
-      for (const base of Array.from(globalGroups.keys())) {
-        if (k.startsWith(base) && k !== base) { globalGroups.get(base)!.add(k); matched = true; break }
-      }
-      if (!matched) globalGroups.set(k, new Set([k]))
-    }
-
-    // Step 3: for each group with 2+ variants, collect all sites that have any variant
-    return Array.from(globalGroups.entries())
-      .filter(([, variants]) => variants.size >= 2)
-      .map(([kw, variants]) => {
-        const sites = new Set<string>()
-        let last_date = ''
-        for (const v of Array.from(variants)) {
-          const vSites = kwSites.get(v)
-          if (vSites) vSites.forEach(s => sites.add(s))
-          const d = kwMaxDate.get(v) || ''
-          if (d > last_date) last_date = d
-        }
-        const first_date = last_date === today ? today : ''
-        return {
-          keyword: kw, longTailCount: variants.size, siteCount: sites.size,
-          sites: Array.from(sites), count: variants.size,
-          last_date, first_date,
-        }
+    if (!wordLibData.length) return []
+    if (!groupNewDomains.size) return wordLibData
+    // Filter entries to only those with at least one site in the group's new_domains
+    return wordLibData
+      .filter(w => w.sites.some(s => groupNewDomains.has(s)))
+      .map(w => {
+        const filtered = w.sites.filter(s => groupNewDomains.has(s))
+        return { ...w, sites: filtered, siteCount: filtered.length }
       })
-      .sort((a, b) => {
-        if (a.last_date !== b.last_date) return b.last_date.localeCompare(a.last_date)
-        return b.longTailCount - a.longTailCount || b.siteCount - a.siteCount
-      })
-  }, [wordLibRawKwMap, groupNewDomains, today])
+  }, [wordLibData, groupNewDomains])
 
   // ── Detail modal data ───────────────────────────────────────────────────────
 
@@ -836,7 +797,7 @@ export default function TaskGroupsPage() {
     }
 
     if (source === '更新词库') {
-      const wordEntry = radarData?.newWords.find(w => w.keyword === keyword)
+      const wordEntry = wordLibWords.find(w => w.keyword === keyword)
       const targetDomains = wordEntry?.sites || []
       const domainToId = new Map(Array.from(idMap.entries()).map(([id, d]) => [d, id]))
       const siteIds = targetDomains.map(d => domainToId.get(d)).filter((id): id is string => !!id)
@@ -848,7 +809,7 @@ export default function TaskGroupsPage() {
             .select('site_id, keyword')
             .in('site_id', siteIds)
             .ilike('keyword', `${keyword}%`)
-            .gte('content_date', since)
+            .gte('discovered_at', since)
           const bySite = new Map<string, Set<string>>()
           for (const r of (raw || [])) {
             const domain = idMap.get(r.site_id)
@@ -930,43 +891,30 @@ export default function TaskGroupsPage() {
   }, [displayedClaims.length])
 
   useEffect(() => {
-    if (rightTab !== 'wordLib' || wordLibRawKwMap !== null || wordLibRawLoading) return
-    setWordLibRawLoading(true);
-    (async () => {
-      try {
-        const supabase = getBrowserClient()
-        let idMap = siteIdMap
-        if (idMap.size === 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: siteData } = await (supabase.from('sites') as any).select('id, domain')
-          idMap = new Map((siteData || []).map((s: { id: string; domain: string }) => [s.id, s.domain]))
-          setSiteIdMap(idMap)
-        }
-        const allSiteIds = Array.from(idMap.keys())
-        if (!allSiteIds.length) { setWordLibRawKwMap(new Map()); return }
-        const since = getMYDate(-30)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: raw } = await (supabase.from('raw_keywords') as any)
-          .select('site_id, keyword, discovered_at')
-          .in('site_id', allSiteIds)
-          .gte('discovered_at', since)
-          .limit(300000)
-        const domainKwMap = new Map<string, Map<string, string>>()
-        for (const r of (raw || [])) {
-          const domain = idMap.get(r.site_id)
-          if (!domain) continue
-          if (!domainKwMap.has(domain)) domainKwMap.set(domain, new Map())
-          const kwMap = domainKwMap.get(domain)!
-          const date = String(r.discovered_at || '').slice(0, 10)
-          const existing = kwMap.get(r.keyword) || ''
-          if (date > existing) kwMap.set(r.keyword, date)
-        }
-        setWordLibRawKwMap(domainKwMap)
-      } finally {
-        setWordLibRawLoading(false)
-      }
-    })()
-  }, [rightTab, siteIdMap]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (rightTab !== 'wordLib' || wordLibLoaded || wordLibLoading) return
+    setWordLibLoading(true)
+    const supabase = getBrowserClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(supabase as any).rpc('get_wordlib_words')
+      .then(({ data }: { data: Array<{keyword: string; long_tail_count: number; site_count: number; sites: string[]; last_date: string}> | null }) => {
+        const t = today
+        setWordLibData((data || []).map(r => {
+          const last_date = String(r.last_date || '').slice(0, 10)
+          return {
+            keyword: r.keyword,
+            longTailCount: r.long_tail_count,
+            count: r.long_tail_count,
+            siteCount: r.site_count,
+            sites: r.sites || [],
+            last_date,
+            first_date: last_date === t ? t : '',
+          }
+        }))
+        setWordLibLoaded(true)
+      })
+      .catch(() => { setWordLibData([]) })
+      .finally(() => { setWordLibLoading(false) })
+  }, [rightTab, wordLibLoaded, wordLibLoading, today])
 
   useEffect(() => {
     if (!activeGroupId || selectedDate !== today) return
@@ -1310,7 +1258,7 @@ export default function TaskGroupsPage() {
     }
 
     if (rightTab === 'wordLib') {
-      if (wordLibRawLoading) return <Spinner />
+      if (wordLibLoading) return <Spinner />
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sorted_wordLib = sortCol && sortDir ? [...wordLibWords].sort((a: any, b: any) => {
         const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'longTailCount' ? (a.longTailCount??0) : sortCol === 'siteCount' ? (a.siteCount??0) : 0
