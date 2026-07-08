@@ -482,39 +482,42 @@ export default function HotRadarPage() {
 
   const wordLibWords = useMemo((): (WordEntry & { longTailCount: number })[] => {
     if (!wordLibRawKwMap) return []
-    // Build global keyword → max content_date across all sites
+
+    // Step 1: collect per-keyword site set + max date across ALL sites
+    const kwSites = new Map<string, Set<string>>()
     const kwMaxDate = new Map<string, string>()
-    for (const [, kwMap] of Array.from(wordLibRawKwMap.entries())) {
+    for (const [domain, kwMap] of Array.from(wordLibRawKwMap.entries())) {
       for (const [kw, date] of Array.from(kwMap.entries())) {
+        if (!kwSites.has(kw)) kwSites.set(kw, new Set())
+        kwSites.get(kw)!.add(domain)
         const existing = kwMaxDate.get(kw) || ''
         if (date > existing) kwMaxDate.set(kw, date)
       }
     }
-    // Prefix-grouping algorithm (same as competitor-daily)
-    const baseAggr = new Map<string, { sites: Set<string>; variants: Set<string> }>()
-    for (const [domain, kwMap] of Array.from(wordLibRawKwMap.entries())) {
-      const kws = Array.from(kwMap.keys()).sort((a, b) => a.length - b.length)
-      const groups = new Map<string, Set<string>>()
-      for (const k of kws) {
-        let matched = false
-        for (const base of Array.from(groups.keys())) {
-          if (k.startsWith(base) && k !== base) { groups.get(base)!.add(k); matched = true; break }
-        }
-        if (!matched) groups.set(k, new Set([k]))
+
+    // Step 2: global prefix-group across all unique keywords (not per-site)
+    // This ensures Site A with "小黄人快跑" and Site B with "小黄人快跑下载"
+    // both appear under the same base — the old per-site algorithm excluded them
+    // when neither site alone had 2+ variants.
+    const allKws = Array.from(kwSites.keys()).sort((a, b) => a.length - b.length)
+    const globalGroups = new Map<string, Set<string>>()
+    for (const k of allKws) {
+      let matched = false
+      for (const base of Array.from(globalGroups.keys())) {
+        if (k.startsWith(base) && k !== base) { globalGroups.get(base)!.add(k); matched = true; break }
       }
-      for (const [base, variants] of Array.from(groups.entries())) {
-        if (variants.size < 2) continue
-        if (!baseAggr.has(base)) baseAggr.set(base, { sites: new Set(), variants: new Set() })
-        const entry = baseAggr.get(base)!
-        entry.sites.add(domain)
-        variants.forEach(v => entry.variants.add(v))
-      }
+      if (!matched) globalGroups.set(k, new Set([k]))
     }
-    return Array.from(baseAggr.entries())
-      .map(([kw, { sites, variants }]) => {
-        // last_date = max content_date across all variants; first_date for badge logic
+
+    // Step 3: for each group with 2+ variants, collect ALL sites that have any variant
+    return Array.from(globalGroups.entries())
+      .filter(([, variants]) => variants.size >= 2)
+      .map(([kw, variants]) => {
+        const sites = new Set<string>()
         let last_date = ''
         for (const v of Array.from(variants)) {
+          const vSites = kwSites.get(v)
+          if (vSites) vSites.forEach(s => sites.add(s))
           const d = kwMaxDate.get(v) || ''
           if (d > last_date) last_date = d
         }
