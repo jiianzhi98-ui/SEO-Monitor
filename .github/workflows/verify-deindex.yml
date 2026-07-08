@@ -1,7 +1,12 @@
 name: Verify De-indexed Pages
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      recheck_disappeared:
+        description: '重新验证已脱收页面（true = recheck mode）'
+        required: false
+        default: 'false'
   schedule:
     - cron: '30 22 * * 5'  # 06:30 MYT every Saturday (UTC+8)
 
@@ -27,3 +32,4 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BAIDU_COOKIE: ${{ secrets.BAIDU_COOKIE }}
+          RECHECK_DISAPPEARED: ${{ github.event.inputs.recheck_disappeared || 'false' }}

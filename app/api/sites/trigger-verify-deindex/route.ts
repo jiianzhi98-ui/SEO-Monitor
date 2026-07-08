@@ -5,8 +5,9 @@ const REPO = 'jiianzhi98-ui/SEO-Monitor'
 const WORKFLOW = 'verify-deindex.yml'
 
 // POST /api/sites/trigger-verify-deindex
+// Body: { recheck?: boolean }
 // Triggers the verify-deindex GitHub Actions workflow via workflow_dispatch.
-export async function POST() {
+export async function POST(req: Request) {
   const authClient = createClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -16,6 +17,8 @@ export async function POST() {
   const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single()
   const role = profile?.role ?? 'normal'
   if (role === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { recheck } = await req.json().catch(() => ({}))
 
   const pat = process.env.GITHUB_PAT
   if (!pat) return NextResponse.json({ error: '服务器未配置 GITHUB_PAT，请联系管理员' }, { status: 500 })
@@ -30,7 +33,10 @@ export async function POST() {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      body: JSON.stringify({ ref: 'main' }),
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: { recheck_disappeared: recheck ? 'true' : 'false' },
+      }),
     }
   )
 

@@ -62,15 +62,19 @@ export default function IndexPagesPage() {
   const [verifying, setVerifying] = useState(false)
   const [verifyMsg, setVerifyMsg] = useState<string | null>(null)
 
-  async function handleTriggerVerify() {
+  async function handleTriggerVerify(recheck = false) {
     if (verifying) return
     setVerifying(true)
     setVerifyMsg(null)
     try {
-      const res = await fetch('/api/sites/trigger-verify-deindex', { method: 'POST' })
+      const res = await fetch('/api/sites/trigger-verify-deindex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recheck }),
+      })
       const data = await res.json()
       if (res.ok) {
-        setVerifyMsg('已触发，验证中…')
+        setVerifyMsg(recheck ? '已触发，重新验证已脱收中…' : '已触发，验证中…')
       } else {
         setVerifyMsg(data.error || '触发失败')
       }
@@ -254,11 +258,22 @@ export default function IndexPagesPage() {
               </span>
             )}
             <button
-              onClick={handleTriggerVerify}
+              onClick={() => handleTriggerVerify(false)}
               disabled={verifying}
               className="h-8 px-4 rounded-lg text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
             >
               {verifying ? '触发中…' : '手动验证'}
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('将对所有已脱收页面逐一搜索百度，确认是否已重新收录。数量较多时耗时较长，确认继续？')) {
+                  handleTriggerVerify(true)
+                }
+              }}
+              disabled={verifying}
+              className="h-8 px-4 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              脱收验证
             </button>
             {triggered ? (
               <>
