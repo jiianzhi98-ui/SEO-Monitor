@@ -390,19 +390,19 @@ export default function HotRadarPage() {
     const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(db.from('raw_keywords') as any)
-      .select('site_id, keyword, content_date')
+      .select('site_id, keyword, discovered_at')
       .in('site_id', allSiteIds)
-      .gte('content_date', since)
-      .limit(100000)
+      .gte('discovered_at', since)
+      .limit(300000)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data: raw }: { data: Array<{site_id: string; keyword: string; content_date: string}> | null }) => {
+      .then(({ data: raw }: { data: Array<{site_id: string; keyword: string; discovered_at: string}> | null }) => {
         const domainKwMap = new Map<string, Map<string, string>>()
         for (const r of (raw || [])) {
           const domain = siteIdMap.get(r.site_id)
           if (!domain) continue
           if (!domainKwMap.has(domain)) domainKwMap.set(domain, new Map())
           const kwMap = domainKwMap.get(domain)!
-          const date = String(r.content_date || '').slice(0, 10)
+          const date = String(r.discovered_at || '').slice(0, 10)
           const existing = kwMap.get(r.keyword) || ''
           if (date > existing) kwMap.set(r.keyword, date)
         }

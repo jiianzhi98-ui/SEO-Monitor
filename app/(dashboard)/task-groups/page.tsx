@@ -947,17 +947,17 @@ export default function TaskGroupsPage() {
         const since = getMYDate(-30)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: raw } = await (supabase.from('raw_keywords') as any)
-          .select('site_id, keyword, content_date')
+          .select('site_id, keyword, discovered_at')
           .in('site_id', allSiteIds)
-          .gte('content_date', since)
-          .limit(100000)
+          .gte('discovered_at', since)
+          .limit(300000)
         const domainKwMap = new Map<string, Map<string, string>>()
         for (const r of (raw || [])) {
           const domain = idMap.get(r.site_id)
           if (!domain) continue
           if (!domainKwMap.has(domain)) domainKwMap.set(domain, new Map())
           const kwMap = domainKwMap.get(domain)!
-          const date = String(r.content_date || '').slice(0, 10)
+          const date = String(r.discovered_at || '').slice(0, 10)
           const existing = kwMap.get(r.keyword) || ''
           if (date > existing) kwMap.set(r.keyword, date)
         }
