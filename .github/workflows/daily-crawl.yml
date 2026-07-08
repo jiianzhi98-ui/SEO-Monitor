@@ -19,13 +19,45 @@ on:
     - cron: '0 20 * * *'   # 04:00 MYT — index-pages
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+      total: ${{ steps.gen.outputs.total }}
+    steps:
+      - name: Compute job matrix
+        id: gen
+        run: |
+          SITE="${{ github.event.inputs.site }}"
+          if [ -n "$SITE" ]; then
+            # 单站运行：1 个 job 即可
+            echo 'matrix={"group":[0]}' >> $GITHUB_OUTPUT
+            echo 'total=1' >> $GITHUB_OUTPUT
+            echo "Single-site run ($SITE) → 1 group"
+          else
+            # 查询所有站点数量，每 5 个站点分配 1 个 job
+            COUNT=$(curl -sf \
+              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id" | \
+              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+            TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/5)))")
+            MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
+            echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
+            echo "total=${TOTAL}" >> $GITHUB_OUTPUT
+            echo "Sites=${COUNT} → Groups=${TOTAL}: ${MATRIX}"
+          fi
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
   crawl:
+    needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false          # 一组失败不影响其他组
-      matrix:
-        group: [0, 1, 2, 3, 4] # 5 个 job，各用不同 IP
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +87,7 @@ jobs:
             STEP="all"
           fi
           echo "step=$STEP" >> $GITHUB_OUTPUT
-          echo "Running step: $STEP"
+          echo "Running step: $STEP (group ${{ matrix.group }}/${{ needs.setup.outputs.total }})"
 
       - name: Run crawl
         run: |
@@ -63,7 +95,7 @@ jobs:
           if [ -n "${{ github.event.inputs.site }}" ]; then
             SITE_ARG="--site=${{ github.event.inputs.site }}"
           fi
-          npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=5 $SITE_ARG
+          npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} $SITE_ARG
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
