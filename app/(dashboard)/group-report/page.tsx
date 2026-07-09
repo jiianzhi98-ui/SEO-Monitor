@@ -60,17 +60,43 @@ interface OutcomeRow {
 interface OutcomeSummary { total: number; successCount: number; indexedCount: number; pendingCount: number }
 type OutcomeSortBy = 'claimed_date' | 'submitted_at' | 'search_volume' | 'rank_change' | 'rank_volume'
 
+interface Rule {
+  id: string
+  rule_number: number
+  group_id: string
+  name: string
+  type: 'add' | 'update' | 'mixed'
+  status: 'active' | 'inactive' | 'testing'
+  source: 'experiment' | 'manual' | 'ai' | 'data'
+  applicable_page_types: string[]
+  stage_applicability: string[]
+  description: string | null
+  confidence: number
+  success_count: number
+  fail_count: number
+  priority: number
+  created_at: string
+}
+
+interface RuleForm {
+  name: string; type: 'add' | 'update' | 'mixed'; status: 'active' | 'inactive' | 'testing'
+  source: 'experiment' | 'manual' | 'ai' | 'data'
+  applicable_page_types: string[]; stage_applicability: string[]
+  description: string; confidence: number; success_count: number; fail_count: number; priority: number
+}
+
+const EMPTY_RULE_FORM: RuleForm = {
+  name: '', type: 'add', status: 'active', source: 'manual',
+  applicable_page_types: [], stage_applicability: [],
+  description: '', confidence: 0, success_count: 0, fail_count: 0, priority: 0,
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const PERIOD_LABELS: Record<Period, string> = { yesterday: '昨日', week: '本周', month: '本月', custom: '自定义' }
 
-
-const SUGGESTED_RULES = [
-  { name: '掉排名 30 天未更新',   condition: '同一关键词排名下滑 ≥ 5，且距上次提交更新操作 > 30 天',              action: '建议重新更新该页面内容',             metric: '通过 rank_changes + member_claimed_keywords 对比' },
-  { name: '新增页面 7 天未收录',  condition: '提交"新增"操作后 7 天内，该 URL 未见于 site_indexed_pages',       action: '检查页面可抓取性、内链、sitemap',    metric: '通过 page_url 匹配 site_indexed_pages' },
-  { name: '高搜量词 3 天无人认领', condition: '搜索量 > 5000 的关键词连续出现在竞品涨排名，超过 3 天无人认领',    action: '优先分配给对应组员处理',             metric: '通过 rank_changes + member_claimed_keywords 对比' },
-  { name: '更新效果无提升',        condition: '提交"更新"操作后 30 天，对应关键词排名无上升记录',                action: '重新评估内容策略，可能需要增加词或调整结构', metric: '通过 submitted_at + rank_changes 时间窗口对比' },
-]
+const PAGE_TYPES = ['软件详情页', '游戏详情页']
+const STAGE_TYPES = ['起站期', '成长期', '成熟期', '通用']
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
   '竞品涨排名':  { bg: 'bg-purple-50',  text: 'text-purple-700' },
@@ -363,6 +389,16 @@ export default function GroupReportPage() {
   const [oPage, setOPage] = useState(0)
   const [oPageSize, setOPageSize] = useState(20)
 
+  // Rules tab state
+  const [rules, setRules] = useState<Rule[]>([])
+  const [rulesLoading, setRulesLoading] = useState(false)
+  const [showRuleModal, setShowRuleModal] = useState(false)
+  const [editingRule, setEditingRule] = useState<Rule | null>(null)
+  const [ruleForm, setRuleForm] = useState<RuleForm>(EMPTY_RULE_FORM)
+  const [ruleSaving, setRuleSaving] = useState(false)
+  const [ruleFilterStatus, setRuleFilterStatus] = useState('')
+  const [ruleFilterType, setRuleFilterType] = useState('')
+
   // Competitor tab state
   const [activeCompetitorDomain, setActiveCompetitorDomain] = useState('')
   const [competitorInnerTab, setCompetitorInnerTab] = useState<CompetitorInnerTab>('keywords')
@@ -461,6 +497,16 @@ export default function GroupReportPage() {
       .then(d => { setOutcomes(d.rows || []); setOutcomeSummary(d.summary || null) })
       .finally(() => setOutcomesLoading(false))
   }, [activeGroupId, reportTab, oFilterDiscoverStart, oFilterDiscoverEnd, oFilterSubmitStart, oFilterSubmitEnd, oFilterMember, oFilterOp, oFilterKw, oFilterIndex, oFilterRankKw, oFilterOutcome, oSortBy, oSortDir])
+
+  // Load rules data
+  useEffect(() => {
+    if (!activeGroupId || reportTab !== 'rules') return
+    setRulesLoading(true)
+    fetch(`/api/task-groups/${activeGroupId}/rules`)
+      .then(r => r.json())
+      .then(d => setRules(d.rules ?? []))
+      .finally(() => setRulesLoading(false))
+  }, [activeGroupId, reportTab])
 
   function toggleKey(key: string) {
     setExpandedKeys(prev => {
@@ -629,24 +675,11 @@ export default function GroupReportPage() {
                       {/* Content */}
                       {competitorInnerTab === 'rules' ? (
                         <div className="space-y-3">
-                          <div className="bg-amber-50 border border-amber-100 rounded-xl px-5 py-3 text-sm text-amber-700">
-                            以下为针对竞品 <span className="font-medium">{activeCompetitorDomain}</span> 的建议监控规则，激活后将每日自动运行。
-                          </div>
-                          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <div className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-2.5 bg-gray-50 text-[11px] font-medium text-gray-400 border-b border-gray-100">
-                              <span>规则名称</span><span>触发条件</span><span>建议动作</span><span>数据来源</span>
-                            </div>
-                            {SUGGESTED_RULES.map((rule, i) => (
-                              <div key={i} className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors items-start">
-                                <div>
-                                  <span className="text-sm font-medium text-gray-800">{rule.name}</span>
-                                  <span className="ml-2 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">待激活</span>
-                                </div>
-                                <span className="text-xs text-gray-500 leading-relaxed">{rule.condition}</span>
-                                <span className="text-xs text-gray-600 leading-relaxed">{rule.action}</span>
-                                <span className="text-[11px] text-gray-400 leading-relaxed font-mono">{rule.metric}</span>
-                              </div>
-                            ))}
+                          <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                            <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span className="text-sm">竞品规则中心即将开放</span>
                           </div>
                         </div>
                       ) : (
@@ -674,31 +707,339 @@ export default function GroupReportPage() {
           )}
 
           {/* ── 规则中心 ── */}
-          {activeTabId !== 'competitors' && reportTab === 'rules' && (
-            <div className="space-y-4">
-              <div className="bg-amber-50 border border-amber-100 rounded-xl px-5 py-3 text-sm text-amber-700">
-                以下为系统建议规则，基于现有数据表可实现。<br />
-                规则激活后将每日自动运行，生成待跟进信号并推送至今日任务中心。
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-2.5 bg-gray-50 text-[11px] font-medium text-gray-400 border-b border-gray-100">
-                  <span>规则名称</span><span>触发条件</span><span>建议动作</span><span>数据来源</span>
+          {activeTabId !== 'competitors' && reportTab === 'rules' && (() => {
+            const TYPE_LABELS: Record<string, string>   = { add: '新增', update: '更新', mixed: '混合' }
+            const STATUS_LABELS: Record<string, string> = { active: '启用', inactive: '停用', testing: '测试中' }
+            const SOURCE_LABELS: Record<string, string> = { experiment: '实验', manual: '人工', ai: 'AI', data: '数据发现' }
+            const TYPE_COLORS: Record<string, string>   = { add: 'bg-green-50 text-green-700', update: 'bg-blue-50 text-blue-700', mixed: 'bg-purple-50 text-purple-700' }
+            const STATUS_COLORS: Record<string, string> = { active: 'bg-green-50 text-green-700', inactive: 'bg-gray-100 text-gray-400', testing: 'bg-amber-50 text-amber-600' }
+            const SOURCE_COLORS2: Record<string, string>= { experiment: 'bg-indigo-50 text-indigo-600', manual: 'bg-gray-100 text-gray-500', ai: 'bg-pink-50 text-pink-600', data: 'bg-teal-50 text-teal-600' }
+
+            const filtered = rules.filter(r =>
+              (!ruleFilterStatus || r.status === ruleFilterStatus) &&
+              (!ruleFilterType   || r.type   === ruleFilterType)
+            )
+
+            async function saveRule() {
+              if (!ruleForm.name.trim()) return
+              setRuleSaving(true)
+              try {
+                if (editingRule) {
+                  const res = await fetch(`/api/rules/${editingRule.id}`, {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(ruleForm),
+                  })
+                  if (res.ok) {
+                    const { rule } = await res.json()
+                    setRules(prev => prev.map(r => r.id === rule.id ? rule : r))
+                  }
+                } else {
+                  const res = await fetch(`/api/task-groups/${activeGroupId}/rules`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(ruleForm),
+                  })
+                  if (res.ok) {
+                    const { rule } = await res.json()
+                    setRules(prev => [...prev, rule])
+                  }
+                }
+                setShowRuleModal(false)
+                setEditingRule(null)
+                setRuleForm(EMPTY_RULE_FORM)
+              } finally { setRuleSaving(false) }
+            }
+
+            async function toggleStatus(rule: Rule) {
+              const next = rule.status === 'active' ? 'inactive' : 'active'
+              const res = await fetch(`/api/rules/${rule.id}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: next }),
+              })
+              if (res.ok) {
+                const { rule: updated } = await res.json()
+                setRules(prev => prev.map(r => r.id === updated.id ? updated : r))
+              }
+            }
+
+            async function deleteRule(rule: Rule) {
+              if (!confirm(`确认删除 Rule #${rule.rule_number} "${rule.name}"？`)) return
+              const res = await fetch(`/api/rules/${rule.id}`, { method: 'DELETE' })
+              if (res.ok) setRules(prev => prev.filter(r => r.id !== rule.id))
+            }
+
+            function openEdit(rule: Rule) {
+              setEditingRule(rule)
+              setRuleForm({
+                name: rule.name, type: rule.type, status: rule.status, source: rule.source,
+                applicable_page_types: rule.applicable_page_types,
+                stage_applicability: rule.stage_applicability,
+                description: rule.description ?? '', confidence: rule.confidence,
+                success_count: rule.success_count, fail_count: rule.fail_count, priority: rule.priority,
+              })
+              setShowRuleModal(true)
+            }
+
+            function toggleCheckbox(field: 'applicable_page_types' | 'stage_applicability', val: string) {
+              setRuleForm(prev => {
+                const arr = prev[field]
+                return { ...prev, [field]: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] }
+              })
+            }
+
+            const successRate = (r: Rule) => {
+              const total = r.success_count + r.fail_count
+              return total > 0 ? Math.round(r.success_count / total * 100) : null
+            }
+
+            return (
+              <div className="space-y-4">
+                {/* Toolbar */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select value={ruleFilterStatus} onChange={e => setRuleFilterStatus(e.target.value)}
+                    className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                    <option value="">全部状态</option>
+                    <option value="active">启用</option>
+                    <option value="inactive">停用</option>
+                    <option value="testing">测试中</option>
+                  </select>
+                  <select value={ruleFilterType} onChange={e => setRuleFilterType(e.target.value)}
+                    className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                    <option value="">全部类型</option>
+                    <option value="add">新增</option>
+                    <option value="update">更新</option>
+                    <option value="mixed">混合</option>
+                  </select>
+                  <span className="text-xs text-gray-400 ml-1">{filtered.length} 条规则</span>
+                  <div className="flex-1" />
+                  {canSeeAll && (
+                    <button onClick={() => { setEditingRule(null); setRuleForm(EMPTY_RULE_FORM); setShowRuleModal(true) }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                      新建规则
+                    </button>
+                  )}
                 </div>
-                {SUGGESTED_RULES.map((rule, i) => (
-                  <div key={i} className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr] gap-x-4 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors items-start">
-                    <div>
-                      <span className="text-sm font-medium text-gray-800">{rule.name}</span>
-                      <span className="ml-2 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">待激活</span>
-                    </div>
-                    <span className="text-xs text-gray-500 leading-relaxed">{rule.condition}</span>
-                    <span className="text-xs text-gray-600 leading-relaxed">{rule.action}</span>
-                    <span className="text-[11px] text-gray-400 leading-relaxed font-mono">{rule.metric}</span>
+
+                {/* Rule list */}
+                {rulesLoading ? <Spinner /> : filtered.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                    <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span className="text-sm">{rules.length === 0 ? '暂无规则，点击「新建规则」开始建立规则库' : '没有符合筛选条件的规则'}</span>
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-2">
+                    {filtered.map(rule => {
+                      const sr = successRate(rule)
+                      const total = rule.success_count + rule.fail_count
+                      return (
+                        <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
+                          <div className="px-4 py-3 flex items-start gap-3">
+                            {/* Rule number */}
+                            <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                              <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
+                            </div>
+                            {/* Main content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
+                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${TYPE_COLORS[rule.type] ?? 'bg-gray-100 text-gray-500'}`}>{TYPE_LABELS[rule.type]}</span>
+                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${STATUS_COLORS[rule.status] ?? 'bg-gray-100 text-gray-400'}`}>{STATUS_LABELS[rule.status]}</span>
+                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${SOURCE_COLORS2[rule.source] ?? 'bg-gray-100 text-gray-400'}`}>{SOURCE_LABELS[rule.source]}</span>
+                              </div>
+                              {rule.description && (
+                                <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
+                              )}
+                              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                {rule.applicable_page_types.length > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    {rule.applicable_page_types.map(t => (
+                                      <span key={t} className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{t}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                {rule.stage_applicability.length > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    {rule.stage_applicability.map(s => (
+                                      <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {/* Stats */}
+                            <div className="flex-shrink-0 flex items-center gap-4 text-xs text-gray-500">
+                              <div className="text-center">
+                                <div className="font-semibold text-gray-700 tabular-nums">{rule.confidence}%</div>
+                                <div className="text-[10px] text-gray-400">信心度</div>
+                              </div>
+                              {total > 0 ? (
+                                <div className="text-center">
+                                  <div className="font-semibold tabular-nums">
+                                    <span className="text-green-600">{rule.success_count}</span>
+                                    <span className="text-gray-300 mx-0.5">/</span>
+                                    <span className="text-red-400">{rule.fail_count}</span>
+                                  </div>
+                                  <div className="text-[10px] text-gray-400">{sr != null ? `成功率 ${sr}%` : '成/失'}</div>
+                                </div>
+                              ) : (
+                                <div className="text-center">
+                                  <div className="text-gray-300 tabular-nums">—</div>
+                                  <div className="text-[10px] text-gray-400">无记录</div>
+                                </div>
+                              )}
+                              {/* Actions */}
+                              {canSeeAll && (
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => openEdit(rule)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="编辑">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                  </button>
+                                  <button onClick={() => toggleStatus(rule)}
+                                    className={`p-1.5 rounded-lg transition-colors ${rule.status === 'active' ? 'text-gray-400 hover:text-amber-500 hover:bg-amber-50' : 'text-gray-400 hover:text-green-500 hover:bg-green-50'}`}
+                                    title={rule.status === 'active' ? '停用' : '启用'}>
+                                    {rule.status === 'active'
+                                      ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                      : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
+                                  </button>
+                                  <button onClick={() => deleteRule(rule)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="删除">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Create / Edit Modal */}
+                {showRuleModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setShowRuleModal(false); setEditingRule(null); setRuleForm(EMPTY_RULE_FORM) }}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                        <h3 className="text-base font-semibold text-gray-900">{editingRule ? `编辑 Rule #${editingRule.rule_number}` : '新建规则'}</h3>
+                        <button onClick={() => { setShowRuleModal(false); setEditingRule(null); setRuleForm(EMPTY_RULE_FORM) }}
+                          className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                      <div className="px-6 py-4 space-y-4">
+                        {/* Name */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">规则名称 <span className="text-red-400">*</span></label>
+                          <input value={ruleForm.name} onChange={e => setRuleForm(p => ({ ...p, name: e.target.value }))}
+                            placeholder="例：排名下降30天更新"
+                            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                        </div>
+                        {/* Type / Status / Source */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">类型</label>
+                            <select value={ruleForm.type} onChange={e => setRuleForm(p => ({ ...p, type: e.target.value as RuleForm['type'] }))}
+                              className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                              <option value="add">新增</option>
+                              <option value="update">更新</option>
+                              <option value="mixed">混合</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">状态</label>
+                            <select value={ruleForm.status} onChange={e => setRuleForm(p => ({ ...p, status: e.target.value as RuleForm['status'] }))}
+                              className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                              <option value="active">启用</option>
+                              <option value="inactive">停用</option>
+                              <option value="testing">测试中</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">来源</label>
+                            <select value={ruleForm.source} onChange={e => setRuleForm(p => ({ ...p, source: e.target.value as RuleForm['source'] }))}
+                              className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+                              <option value="manual">人工经验</option>
+                              <option value="experiment">实验</option>
+                              <option value="ai">AI建议</option>
+                              <option value="data">数据发现</option>
+                            </select>
+                          </div>
+                        </div>
+                        {/* Page types */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">适用页面类型</label>
+                          <div className="flex gap-3">
+                            {PAGE_TYPES.map(t => (
+                              <label key={t} className="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" checked={ruleForm.applicable_page_types.includes(t)}
+                                  onChange={() => toggleCheckbox('applicable_page_types', t)}
+                                  className="rounded border-gray-300 text-green-500 focus:ring-green-400" />
+                                <span className="text-sm text-gray-700">{t}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Stage applicability */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">适用阶段</label>
+                          <div className="flex gap-3 flex-wrap">
+                            {STAGE_TYPES.map(s => (
+                              <label key={s} className="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" checked={ruleForm.stage_applicability.includes(s)}
+                                  onChange={() => toggleCheckbox('stage_applicability', s)}
+                                  className="rounded border-gray-300 text-green-500 focus:ring-green-400" />
+                                <span className="text-sm text-gray-700">{s}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Description */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">规则说明</label>
+                          <textarea value={ruleForm.description} onChange={e => setRuleForm(p => ({ ...p, description: e.target.value }))}
+                            rows={3} placeholder="描述触发条件、执行动作、预期效果…"
+                            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 resize-none" />
+                        </div>
+                        {/* Numbers */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">信心度 %</label>
+                            <input type="number" min={0} max={100} value={ruleForm.confidence}
+                              onChange={e => setRuleForm(p => ({ ...p, confidence: Number(e.target.value) }))}
+                              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">历史成功</label>
+                            <input type="number" min={0} value={ruleForm.success_count}
+                              onChange={e => setRuleForm(p => ({ ...p, success_count: Number(e.target.value) }))}
+                              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">历史失败</label>
+                            <input type="number" min={0} value={ruleForm.fail_count}
+                              onChange={e => setRuleForm(p => ({ ...p, fail_count: Number(e.target.value) }))}
+                              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                        <button onClick={() => { setShowRuleModal(false); setEditingRule(null); setRuleForm(EMPTY_RULE_FORM) }}
+                          className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                          取消
+                        </button>
+                        <button onClick={saveRule} disabled={ruleSaving || !ruleForm.name.trim()}
+                          className="px-4 py-2 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                          {ruleSaving ? '保存中…' : editingRule ? '保存修改' : '创建规则'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-gray-400 text-center">规则激活需要：① Action History 积累足够数据 ② 管理员确认规则逻辑后手动开启</p>
-            </div>
-          )}
+            )
+          })()}
 
           {/* ── 成效追踪 ── */}
           {activeTabId !== 'competitors' && reportTab === 'outcomes' && (() => {
