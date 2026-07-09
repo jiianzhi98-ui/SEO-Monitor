@@ -64,15 +64,6 @@ type OutcomeSortBy = 'claimed_date' | 'submitted_at' | 'search_volume' | 'rank_c
 
 const PERIOD_LABELS: Record<Period, string> = { yesterday: '昨日', week: '本周', month: '本月', custom: '自定义' }
 
-const PREVIEW_OUTCOMES: OutcomeRow[] = [
-  { id:'p1', user_id:'u1', username:'Joanne',  keyword:'葫芦侠',           final_keyword:'葫芦侠官方下载',    page_url:'https://www.sjwyx.com/ruanjian/1001.html', operation_type:'新增', search_volume:8200, source:'竞品涨排名', claimed_date:'2026-06-10', submitted_at:'2026-06-10T09:00:00Z', indexed:true,  first_seen_date:'2026-06-13', disappeared_date:null, rank_keyword:'葫芦侠下载',       rank_position:5,  prev_rank:19, rank_change:14, rank_volume:6800, rank_date:'2026-07-07', outcome:'success' },
-  { id:'p2', user_id:'u2', username:'Jackson', keyword:'MT管理器',          final_keyword:'MT管理器最新版',    page_url:'https://www.sjwyx.com/ruanjian/1002.html', operation_type:'新增', search_volume:5500, source:'共新增词',   claimed_date:'2026-06-12', submitted_at:'2026-06-12T11:30:00Z', indexed:true,  first_seen_date:'2026-06-17', disappeared_date:null, rank_keyword:'MT管理器下载',      rank_position:8,  prev_rank:14, rank_change:6,  rank_volume:4200, rank_date:'2026-07-07', outcome:'success' },
-  { id:'p3', user_id:'u1', username:'Joanne',  keyword:'好游快爆 下载安装',  final_keyword:'好游快爆下载2024', page_url:'https://www.sjwyx.com/ruanjian/1003.html', operation_type:'更新', search_volume:3100, source:'交叉词',     claimed_date:'2026-06-18', submitted_at:'2026-06-18T14:00:00Z', indexed:true,  first_seen_date:'2026-05-10', disappeared_date:null, rank_keyword:null,               rank_position:null,prev_rank:null,rank_change:null,rank_volume:null, rank_date:null,          outcome:'fail' },
-  { id:'p4', user_id:'u3', username:'Yanling', keyword:'蛋仔派对官服',       final_keyword:'蛋仔派对官方版下载',page_url:'https://www.sjwyx.com/ruanjian/1004.html', operation_type:'新增', search_volume:12000,source:'竞品涨排名', claimed_date:'2026-07-01', submitted_at:'2026-07-01T10:00:00Z', indexed:true,  first_seen_date:'2026-07-04', disappeared_date:null, rank_keyword:null,               rank_position:null,prev_rank:null,rank_change:null,rank_volume:null, rank_date:null,          outcome:'pending' },
-  { id:'p5', user_id:'u2', username:'Jackson', keyword:'CAPCUT',             final_keyword:'CapCut剪映国际版',  page_url:'https://www.sjwyx.com/ruanjian/1005.html', operation_type:'更新', search_volume:9800, source:'连续上涨词', claimed_date:'2026-06-22', submitted_at:'2026-06-22T08:00:00Z', indexed:true,  first_seen_date:'2026-04-15', disappeared_date:null, rank_keyword:'capcut下载',        rank_position:3,  prev_rank:12, rank_change:9,  rank_volume:7500, rank_date:'2026-07-07', outcome:'success' },
-  { id:'p6', user_id:'u1', username:'Joanne',  keyword:'氪金兽',             final_keyword:'氪金兽手游下载',   page_url:'https://www.sjwyx.com/ruanjian/1006.html', operation_type:'新增', search_volume:2200, source:'更新词库',   claimed_date:'2026-07-03', submitted_at:'2026-07-03T16:00:00Z', indexed:false, first_seen_date:null,         disappeared_date:null, rank_keyword:null,               rank_position:null,prev_rank:null,rank_change:null,rank_volume:null, rank_date:null,          outcome:'pending' },
-]
-
 
 const SUGGESTED_RULES = [
   { name: '掉排名 30 天未更新',   condition: '同一关键词排名下滑 ≥ 5，且距上次提交更新操作 > 30 天',              action: '建议重新更新该页面内容',             metric: '通过 rank_changes + member_claimed_keywords 对比' },
@@ -558,7 +549,6 @@ export default function GroupReportPage() {
                 <button key={tab} onClick={() => setReportTab(tab)}
                   className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${reportTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
                   {label}
-                  {tab === 'outcomes' && <span className="ml-1.5 text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">建设中</span>}
                   {tab === 'rules'    && <span className="ml-1.5 text-[10px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-full">建议</span>}
                 </button>
               ))}
@@ -715,8 +705,7 @@ export default function GroupReportPage() {
             const OCOLS = 'grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px]'
             const oTotal = outcomes.length
             const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterDiscoverStart || oFilterDiscoverEnd || oFilterSubmitStart || oFilterSubmitEnd)
-            const isPreview = oTotal === 0 && !anyFilter && !outcomesLoading
-            const displayData = isPreview ? PREVIEW_OUTCOMES : outcomes
+            const displayData = outcomes
             const displayTotal = displayData.length
             const oTotalPages = Math.max(1, Math.ceil(displayTotal / oPageSize))
             const pagedO = displayData.slice(oPage * oPageSize, (oPage + 1) * oPageSize)
@@ -734,9 +723,36 @@ export default function GroupReportPage() {
             }
             return (
               <div className="space-y-4">
-                {/* Filters */}
-                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 space-y-2.5">
+                {/* Summary cards */}
+                {outcomeSummary && (
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: '已追踪动作', value: outcomeSummary.total, sub: '全部提交' },
+                      { label: '有效成效', value: outcomeSummary.successCount, sub: outcomeSummary.total ? `成效率 ${Math.round(outcomeSummary.successCount / outcomeSummary.total * 100)}%` : '—', color: 'text-green-600' },
+                      { label: '成功收录', value: outcomeSummary.indexedCount, sub: outcomeSummary.total ? `收录率 ${Math.round(outcomeSummary.indexedCount / outcomeSummary.total * 100)}%` : '—', color: 'text-blue-600' },
+                      { label: '追踪中', value: outcomeSummary.pendingCount, sub: '未满30天' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+                        <div className={`text-2xl font-bold ${(s as { color?: string }).color ?? 'text-gray-800'}`}>{s.value}</div>
+                        <div className="text-xs font-medium text-gray-600 mt-0.5">{s.label}</div>
+                        <div className="text-[11px] text-gray-400">{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Filters — dates first, then dropdowns */}
+                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500">发现日期：</span>
+                    <input type="date" value={oFilterDiscoverStart}
+                      onChange={e => { const v = e.target.value; setOFilterDiscoverStart(v); setOFilterDiscoverEnd(v); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                    <span className="text-xs font-medium text-gray-500 ml-1">提交日期：</span>
+                    <input type="date" value={oFilterSubmitStart}
+                      onChange={e => { const v = e.target.value; setOFilterSubmitStart(v); setOFilterSubmitEnd(v); setOPage(0) }}
+                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                    <span className="w-px h-5 bg-gray-200 mx-1" />
                     {canSeeAll && report?.members && report.members.length > 1 && (
                       <select value={oFilterMember} onChange={e => { setOFilterMember(e.target.value); setOPage(0) }}
                         className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
@@ -776,35 +792,7 @@ export default function GroupReportPage() {
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                    <span className="font-medium">发现日期：</span>
-                    <input type="date" value={oFilterDiscoverStart}
-                      onChange={e => { const v = e.target.value; setOFilterDiscoverStart(v); setOFilterDiscoverEnd(v); setOPage(0) }}
-                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
-                    <span className="font-medium ml-2">提交日期：</span>
-                    <input type="date" value={oFilterSubmitStart}
-                      onChange={e => { const v = e.target.value; setOFilterSubmitStart(v); setOFilterSubmitEnd(v); setOPage(0) }}
-                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
-                  </div>
                 </div>
-
-                {/* Summary cards */}
-                {outcomeSummary && (
-                  <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { label: '已追踪动作', value: outcomeSummary.total, sub: '全部提交' },
-                      { label: '有效成效', value: outcomeSummary.successCount, sub: outcomeSummary.total ? `成效率 ${Math.round(outcomeSummary.successCount / outcomeSummary.total * 100)}%` : '—', color: 'text-green-600' },
-                      { label: '成功收录', value: outcomeSummary.indexedCount, sub: outcomeSummary.total ? `收录率 ${Math.round(outcomeSummary.indexedCount / outcomeSummary.total * 100)}%` : '—', color: 'text-blue-600' },
-                      { label: '追踪中', value: outcomeSummary.pendingCount, sub: '未满30天' },
-                    ].map(s => (
-                      <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-                        <div className={`text-2xl font-bold ${(s as { color?: string }).color ?? 'text-gray-800'}`}>{s.value}</div>
-                        <div className="text-xs font-medium text-gray-600 mt-0.5">{s.label}</div>
-                        <div className="text-[11px] text-gray-400">{s.sub}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
 
                 {/* Table */}
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -812,21 +800,15 @@ export default function GroupReportPage() {
                     <span className="text-sm font-semibold text-gray-700">动作成效明细</span>
                     <span className="text-xs text-gray-400 ml-2">每条提交动作的排名与收录结果</span>
                   </div>
-                  {outcomesLoading ? <Spinner /> : (oTotal === 0 && anyFilter) ? (
+                  {outcomesLoading ? <Spinner /> : oTotal === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-gray-300">
                       <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
-                      <span className="text-sm">没有符合筛选条件的记录</span>
+                      <span className="text-sm">{anyFilter ? '没有符合筛选条件的记录' : '暂无数据，组员提交带 URL + 最终词的操作后自动显示'}</span>
                     </div>
                   ) : (
                     <>
-                      {isPreview && (
-                        <div className="flex items-center gap-2 mx-4 my-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
-                          <span className="font-bold bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded text-[10px] flex-shrink-0">样例</span>
-                          以下为演示数据，帮助你预览页面效果。真实数据将在组员提交带 URL + 最终词的操作后自动显示。
-                        </div>
-                      )}
                       <div className="overflow-x-auto">
                         <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[860px]`}>
                           <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">发现日期{oSortIcons('claimed_date')}</span>
@@ -896,7 +878,7 @@ export default function GroupReportPage() {
                       {/* Pagination */}
                       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/40">
                         <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <span>第 {oPage * oPageSize + 1}–{Math.min((oPage + 1) * oPageSize, displayTotal)} 条，共 {displayTotal} 条{isPreview ? '（样例）' : ''}</span>
+                          <span>第 {oPage * oPageSize + 1}–{Math.min((oPage + 1) * oPageSize, displayTotal)} 条，共 {displayTotal} 条</span>
                           <span className="text-gray-200 mx-1">|</span>
                           <span>每页</span>
                           {([20, 40, 60] as const).map(n => (
