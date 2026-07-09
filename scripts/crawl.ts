@@ -6,6 +6,8 @@ import {
   fetchRankChanges,
   fetchBaiduIndexPages,
   type HtmlSource,
+  type BaiduIndexedPage,
+  type BaiduIndexFailReason,
 } from '../lib/crawler'
 import { activityStart, activityEnd, siteLog } from '../lib/activity-log'
 
@@ -461,23 +463,59 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
     try {
-      // Build crawl URL with gpc time filter (Baidu's internal re-indexing time, not page publish date).
-      // SUPPLEMENT_CUSTOM_URL overrides entirely; SUPPLEMENT_PERIOD controls the window (monthly/weekly/daily).
-      // Include ct=2097152/si= to activate Baidu site-search mode for more complete results.
       const nowSec = Math.floor(Date.now() / 1000)
       const supplementCustomUrl = process.env.SUPPLEMENT_CUSTOM_URL
-      let crawlUrl: string
-      if (supplementCustomUrl) {
-        const u = new URL(supplementCustomUrl)
-        u.searchParams.delete('pn')
-        crawlUrl = u.toString()
+      const isSupplementRun = !!(supplementCustomUrl || process.env.SUPPLEMENT_DOMAIN || process.env.SUPPLEMENT_PERIOD)
+
+      let pages: BaiduIndexedPage[]
+      let failReason: BaiduIndexFailReason
+      let periodSummary = ''
+
+      if (isSupplementRun) {
+        // Single-period fetch for manual/supplement runs (original behaviour)
+        let crawlUrl: string
+        if (supplementCustomUrl) {
+          const u = new URL(supplementCustomUrl)
+          u.searchParams.delete('pn')
+          crawlUrl = u.toString()
+        } else {
+          const period = process.env.SUPPLEMENT_PERIOD || 'monthly'
+          const days = period === 'daily' ? 1 : period === 'weekly' ? 7 : 31
+          const gpc = encodeURIComponent(`stf=${nowSec - days * 86400},${nowSec}|stftype=1`)
+          crawlUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&ct=2097152&si=${encodeURIComponent(site.domain)}&fenlei=256&ie=utf-8&gpc=${gpc}&tfflag=1`
+        }
+        const result = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie, crawlUrl)
+        pages = result.pages
+        failReason = result.failReason
       } else {
-        const period = process.env.SUPPLEMENT_PERIOD || 'monthly'
-        const days = period === 'daily' ? 1 : period === 'weekly' ? 7 : 31
-        const gpc = encodeURIComponent(`stf=${nowSec - days * 86400},${nowSec}|stftype=1`)
-        crawlUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&ct=2097152&si=${encodeURIComponent(site.domain)}&fenlei=256&ie=utf-8&gpc=${gpc}&tfflag=1`
+        // Main daily crawl: fetch all three gpc windows and union the results.
+        // Each window returns pages Baidu re-indexed within that timeframe; combining them
+        // maximises coverage since Baidu may surface different pages in each window.
+        const PERIODS = [
+          { label: '月(31天)', days: 31 },
+          { label: '周(7天)',  days: 7  },
+          { label: '日(1天)',  days: 1  },
+        ] as const
+        const pageMap = new Map<string, BaiduIndexedPage>()
+        const periodLogs: string[] = []
+        let lastFailReason: BaiduIndexFailReason = null
+        for (let pi = 0; pi < PERIODS.length; pi++) {
+          const { label, days } = PERIODS[pi]
+          const gpc = encodeURIComponent(`stf=${nowSec - days * 86400},${nowSec}|stftype=1`)
+          const crawlUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`site:${site.domain}`)}&ct=2097152&si=${encodeURIComponent(site.domain)}&fenlei=256&ie=utf-8&gpc=${gpc}&tfflag=1`
+          const result = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie, crawlUrl)
+          periodLogs.push(`${label}=${result.pages.length}${result.failReason ? `(${result.failReason})` : ''}`)
+          if (result.failReason) lastFailReason = result.failReason
+          for (const p of result.pages) {
+            if (!pageMap.has(p.url)) pageMap.set(p.url, p)
+          }
+          if (result.failReason === 'captcha') break  // IP blocked — stop early
+          if (pi < PERIODS.length - 1) await delay(3000)
+        }
+        pages = Array.from(pageMap.values())
+        failReason = pages.length === 0 ? (lastFailReason ?? 'empty_results') : null
+        periodSummary = periodLogs.join(' ')
       }
-      const { pages, failReason } = await fetchBaiduIndexPages(site.domain, undefined, baiduCookie, crawlUrl)
 
       if (pages.length === 0) {
         const reasonMap: Record<string, string> = {
@@ -516,9 +554,8 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
           newCount += inserted.filter(r => r.first_seen_date === today).length
         }
 
-        // Only run missed-page logic during authoritative (monthly) crawls — supplement runs use a
-        // narrower time window so absence from results does NOT mean the page was de-indexed.
-        const isSupplementRun = !!(process.env.SUPPLEMENT_DOMAIN || process.env.SUPPLEMENT_PERIOD)
+        // Only run missed-page logic during authoritative (all-period) crawls — supplement runs use a
+        // single/narrower time window so absence from results does NOT mean the page was de-indexed.
         let flaggedCount = 0
         if (!isSupplementRun) {
           const window30d = getMalaysiaDate(-30)
@@ -534,8 +571,9 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
 
         totalNew += newCount
         ok++
-        console.log(`${prefix} ✓  发现=${String(pages.length).padStart(4)}  新增=${String(newCount).padStart(4)}  待验证=${String(flaggedCount).padStart(3)}`)
-        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `发现${pages.length}条，新增${newCount}条，待验证${flaggedCount}条` })
+        const periodStr = periodSummary ? ` [${periodSummary}]` : ''
+        console.log(`${prefix} ✓${periodStr}  合计=${String(pages.length).padStart(4)}  新增=${String(newCount).padStart(4)}  待验证=${String(flaggedCount).padStart(3)}`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: newCount, detail: `${periodSummary ? `[${periodSummary}] ` : ''}合计${pages.length}条，新增${newCount}条，待验证${flaggedCount}条` })
       }
     } catch (e) {
       console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)
