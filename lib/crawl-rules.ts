@@ -73,8 +73,8 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '收录页面追踪',
     badge: 'step=index-pages · GitHub Actions · 03:00 MYT（cron 19:00 UTC）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 19 * * * UTC = 03:00 MYT)，动态 matrix job 并行（每站一个job，SPG=1）；retry-crawl.yml (cron 0 22 UTC = 06:00 MYT) 自动补抓；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
-      { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 19 * * * UTC = 03:00 MYT)，setup job 仅查询 has_index_pages=true 的站点数决定 job 数，每站一个 job（SPG=1）；retry-crawl.yml (cron 0 22 UTC = 06:00 MYT) 自动补抓；支持页面手动重抓 → /api/trigger-crawl → /api/cron?step=index-pages' },
+      { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）；setup 阶段已精确过滤，不会为其他类型站点创建多余 job' },
       { label: '抓取方式', text: '百度 site:domain 搜索，带近31天 gpc 时间过滤（gpc=stf={now-31d},{now}|stftype=1 + tfflag=1），过滤依据是百度内部重新收录时间而非页面发布日期；带 ct=2097152/si=domain/fenlei=256 开启百度站内搜索模式以获取更完整结果；pn=0/10/20... 翻页，无页数上限；停止条件：空页、被拦截、或整页URL相同立即停；页间延迟 1.5-3 秒（有 Cookie），4-7 秒（无 Cookie）；站间延迟 10 秒' },
       { label: '去重', text: '按 (site_id, url) 唯一索引 upsert；新页面写入 first_seen_date=today（DB trigger 保护，UPDATE 时不覆盖）；已知页面更新 last_seen_date=today 并重置 missed_count=0、verify_needed=false、disappeared_date=null；抓完后对 30天窗口内未出现的页面执行宽限计数：连续 2 次未出现（missed_count≥2）才标记 verify_needed=true 进入验证队列，不直接写 disappeared_date（30天可观测窗口外的历史页面不参与判定）' },
       { label: '脱收验证', text: '脱收不在本步骤确认——verify_needed=true 的页面由每周三 verify-deindex.yml 逐 URL 搜索百度（site:domain/path）确认；搜得到则清除标记（误报），搜不到才写 disappeared_date=today；百度拦截（captcha）时跳过本 URL，下周再试' },
