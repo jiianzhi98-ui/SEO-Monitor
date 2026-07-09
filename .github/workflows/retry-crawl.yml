@@ -22,10 +22,9 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
       total: ${{ steps.gen.outputs.total }}
     steps:
-      - name: Compute job matrix
+      - name: Compute retry matrix (based on actual failed sites)
         id: gen
         run: |
-          # 与主抓取保持相同 SPG，确保 group 索引对应同一批站点
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STEP="${{ github.event.inputs.step }}"
           elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
@@ -41,32 +40,55 @@ jobs:
           else
             STEP="keywords"
           fi
-          case "$STEP" in
-            keywords)    SPG=5 ;;
-            rank)        SPG=4 ;;
-            weight)      SPG=4 ;;
-            index-pages) SPG=1 ;;
-            rank-title)  SPG=2 ;;
-            *)           SPG=4 ;;
-          esac
-          if [ "$STEP" = "rank-title" ]; then
-            COUNT=$(curl -sf \
-              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&has_rank_title=eq.true" | \
-              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+
+          SB_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
+          SB_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+
+          # Today's date in MYT (UTC+8)
+          TODAY=$(python3 -c "
+          from datetime import datetime, timezone, timedelta
+          now = datetime.now(timezone(timedelta(hours=8)))
+          print(now.strftime('%Y-%m-%d'))
+          ")
+          TODAY_START="${TODAY}T00:00:00+08:00"
+          TODAY_END="${TODAY}T23:59:59.999+08:00"
+
+          # Step 1: Get today's activity IDs for this step
+          ACTS=$(curl -sf \
+            -H "apikey: ${SB_KEY}" \
+            -H "Authorization: Bearer ${SB_KEY}" \
+            "${SB_URL}/rest/v1/activity_log?select=id&step=eq.${STEP}&type=eq.cron_task&logged_at=gte.${TODAY_START}&logged_at=lte.${TODAY_END}")
+          IDS=$(echo "$ACTS" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          print(','.join(d['id'] for d in data))
+          ")
+
+          if [ -z "$IDS" ]; then
+            echo "今日尚无 ${STEP} 主抓取记录，创建 1 个 no-op job"
+            FAILED_COUNT=0
           else
-            COUNT=$(curl -sf \
-              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
-              python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+            # Step 2: Count unique failed/empty domains
+            SITE_LOGS=$(curl -sf \
+              -H "apikey: ${SB_KEY}" \
+              -H "Authorization: Bearer ${SB_KEY}" \
+              "${SB_URL}/rest/v1/activity_site_log?select=domain&activity_id=in.(${IDS})&status=in.(fail,empty)")
+            FAILED_COUNT=$(echo "$SITE_LOGS" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          domains = set(d['domain'] for d in data if d.get('domain'))
+          print(len(domains))
+            ")
           fi
-          TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/${SPG})))")
+
+          echo "Step=${STEP} 今日失败/空站: ${FAILED_COUNT}"
+
+          # 1 job per failed site (max parallelism); fallback to 1 no-op job if none
+          TOTAL=$(python3 -c "print(max(1, ${FAILED_COUNT}))")
           MATRIX=$(python3 -c "import json; print(json.dumps({'group': list(range(${TOTAL}))}))")
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "total=${TOTAL}" >> $GITHUB_OUTPUT
-          echo "Step=${STEP} SPG=${SPG} Sites=${COUNT} → Groups=${TOTAL}"
+          echo "Groups=${TOTAL}"
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -114,8 +136,7 @@ jobs:
       - name: Run retry crawl
         run: |
           if [ "${{ steps.vars.outputs.step }}" = "rank-title" ]; then
-            # rank-title 无失败记录机制，直接重跑本组
-            npx tsx scripts/crawl-rank.ts --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }}
+            npx tsx scripts/crawl-rank.ts --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} --retry-failed
           else
             npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} --retry-failed
           fi

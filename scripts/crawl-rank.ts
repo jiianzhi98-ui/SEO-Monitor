@@ -10,6 +10,7 @@ const supabase = createClient(
 const cliArgs = process.argv.slice(2)
 const group = parseInt(cliArgs.find(a => a.startsWith('--group='))?.split('=')[1] ?? '0', 10)
 const totalGroups = parseInt(cliArgs.find(a => a.startsWith('--total-groups='))?.split('=')[1] ?? '1', 10)
+const retryFailed = cliArgs.includes('--retry-failed')
 
 function getMalaysiaDate(offsetDays = 0): string {
   const ms = Date.now() + 8 * 60 * 60 * 1000 + offsetDays * 86400000
@@ -64,16 +65,47 @@ async function main() {
     return
   }
 
-  const sites = totalGroups > 1
-    ? [...allSites].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
-    : allSites
+  let candidateSites = allSites
 
-  console.log(`  共 ${allSites.length} 个站点，本组 ${sites.length} 个（group ${group + 1}/${totalGroups}）: ${sites.map(s => s.domain).join(', ')}`)
+  // Retry mode: only process today's failed/empty sites
+  if (retryFailed) {
+    const todayStart = new Date(today + 'T00:00:00+08:00').toISOString()
+    const todayEnd   = new Date(today + 'T23:59:59.999+08:00').toISOString()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: acts } = await (supabase as any)
+      .from('activity_log')
+      .select('id')
+      .eq('step', 'rank-title')
+      .eq('type', 'cron_task')
+      .gte('logged_at', todayStart)
+      .lte('logged_at', todayEnd)
+    const actIds = ((acts || []) as { id: string }[]).map(a => a.id)
+    if (actIds.length === 0) {
+      console.log('  重试模式：今日尚无 rank-title 主抓取记录，退出\n')
+      return
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: failLogs } = await (supabase as any)
+      .from('activity_site_log')
+      .select('domain')
+      .in('activity_id', actIds)
+      .in('status', ['fail', 'empty'])
+    const failedDomains = new Set(((failLogs || []) as { domain: string }[]).map(l => l.domain))
+    console.log(`  重试模式：今日 rank-title 失败/空 ${failedDomains.size} 站`)
+    if (failedDomains.size === 0) { console.log('  无失败站点，退出\n'); return }
+    candidateSites = allSites.filter(s => failedDomains.has(s.domain))
+  }
+
+  const sites = totalGroups > 1
+    ? [...candidateSites].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
+    : candidateSites
+
+  console.log(`  共 ${allSites.length} 个站点，${retryFailed ? `重试 ${candidateSites.length} 个，` : ''}本组 ${sites.length} 个（group ${group + 1}/${totalGroups}）: ${sites.map(s => s.domain).join(', ')}`)
 
   // Start activity log
   const activityId = await activityStart(supabase, {
     type: 'cron_task',
-    source: 'github_actions',
+    source: retryFailed ? 'github_retry' : 'github_actions',
     step: 'rank-title',
     groupIndex: group,
     totalGroups,
