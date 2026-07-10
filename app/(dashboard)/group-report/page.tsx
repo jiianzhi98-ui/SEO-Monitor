@@ -63,12 +63,10 @@ type OutcomeSortBy = 'claimed_date' | 'submitted_at' | 'search_volume' | 'rank_c
 interface Rule {
   id: string
   rule_number: number
-  group_id: string
   name: string
   type: 'add' | 'update' | 'mixed'
   status: 'active' | 'inactive' | 'testing'
   source: 'experiment' | 'manual' | 'ai' | 'data'
-  applicable_page_types: string[]
   stage_applicability: string[]
   description: string | null
   confidence: number
@@ -81,13 +79,13 @@ interface Rule {
 interface RuleForm {
   name: string; type: 'add' | 'update' | 'mixed'; status: 'active' | 'inactive' | 'testing'
   source: 'experiment' | 'manual' | 'ai' | 'data'
-  applicable_page_types: string[]; stage_applicability: string[]
+  stage_applicability: string[]
   description: string; confidence: number; success_count: number; fail_count: number; priority: number
 }
 
 const EMPTY_RULE_FORM: RuleForm = {
   name: '', type: 'add', status: 'active', source: 'manual',
-  applicable_page_types: [], stage_applicability: [],
+  stage_applicability: [],
   description: '', confidence: 0, success_count: 0, fail_count: 0, priority: 0,
 }
 
@@ -95,7 +93,6 @@ const EMPTY_RULE_FORM: RuleForm = {
 
 const PERIOD_LABELS: Record<Period, string> = { yesterday: '昨日', week: '本周', month: '本月', custom: '自定义' }
 
-const PAGE_TYPES = ['软件详情页', '游戏详情页']
 const STAGE_TYPES = ['起站期', '成长期', '成熟期', '通用']
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -771,7 +768,6 @@ export default function GroupReportPage() {
               setEditingRule(rule)
               setRuleForm({
                 name: rule.name, type: rule.type, status: rule.status, source: rule.source,
-                applicable_page_types: rule.applicable_page_types,
                 stage_applicability: rule.stage_applicability,
                 description: rule.description ?? '', confidence: rule.confidence,
                 success_count: rule.success_count, fail_count: rule.fail_count, priority: rule.priority,
@@ -779,10 +775,10 @@ export default function GroupReportPage() {
               setShowRuleModal(true)
             }
 
-            function toggleCheckbox(field: 'applicable_page_types' | 'stage_applicability', val: string) {
+            function toggleStage(val: string) {
               setRuleForm(prev => {
-                const arr = prev[field]
-                return { ...prev, [field]: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] }
+                const arr = prev.stage_applicability
+                return { ...prev, stage_applicability: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] }
               })
             }
 
@@ -851,22 +847,13 @@ export default function GroupReportPage() {
                               {rule.description && (
                                 <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
                               )}
-                              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                {rule.applicable_page_types.length > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    {rule.applicable_page_types.map(t => (
-                                      <span key={t} className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{t}</span>
-                                    ))}
-                                  </div>
-                                )}
-                                {rule.stage_applicability.length > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    {rule.stage_applicability.map(s => (
-                                      <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
+                              {rule.stage_applicability.length > 0 && (
+                                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                                  {rule.stage_applicability.map(s => (
+                                    <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             {/* Stats */}
                             <div className="flex-shrink-0 flex items-center gap-4 text-xs text-gray-500">
@@ -967,20 +954,6 @@ export default function GroupReportPage() {
                             </select>
                           </div>
                         </div>
-                        {/* Page types */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-2">适用页面类型</label>
-                          <div className="flex gap-3">
-                            {PAGE_TYPES.map(t => (
-                              <label key={t} className="flex items-center gap-1.5 cursor-pointer">
-                                <input type="checkbox" checked={ruleForm.applicable_page_types.includes(t)}
-                                  onChange={() => toggleCheckbox('applicable_page_types', t)}
-                                  className="rounded border-gray-300 text-green-500 focus:ring-green-400" />
-                                <span className="text-sm text-gray-700">{t}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
                         {/* Stage applicability */}
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-2">适用阶段</label>
@@ -988,7 +961,7 @@ export default function GroupReportPage() {
                             {STAGE_TYPES.map(s => (
                               <label key={s} className="flex items-center gap-1.5 cursor-pointer">
                                 <input type="checkbox" checked={ruleForm.stage_applicability.includes(s)}
-                                  onChange={() => toggleCheckbox('stage_applicability', s)}
+                                  onChange={() => toggleStage(s)}
                                   className="rounded border-gray-300 text-green-500 focus:ring-green-400" />
                                 <span className="text-sm text-gray-700">{s}</span>
                               </label>

@@ -1,26 +1,24 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: Request, { params: _params }: { params: Promise<{ id: string }> }) {
   const authClient = createClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { id: groupId } = await params
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
 
   const { data, error } = await service
     .from('rules')
     .select('*')
-    .eq('group_id', groupId)
     .order('rule_number', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ rules: data ?? [] })
 }
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params: _params }: { params: Promise<{ id: string }> }) {
   const authClient = createClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,25 +32,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { id: groupId } = await params
   const body = await req.json()
 
   const { data, error } = await service
     .from('rules')
     .insert({
-      group_id:              groupId,
-      name:                  body.name,
-      type:                  body.type,
-      status:                body.status ?? 'active',
-      source:                body.source ?? 'manual',
-      applicable_page_types: body.applicable_page_types ?? [],
-      stage_applicability:   body.stage_applicability ?? [],
-      description:           body.description ?? null,
-      confidence:            body.confidence ?? 0,
-      success_count:         body.success_count ?? 0,
-      fail_count:            body.fail_count ?? 0,
-      priority:              body.priority ?? 0,
-      created_by:            user.id,
+      name:                body.name,
+      type:                body.type,
+      status:              body.status ?? 'active',
+      source:              body.source ?? 'manual',
+      stage_applicability: body.stage_applicability ?? [],
+      description:         body.description ?? null,
+      confidence:          body.confidence ?? 0,
+      success_count:       body.success_count ?? 0,
+      fail_count:          body.fail_count ?? 0,
+      priority:            body.priority ?? 0,
+      created_by:          user.id,
     })
     .select()
     .single()
