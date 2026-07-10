@@ -49,19 +49,32 @@ interface ReportData {
   members: MemberReport[]
 }
 
-interface CompetitorKw { keyword: string; search_volume: number; source: string }
+interface CompetitorKw { keyword: string; search_volume: number; source: string; content_type: string | null; content_date: string }
 interface CompetitorRankRow { keyword: string; volume: number; rank_position: number | null; title: string | null }
+interface CompetitorOutcomeRow {
+  keyword: string
+  content_type: string | null
+  content_date: string
+  discovered_at: string
+  volume: number
+  rank_position: number | null
+  rank_type: string | null
+  rank_date: string | null
+}
+interface CompetitorOutcomeSummary { total: number; hasRank: number; rankup: number; rankdown: number; top10: number }
 interface CompetitorData {
   site: { id: string; domain: string; has_rank_title: boolean } | null
   date: string
   keywords: CompetitorKw[]
   rankup: CompetitorRankRow[]
   rankdown: CompetitorRankRow[]
+  outcomes: CompetitorOutcomeRow[]
+  outcomeSummary: CompetitorOutcomeSummary | null
 }
 
 type Period = 'yesterday' | 'week' | 'month' | 'custom'
 type ReportTab = 'submissions' | 'outcomes' | 'rules'
-type CompetitorInnerTab = 'keywords' | 'ranks' | 'rules'
+type CompetitorInnerTab = 'keywords' | 'outcomes' | 'rules'
 
 interface OutcomeRow {
   id: string; user_id: string; username: string
@@ -364,6 +377,171 @@ function CompetitorRanksPanel({ site, rankup, rankdown }: {
   )
 }
 
+// ── Competitor Outcomes Panel ─────────────────────────────────────────────────
+
+function CompetitorOutcomesPanel({
+  site, outcomes, summary, loading,
+}: {
+  site: { id: string; domain: string; has_rank_title: boolean } | null
+  outcomes: CompetitorOutcomeRow[]
+  summary: CompetitorOutcomeSummary | null
+  loading: boolean
+}) {
+  const [filterType,   setFilterType]   = useState<'all' | 'app' | 'game'>('all')
+  const [filterRank,   setFilterRank]   = useState<'all' | 'has' | 'top10' | 'none'>('all')
+  const [filterTrend,  setFilterTrend]  = useState<'all' | 'rankup' | 'rankdown'>('all')
+  const [filterKw,     setFilterKw]     = useState('')
+  const [oPage,        setOPage]        = useState(0)
+  const O_PAGE = 50
+
+  if (!site) return <div className="flex justify-center py-14 text-sm text-gray-400">该域名未在网站管理中找到</div>
+  if (!site.has_rank_title) return (
+    <div className="flex flex-col items-center justify-center py-14 gap-1">
+      <span className="text-sm text-gray-400">该竞品未开启竞品追踪抓取</span>
+      <span className="text-xs text-gray-300">请前往网站管理为 {site.domain} 开启橙色「竞品追踪」开关</span>
+    </div>
+  )
+
+  const anyFilter = !!(filterType !== 'all' || filterRank !== 'all' || filterTrend !== 'all' || filterKw)
+
+  const filtered = outcomes.filter(r => {
+    if (filterType === 'app'  && r.content_type === 'game') return false
+    if (filterType === 'game' && r.content_type !== 'game') return false
+    if (filterRank === 'has'   && r.rank_position == null) return false
+    if (filterRank === 'top10' && (r.rank_position == null || r.rank_position > 10)) return false
+    if (filterRank === 'none'  && r.rank_position != null) return false
+    if (filterTrend === 'rankup'   && r.rank_type !== 'rankup') return false
+    if (filterTrend === 'rankdown' && r.rank_type !== 'rankdown') return false
+    if (filterKw && !r.keyword.toLowerCase().includes(filterKw.toLowerCase())) return false
+    return true
+  })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / O_PAGE))
+  const paged = filtered.slice(oPage * O_PAGE, (oPage + 1) * O_PAGE)
+
+  return (
+    <div className="space-y-4">
+      {/* Summary cards */}
+      {summary && (
+        <div className="grid grid-cols-4 gap-3">
+          {([
+            { label: '发现词总量', value: summary.total,   sub: '期间内新词',   color: '' },
+            { label: '有排名词',   value: summary.hasRank, sub: summary.total ? `${Math.round(summary.hasRank / summary.total * 100)}% 有排名` : '—', color: 'text-blue-600' },
+            { label: '涨排名词',   value: summary.rankup,  sub: '排名上升',     color: 'text-green-600' },
+            { label: '跌排名词',   value: summary.rankdown,sub: '排名下降',     color: 'text-red-400' },
+          ] as { label: string; value: number; sub: string; color: string }[]).map(s => (
+            <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+              <div className={`text-2xl font-bold ${s.color || 'text-gray-800'}`}>{s.value}</div>
+              <div className="text-xs font-medium text-gray-600 mt-0.5">{s.label}</div>
+              <div className="text-[11px] text-gray-400">{s.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={filterType} onChange={e => { setFilterType(e.target.value as typeof filterType); setOPage(0) }}
+            className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+            <option value="all">全部类型</option>
+            <option value="app">应用</option>
+            <option value="game">游戏</option>
+          </select>
+          <select value={filterRank} onChange={e => { setFilterRank(e.target.value as typeof filterRank); setOPage(0) }}
+            className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+            <option value="all">全部排名</option>
+            <option value="has">有排名</option>
+            <option value="top10">前10名</option>
+            <option value="none">无排名</option>
+          </select>
+          <select value={filterTrend} onChange={e => { setFilterTrend(e.target.value as typeof filterTrend); setOPage(0) }}
+            className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+            <option value="all">全部趋势</option>
+            <option value="rankup">涨排名</option>
+            <option value="rankdown">跌排名</option>
+          </select>
+          <input value={filterKw} onChange={e => { setFilterKw(e.target.value); setOPage(0) }}
+            placeholder="搜索关键词…"
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 w-44" />
+          {anyFilter && (
+            <button onClick={() => { setFilterType('all'); setFilterRank('all'); setFilterTrend('all'); setFilterKw(''); setOPage(0) }}
+              className="text-xs text-gray-400 hover:text-red-400 px-2 py-1.5 rounded border border-gray-200 hover:border-red-200 transition-colors">
+              清除筛选
+            </button>
+          )}
+          <span className="ml-auto text-xs text-gray-400">{filtered.length} 条</span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+          <span className="text-sm font-semibold text-gray-700">竞品关键词成效明细</span>
+          <span className="text-xs text-gray-400 ml-2">期间内发现词的当前排名情况</span>
+        </div>
+        {loading ? <Spinner /> : outcomes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+            <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span className="text-sm">暂无数据</span>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-[48px_2fr_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 text-[11px] font-medium text-gray-400 min-w-[620px]">
+                <span className="text-center">日期</span>
+                <span>关键词</span>
+                <span className="text-center">类型</span>
+                <span className="text-right">搜索量</span>
+                <span className="text-center">当前排名</span>
+                <span className="text-center">趋势</span>
+                <span className="text-center">排名日期</span>
+              </div>
+              <div className="divide-y divide-gray-50 min-w-[620px]">
+                {paged.map((r, i) => (
+                  <div key={i} className="grid grid-cols-[48px_2fr_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
+                    <span className="text-xs text-gray-400 text-center">{r.content_date.slice(5).replace('-', '/')}</span>
+                    <span className="text-sm text-gray-800 truncate" title={r.keyword}>{r.keyword}</span>
+                    <div className="flex justify-center">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                        {r.content_type === 'game' ? '游戏' : '应用'}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-600 tabular-nums text-right">{r.volume ? fmtVol(r.volume) : '—'}</span>
+                    <div className="text-center">
+                      {r.rank_position != null
+                        ? <span className="text-sm text-gray-700">第{r.rank_position}名</span>
+                        : <span className="text-sm text-gray-300">—</span>}
+                    </div>
+                    <div className="flex justify-center">
+                      {r.rank_type === 'rankup'   && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">涨↑</span>}
+                      {r.rank_type === 'rankdown'  && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">跌↓</span>}
+                      {!r.rank_type && <span className="text-xs text-gray-300">—</span>}
+                    </div>
+                    <span className="text-xs text-gray-400 text-center">{r.rank_date ? r.rank_date.slice(5).replace('-', '/') : '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/40 text-xs text-gray-400">
+                <span>第 {oPage * O_PAGE + 1}–{Math.min((oPage + 1) * O_PAGE, filtered.length)} 条，共 {filtered.length} 条</span>
+                <div className="flex items-center gap-1">
+                  <button disabled={oPage === 0} onClick={() => setOPage(p => p - 1)} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 transition-colors">上一页</button>
+                  <span className="px-2">{oPage + 1} / {totalPages}</span>
+                  <button disabled={oPage >= totalPages - 1} onClick={() => setOPage(p => p + 1)} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 transition-colors">下一页</button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function GroupReportPage() {
@@ -422,7 +600,8 @@ export default function GroupReportPage() {
   const [activeCompetitorDomain, setActiveCompetitorDomain] = useState('')
   const [competitorInnerTab, setCompetitorInnerTab] = useState<CompetitorInnerTab>('keywords')
   const [competitorDate, setCompetitorDate] = useState('')
-  const [competitorPeriod, setCompetitorPeriod] = useState<'yesterday' | 'custom'>('yesterday')
+  const [competitorDateEnd, setCompetitorDateEnd] = useState('')
+  const [competitorPeriod, setCompetitorPeriod] = useState<Period>('yesterday')
   const [competitorData, setCompetitorData] = useState<CompetitorData | null>(null)
   const [competitorLoading, setCompetitorLoading] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
@@ -431,6 +610,25 @@ export default function GroupReportPage() {
   const yesterday = useMemo(() => new Date(Date.now() + 8 * 3600000 - 86400000).toISOString().slice(0, 10), [])
 
   useEffect(() => { setCompetitorDate(yesterday) }, [yesterday])
+
+  // Compute date range for competitor queries
+  const competitorDateRange = useMemo(() => {
+    if (competitorPeriod === 'yesterday') return { start: yesterday, end: yesterday }
+    if (competitorPeriod === 'week') {
+      const d = new Date(Date.now() + 8 * 3600000)
+      const dow = d.getDay() || 7
+      const monday = new Date(d.getTime() - (dow - 1) * 86400000)
+      return { start: monday.toISOString().slice(0, 10), end: yesterday }
+    }
+    if (competitorPeriod === 'month') {
+      const d = new Date(Date.now() + 8 * 3600000)
+      return { start: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`, end: yesterday }
+    }
+    // custom
+    const s = competitorDate || yesterday
+    const e = competitorDateEnd || s
+    return { start: s, end: e }
+  }, [competitorPeriod, competitorDate, competitorDateEnd, yesterday])
 
   // Derived: activeGroupId is the selected group tab (empty when competitors tab active)
   const activeGroupId = activeTabId !== 'competitors' ? activeTabId : ''
@@ -454,14 +652,18 @@ export default function GroupReportPage() {
 
   // Load competitor data (skip for rules tab — no API call needed)
   useEffect(() => {
-    if (!activeCompetitorDomain || !competitorDate || competitorInnerTab === 'rules') { return }
+    if (!activeCompetitorDomain || competitorInnerTab === 'rules') return
+    const { start, end } = competitorDateRange
+    if (!start) return
     setCompetitorLoading(true)
     setCompetitorData(null)
-    fetch(`/api/competitor-site?domain=${encodeURIComponent(activeCompetitorDomain)}&date=${competitorDate}&tab=${competitorInnerTab}`)
+    const apiTab = competitorInnerTab === 'outcomes' ? 'outcomes' : 'keywords'
+    const url = `/api/competitor-site?domain=${encodeURIComponent(activeCompetitorDomain)}&date=${start}&date_start=${start}&date_end=${end}&tab=${apiTab}`
+    fetch(url)
       .then(r => r.json())
       .then(d => setCompetitorData(d))
       .finally(() => setCompetitorLoading(false))
-  }, [activeCompetitorDomain, competitorDate, competitorInnerTab])
+  }, [activeCompetitorDomain, competitorDateRange, competitorInnerTab])
 
   // Load member report
   useEffect(() => {
@@ -711,7 +913,7 @@ export default function GroupReportPage() {
                       <div className="flex gap-0 border-b border-gray-100">
                         {([
                           ['keywords', '提交记录'],
-                          ['ranks', '成效追踪'],
+                          ['outcomes', '成效追踪'],
                           ['rules', '规则中心'],
                         ] as [CompetitorInnerTab, string][]).map(([t, label]) => (
                           <button key={t} onClick={() => setCompetitorInnerTab(t)}
@@ -721,32 +923,36 @@ export default function GroupReportPage() {
                         ))}
                       </div>
 
-                      {/* Date + count — only for keywords / ranks */}
+                      {/* Period buttons — same design as group tab */}
                       {competitorInnerTab !== 'rules' && (
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm text-gray-500 mr-1">时间范围：</span>
                           <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden">
-                            <button
-                              onClick={() => { setCompetitorPeriod('yesterday'); setCompetitorDate(yesterday) }}
-                              className={`px-4 py-1.5 text-sm font-medium transition-colors ${competitorPeriod === 'yesterday' ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                              昨日
-                            </button>
-                            <button
-                              onClick={() => setCompetitorPeriod('custom')}
-                              className={`px-4 py-1.5 text-sm font-medium transition-colors ${competitorPeriod === 'custom' ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                              自定义
-                            </button>
+                            {(['yesterday', 'week', 'month', 'custom'] as Period[]).map(p => (
+                              <button key={p} onClick={() => setCompetitorPeriod(p)}
+                                className={`px-4 py-1.5 text-sm font-medium transition-colors ${competitorPeriod === p ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                                {PERIOD_LABELS[p]}
+                              </button>
+                            ))}
                           </div>
                           {competitorPeriod === 'custom' ? (
-                            <input type="date" value={competitorDate} max={today}
-                              onChange={e => setCompetitorDate(e.target.value)}
-                              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-700" />
+                            <div className="flex items-center gap-2">
+                              <input type="date" value={competitorDate} max={competitorDateEnd || today}
+                                onChange={e => setCompetitorDate(e.target.value)}
+                                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-700" />
+                              <span className="text-gray-400 text-sm">~</span>
+                              <input type="date" value={competitorDateEnd} min={competitorDate} max={today}
+                                onChange={e => setCompetitorDateEnd(e.target.value)}
+                                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-700" />
+                            </div>
                           ) : competitorData && !competitorLoading ? (
                             <span className="text-xs text-gray-400">
-                              {competitorDate}
+                              {competitorDateRange.start === competitorDateRange.end
+                                ? competitorDateRange.start
+                                : `${competitorDateRange.start} ~ ${competitorDateRange.end}`}
                               {competitorInnerTab === 'keywords'
                                 ? ` · ${competitorData.keywords.length} 词`
-                                : ` · 涨 ${competitorData.rankup.length} · 跌 ${competitorData.rankdown.length}`}
+                                : ` · ${competitorData.outcomeSummary?.total ?? 0} 词`}
                             </span>
                           ) : null}
                         </div>
@@ -754,30 +960,29 @@ export default function GroupReportPage() {
 
                       {/* Content */}
                       {competitorInnerTab === 'rules' ? (
-                        <div className="space-y-3">
-                          <div className="flex flex-col items-center justify-center py-16 text-gray-300">
-                            <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            <span className="text-sm">竞品规则中心即将开放</span>
-                          </div>
+                        <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                          <svg className="w-10 h-10 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <span className="text-sm">竞品规则中心即将开放</span>
                         </div>
-                      ) : (
+                      ) : competitorInnerTab === 'keywords' ? (
                         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                           <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
                             <span className="text-sm font-semibold text-gray-700">{activeCompetitorDomain}</span>
                             <span className="text-xs text-gray-400">
-                              {competitorInnerTab === 'keywords' ? `· ${competitorDate} 新增词` : `· ${competitorDate} 排名变动`}
+                              · {competitorDateRange.start === competitorDateRange.end ? competitorDateRange.start : `${competitorDateRange.start} ~ ${competitorDateRange.end}`} 新增词
                             </span>
-                            {competitorData?.site?.has_rank_title && competitorInnerTab === 'ranks' && (
-                              <span className="ml-auto text-[11px] bg-orange-50 text-orange-500 border border-orange-100 px-2 py-0.5 rounded-full">竞品追踪</span>
-                            )}
                           </div>
-                          {competitorLoading ? <Spinner /> : competitorInnerTab === 'keywords'
-                            ? <CompetitorKeywordsTable keywords={competitorData?.keywords || []} />
-                            : <div className="p-4"><CompetitorRanksPanel site={competitorData?.site || null} rankup={competitorData?.rankup || []} rankdown={competitorData?.rankdown || []} /></div>
-                          }
+                          {competitorLoading ? <Spinner /> : <CompetitorKeywordsTable keywords={competitorData?.keywords || []} />}
                         </div>
+                      ) : (
+                        <CompetitorOutcomesPanel
+                          site={competitorData?.site ?? null}
+                          outcomes={competitorData?.outcomes ?? []}
+                          summary={competitorData?.outcomeSummary ?? null}
+                          loading={competitorLoading}
+                        />
                       )}
                     </div>
                   )}
