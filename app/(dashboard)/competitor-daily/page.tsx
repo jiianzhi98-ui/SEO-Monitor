@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
 import { buildGroupMaps, groupSortedRows } from '@/lib/company-groups'
 import { useUser } from '@/lib/user-context'
@@ -113,6 +114,7 @@ function cleanTitleClient(title: string, suffixes: string[]): string {
 
 export default function CompetitorDailyPage() {
   const { role, accessibleSiteIds } = useUser()
+  const router = useRouter()
   const [rows, setRows] = useState<CompetitorRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -716,6 +718,12 @@ export default function CompetitorDailyPage() {
                               className={`text-xs border rounded px-1.5 py-0.5 transition-colors ${(row.hasRankData || row.hasRankTitle) ? 'text-rose-500 hover:text-rose-700 border-rose-100 hover:border-rose-200' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
                             >
                               不稳定词
+                            </button>
+                            <button
+                              onClick={() => router.push(`/competitor-daily/${row.site_id}`)}
+                              className="text-xs border rounded px-1.5 py-0.5 transition-colors text-sky-500 hover:text-sky-700 border-sky-100 hover:border-sky-200"
+                            >
+                              详情
                             </button>
                           </div>
                         </td>
