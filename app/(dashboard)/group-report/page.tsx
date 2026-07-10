@@ -11,8 +11,25 @@ interface Group {
   id: string
   name: string
   type: string
+  site_domains: string[]
   competitor_domains: string[]
   members: { user_id: string; username: string; member_type: string }[]
+}
+
+interface SiteProfile {
+  id: string
+  domain: string
+  name: string
+  site_stage: 'startup' | 'growth' | 'mature' | null
+  site_focus: 'game' | 'app' | 'mixed' | null
+  site_strategy: 'new_content' | 'update' | 'mixed' | null
+}
+
+interface TargetForm {
+  siteId: string
+  site_stage: string
+  site_focus: string
+  site_strategy: string
 }
 
 interface BySourceItem { source: string; count: number; volume: number }
@@ -395,6 +412,11 @@ export default function GroupReportPage() {
   const [ruleSaving, setRuleSaving] = useState(false)
   const [ruleFilterStatus, setRuleFilterStatus] = useState('')
   const [ruleFilterType, setRuleFilterType] = useState('')
+  // Target (站点情况) state
+  const [showTargetModal, setShowTargetModal] = useState(false)
+  const [groupSiteProfiles, setGroupSiteProfiles] = useState<SiteProfile[]>([])
+  const [targetForm, setTargetForm] = useState<TargetForm>({ siteId: '', site_stage: '', site_focus: '', site_strategy: '' })
+  const [targetSaving, setTargetSaving] = useState(false)
 
   // Competitor tab state
   const [activeCompetitorDomain, setActiveCompetitorDomain] = useState('')
@@ -415,7 +437,7 @@ export default function GroupReportPage() {
   // Load groups
   useEffect(() => {
     fetch('/api/task-groups').then(r => r.json()).then(d => {
-      const g: Group[] = (d.groups || []).map((grp: Group) => ({ ...grp, competitor_domains: grp.competitor_domains || [] }))
+      const g: Group[] = (d.groups || []).map((grp: Group) => ({ ...grp, site_domains: grp.site_domains || [], competitor_domains: grp.competitor_domains || [] }))
       setGroups(g)
       if (g.length > 0) setCompetitorGroupId(g[0].id)
     }).finally(() => setGroupsLoading(false))
@@ -495,7 +517,7 @@ export default function GroupReportPage() {
       .finally(() => setOutcomesLoading(false))
   }, [activeGroupId, reportTab, oFilterDiscoverStart, oFilterDiscoverEnd, oFilterSubmitStart, oFilterSubmitEnd, oFilterMember, oFilterOp, oFilterKw, oFilterIndex, oFilterRankKw, oFilterOutcome, oSortBy, oSortDir])
 
-  // Load rules data
+  // Load rules data (global rules, activeGroupId only used for auth context)
   useEffect(() => {
     if (!activeGroupId || reportTab !== 'rules') return
     setRulesLoading(true)
@@ -504,6 +526,51 @@ export default function GroupReportPage() {
       .then(d => setRules(d.rules ?? []))
       .finally(() => setRulesLoading(false))
   }, [activeGroupId, reportTab])
+
+  async function openTargetModal() {
+    const activeGroup = groups.find(g => g.id === activeGroupId)
+    const domains = activeGroup?.site_domains ?? []
+    if (domains.length === 0) {
+      setGroupSiteProfiles([])
+      setTargetForm({ siteId: '', site_stage: '', site_focus: '', site_strategy: '' })
+      setShowTargetModal(true)
+      return
+    }
+    const res = await fetch('/api/sites')
+    const d = await res.json()
+    const profiles: SiteProfile[] = ((d.sites ?? []) as SiteProfile[])
+      .filter(s => domains.includes(s.domain))
+      .map(s => ({ id: s.id, domain: s.domain, name: s.name, site_stage: s.site_stage, site_focus: s.site_focus, site_strategy: s.site_strategy }))
+    setGroupSiteProfiles(profiles)
+    const first = profiles[0]
+    setTargetForm({
+      siteId: first?.id ?? '',
+      site_stage: first?.site_stage ?? '',
+      site_focus: first?.site_focus ?? '',
+      site_strategy: first?.site_strategy ?? '',
+    })
+    setShowTargetModal(true)
+  }
+
+  async function saveTarget() {
+    if (!targetForm.siteId) return
+    setTargetSaving(true)
+    try {
+      const res = await fetch(`/api/sites/${targetForm.siteId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          site_stage: targetForm.site_stage || null,
+          site_focus: targetForm.site_focus || null,
+          site_strategy: targetForm.site_strategy || null,
+        }),
+      })
+      if (res.ok) {
+        const { site } = await res.json()
+        setGroupSiteProfiles(prev => prev.map(p => p.id === site.id ? { ...p, ...site } : p))
+        setShowTargetModal(false)
+      }
+    } finally { setTargetSaving(false) }
+  }
 
   function toggleKey(key: string) {
     setExpandedKeys(prev => {
@@ -808,11 +875,18 @@ export default function GroupReportPage() {
                   <span className="text-xs text-gray-400 ml-1">{filtered.length} 条规则</span>
                   <div className="flex-1" />
                   {canSeeAll && (
-                    <button onClick={() => { setEditingRule(null); setRuleForm(EMPTY_RULE_FORM); setShowRuleModal(true) }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                      新建规则
-                    </button>
+                    <>
+                      <button onClick={openTargetModal}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500 text-white text-sm font-medium rounded-lg hover:bg-sky-600 transition-colors">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+                        站点目标
+                      </button>
+                      <button onClick={() => { setEditingRule(null); setRuleForm(EMPTY_RULE_FORM); setShowRuleModal(true) }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                        新建规则
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -1007,6 +1081,81 @@ export default function GroupReportPage() {
                           {ruleSaving ? '保存中…' : editingRule ? '保存修改' : '创建规则'}
                         </button>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 站点目标 modal ── */}
+                {showTargetModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden">
+                      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                        <h3 className="text-base font-semibold text-gray-800">站点情况</h3>
+                        <button onClick={() => setShowTargetModal(false)} className="text-gray-400 hover:text-gray-600">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                      <div className="px-6 py-5 space-y-4">
+                        {groupSiteProfiles.length === 0 ? (
+                          <p className="text-sm text-gray-400 text-center py-4">该分组暂无关联站点（site_domains 为空）</p>
+                        ) : (
+                          <>
+                            {groupSiteProfiles.length > 1 && (
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1.5">站点</label>
+                                <select value={targetForm.siteId} onChange={e => {
+                                  const p = groupSiteProfiles.find(s => s.id === e.target.value)
+                                  setTargetForm({ siteId: e.target.value, site_stage: p?.site_stage ?? '', site_focus: p?.site_focus ?? '', site_strategy: p?.site_strategy ?? '' })
+                                }} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400 text-gray-700">
+                                  {groupSiteProfiles.map(p => <option key={p.id} value={p.id}>{p.name || p.domain}</option>)}
+                                </select>
+                              </div>
+                            )}
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1.5">当前阶段</label>
+                              <div className="flex gap-2">
+                                {[['startup','起站期'],['growth','成长期'],['mature','成熟期']].map(([val, label]) => (
+                                  <button key={val} onClick={() => setTargetForm(p => ({ ...p, site_stage: p.site_stage === val ? '' : val }))}
+                                    className={`flex-1 py-1.5 text-sm rounded-lg border transition-colors ${targetForm.site_stage === val ? 'bg-sky-500 text-white border-sky-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1.5">主要方向</label>
+                              <div className="flex gap-2">
+                                {[['game','游戏'],['app','应用'],['mixed','混合']].map(([val, label]) => (
+                                  <button key={val} onClick={() => setTargetForm(p => ({ ...p, site_focus: p.site_focus === val ? '' : val }))}
+                                    className={`flex-1 py-1.5 text-sm rounded-lg border transition-colors ${targetForm.site_focus === val ? 'bg-sky-500 text-white border-sky-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1.5">内容策略</label>
+                              <div className="flex gap-2">
+                                {[['new_content','新增为主'],['update','更新为主'],['mixed','均有']].map(([val, label]) => (
+                                  <button key={val} onClick={() => setTargetForm(p => ({ ...p, site_strategy: p.site_strategy === val ? '' : val }))}
+                                    className={`flex-1 py-1.5 text-sm rounded-lg border transition-colors ${targetForm.site_strategy === val ? 'bg-sky-500 text-white border-sky-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {groupSiteProfiles.length > 0 && (
+                        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                          <button onClick={() => setShowTargetModal(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+                          <button onClick={saveTarget} disabled={targetSaving}
+                            className="px-4 py-2 text-sm font-medium bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-50 transition-colors">
+                            {targetSaving ? '保存中…' : '保存'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
