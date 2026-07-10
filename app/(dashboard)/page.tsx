@@ -973,7 +973,7 @@ function KeywordSearchCard() {
   // Export auth dialog
   const [showDialog, setShowDialog] = useState(false)
   const [exportType, setExportType] = useState<'all' | 'today'>('all')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [verifyError, setVerifyError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
@@ -996,7 +996,7 @@ function KeywordSearchCard() {
 
   function openExportDialog(type: 'all' | 'today' = 'all') {
     setExportType(type)
-    setEmail('')
+    setUsername('')
     setPassword('')
     setVerifyError(null)
     setShowDialog(true)
@@ -1009,7 +1009,7 @@ function KeywordSearchCard() {
       const verifyRes = await fetch('/api/keyword-volume/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       })
       const verifyData = await verifyRes.json()
       if (!verifyRes.ok) {
@@ -1133,13 +1133,13 @@ function KeywordSearchCard() {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">邮箱</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">用户名</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
                   autoFocus
-                  placeholder="your@email.com"
+                  placeholder="输入用户名"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
@@ -1169,7 +1169,7 @@ function KeywordSearchCard() {
               </button>
               <button
                 onClick={handleVerifyAndExport}
-                disabled={verifying || !email || !password}
+                disabled={verifying || !username || !password}
                 className="flex-1 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 font-medium"
               >
                 {verifying ? '验证中...' : '确认导出'}
@@ -1189,7 +1189,7 @@ function RankupExportButton() {
   const [domain, setDomain] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState<'idle' | 'verifying' | 'crawling' | 'done'>('idle')
   const [progress, setProgress] = useState('')
@@ -1199,7 +1199,7 @@ function RankupExportButton() {
     setDomain('')
     setStartDate(getMY(-6))
     setEndDate(getMY())
-    setEmail('')
+    setUsername('')
     setPassword('')
     setStatus('idle')
     setProgress('')
@@ -1215,7 +1215,7 @@ function RankupExportButton() {
     const verRes = await fetch('/api/keyword-volume/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     })
     if (!verRes.ok) {
       const d = await verRes.json()
@@ -1351,13 +1351,13 @@ function RankupExportButton() {
                 <p className="text-xs text-red-500">抓取范围超出 7 天（爱站最多保留 7 天数据）</p>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">邮箱</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">用户名</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
                   disabled={busy}
-                  placeholder="your@email.com"
+                  placeholder="输入用户名"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-50"
                 />
               </div>
@@ -1388,7 +1388,7 @@ function RankupExportButton() {
               {status !== 'done' && (
                 <button
                   onClick={handleStart}
-                  disabled={busy || !domain || !email || !password || rangeExceeds}
+                  disabled={busy || !domain || !username || !password || rangeExceeds}
                   className="flex-1 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 font-medium"
                 >
                   {status === 'verifying' ? '验证中...' : status === 'crawling' ? '抓取中...' : '开始导出'}
@@ -1409,7 +1409,7 @@ function RankdownExportButton() {
   const [domain, setDomain] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState<'idle' | 'verifying' | 'crawling' | 'done'>('idle')
   const [progress, setProgress] = useState('')
@@ -1419,7 +1419,7 @@ function RankdownExportButton() {
     setDomain('')
     setStartDate(getMY(-6))
     setEndDate(getMY())
-    setEmail('')
+    setUsername('')
     setPassword('')
     setStatus('idle')
     setProgress('')
@@ -1435,7 +1435,7 @@ function RankdownExportButton() {
     const verRes = await fetch('/api/keyword-volume/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     })
     if (!verRes.ok) {
       const d = await verRes.json()
@@ -1572,13 +1572,13 @@ function RankdownExportButton() {
                 <p className="text-xs text-red-500">抓取范围超出 7 天（爱站最多保留 7 天数据）</p>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">邮箱</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">用户名</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
                   disabled={busy}
-                  placeholder="your@email.com"
+                  placeholder="输入用户名"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 disabled:bg-gray-50"
                 />
               </div>
@@ -1609,7 +1609,7 @@ function RankdownExportButton() {
               {status !== 'done' && (
                 <button
                   onClick={handleStart}
-                  disabled={busy || !domain || !email || !password || rangeExceeds}
+                  disabled={busy || !domain || !username || !password || rangeExceeds}
                   className="flex-1 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 font-medium"
                 >
                   {status === 'verifying' ? '验证中...' : status === 'crawling' ? '抓取中...' : '开始导出'}
