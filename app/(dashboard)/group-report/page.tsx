@@ -862,7 +862,6 @@ export default function GroupReportPage() {
                 <button key={tab} onClick={() => setReportTab(tab)}
                   className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${reportTab === tab ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
                   {label}
-                  {tab === 'rules'    && <span className="ml-1.5 text-[10px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-full">建议</span>}
                 </button>
               ))}
             </div>
