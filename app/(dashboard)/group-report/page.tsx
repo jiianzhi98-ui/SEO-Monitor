@@ -422,6 +422,7 @@ export default function GroupReportPage() {
   const [activeCompetitorDomain, setActiveCompetitorDomain] = useState('')
   const [competitorInnerTab, setCompetitorInnerTab] = useState<CompetitorInnerTab>('keywords')
   const [competitorDate, setCompetitorDate] = useState('')
+  const [competitorPeriod, setCompetitorPeriod] = useState<'yesterday' | 'custom'>('yesterday')
   const [competitorData, setCompetitorData] = useState<CompetitorData | null>(null)
   const [competitorLoading, setCompetitorLoading] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
@@ -722,17 +723,32 @@ export default function GroupReportPage() {
 
                       {/* Date + count — only for keywords / ranks */}
                       {competitorInnerTab !== 'rules' && (
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <input type="date" value={competitorDate} max={today}
-                            onChange={e => setCompetitorDate(e.target.value)}
-                            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700" />
-                          {competitorData && !competitorLoading && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm text-gray-500 mr-1">时间范围：</span>
+                          <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden">
+                            <button
+                              onClick={() => { setCompetitorPeriod('yesterday'); setCompetitorDate(yesterday) }}
+                              className={`px-4 py-1.5 text-sm font-medium transition-colors ${competitorPeriod === 'yesterday' ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                              昨日
+                            </button>
+                            <button
+                              onClick={() => setCompetitorPeriod('custom')}
+                              className={`px-4 py-1.5 text-sm font-medium transition-colors ${competitorPeriod === 'custom' ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                              自定义
+                            </button>
+                          </div>
+                          {competitorPeriod === 'custom' ? (
+                            <input type="date" value={competitorDate} max={today}
+                              onChange={e => setCompetitorDate(e.target.value)}
+                              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-700" />
+                          ) : competitorData && !competitorLoading ? (
                             <span className="text-xs text-gray-400">
+                              {competitorDate}
                               {competitorInnerTab === 'keywords'
-                                ? `${competitorData.keywords.length} 词`
-                                : `涨 ${competitorData.rankup.length} · 跌 ${competitorData.rankdown.length}`}
+                                ? ` · ${competitorData.keywords.length} 词`
+                                : ` · 涨 ${competitorData.rankup.length} · 跌 ${competitorData.rankdown.length}`}
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       )}
 
