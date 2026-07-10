@@ -23,7 +23,8 @@ interface ClaimedKeyword {
   operation_type: string | null; final_keyword: string | null; page_url: string | null
 }
 
-type RightTab = 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
+type RightTab = 'recommend' | 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
+type RecSubTab = 'rules' | 'competitors'
 type Badge = 'new' | 'updated' | null
 interface DetailRow { date: string; domain: string }
 
@@ -467,8 +468,11 @@ export default function TaskGroupsPage() {
   const [claimedLoading, setClaimedLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const [rightTab, setRightTab] = useState<RightTab>('search')
-  const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 })
+  const [rightTab, setRightTab] = useState<RightTab>('recommend')
+  const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 })
+  const [recSubTab, setRecSubTab] = useState<RecSubTab>('rules')
+  const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; search_volume: number; content_type: string | null }[] }[]>([])
+  const [compRecLoading, setCompRecLoading] = useState(false)
 
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
   const [radarLoaded, setRadarLoaded] = useState(false)
@@ -620,6 +624,72 @@ export default function TaskGroupsPage() {
         return { ...w, sites: filtered, siteCount: filtered.length }
       })
   }, [wordLibData, groupNewDomains])
+
+  // ── 今日推荐 ─────────────────────────────────────────────────────────────────
+
+  const recKeywords = useMemo(() => {
+    const map = new Map<string, { keyword: string; volume: number; sources: string[] }>()
+    for (const w of crossWords) {
+      map.set(w.keyword, { keyword: w.keyword, volume: w.volume, sources: ['交叉词'] })
+    }
+    for (const w of streakWords.slice(0, 150)) {
+      if (map.has(w.keyword)) {
+        map.get(w.keyword)!.sources.push(`连涨${w.streak}天`)
+      } else {
+        map.set(w.keyword, { keyword: w.keyword, volume: w.volume, sources: [`连涨${w.streak}天`] })
+      }
+    }
+    for (const w of rankWordsSorted.slice(0, 150)) {
+      if (map.has(w.keyword)) {
+        if (!map.get(w.keyword)!.sources.includes('涨排名')) map.get(w.keyword)!.sources.push('涨排名')
+      } else {
+        map.set(w.keyword, { keyword: w.keyword, volume: w.volume, sources: ['涨排名'] })
+      }
+    }
+    const priority = (s: string[]) => s.includes('交叉词') ? 0 : s.some(x => x.startsWith('连涨')) ? 1 : 2
+    return Array.from(map.values())
+      .sort((a, b) => priority(a.sources) - priority(b.sources) || (b.volume ?? 0) - (a.volume ?? 0))
+      .slice(0, 120)
+  }, [crossWords, streakWords, rankWordsSorted])
+
+  async function loadCompRec() {
+    if (!activeGroup) return
+    setCompRecLoading(true)
+    setCompRecData([])
+    try {
+      const assocSet = new Set(activeGroup.associated_domains)
+      const compDomains = Array.from(new Set([...activeGroup.rank_domains, ...activeGroup.new_domains]))
+        .filter(d => !assocSet.has(d))
+      if (compDomains.length === 0) return
+
+      const supabase = getBrowserClient()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: siteData } = await (supabase.from('sites') as any)
+        .select('id, domain').in('domain', compDomains)
+      const domainToId = new Map<string, string>((siteData || []).map((s: { id: string; domain: string }) => [s.domain, s.id] as [string, string]))
+      const idToDomain = new Map<string, string>((siteData || []).map((s: { id: string; domain: string }) => [s.id, s.domain] as [string, string]))
+      const siteIds = compDomains.map(d => domainToId.get(d)).filter(Boolean)
+      if (siteIds.length === 0) return
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: kwData } = await (supabase.from('raw_keywords') as any)
+        .select('site_id, keyword, search_volume, content_type')
+        .in('site_id', siteIds)
+        .eq('content_date', yesterday)
+        .not('keyword', 'like', '%电脑版%')
+        .order('search_volume', { ascending: false })
+        .limit(1000)
+
+      const grouped = new Map<string, { keyword: string; search_volume: number; content_type: string | null }[]>()
+      for (const kw of (kwData || []) as { site_id: string; keyword: string; search_volume: number; content_type: string | null }[]) {
+        const domain = idToDomain.get(kw.site_id) || ''
+        if (!domain) continue
+        if (!grouped.has(domain)) grouped.set(domain, [])
+        grouped.get(domain)!.push({ keyword: kw.keyword, search_volume: kw.search_volume || 0, content_type: kw.content_type })
+      }
+      setCompRecData(compDomains.filter(d => grouped.has(d)).map(d => ({ domain: d, keywords: grouped.get(d)! })))
+    } finally { setCompRecLoading(false) }
+  }
 
   // ── Detail modal data ───────────────────────────────────────────────────────
 
@@ -830,8 +900,8 @@ export default function TaskGroupsPage() {
     }
 
     const since = getMYDate(-30)
-    const needsNew = ['交叉词', '共新增词'].includes(source)
-    const needsRank = ['交叉词', '竞品涨排名', '连续上涨词'].includes(source)
+    const needsNew = ['交叉词', '共新增词', '今日推荐', '竞品词'].includes(source)
+    const needsRank = ['交叉词', '竞品涨排名', '连续上涨词', '今日推荐'].includes(source)
 
     try {
       const nRows: DetailRow[] = []
@@ -885,6 +955,7 @@ export default function TaskGroupsPage() {
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (rightTab === 'recommend' && recSubTab === 'competitors') loadCompRec() }, [rightTab, recSubTab, activeGroupId]) // eslint-disable-line react-hooks/exhaustive-deps
   // Scroll today's task list to bottom when a new claim is added
   useEffect(() => {
     if (claimedListRef.current) claimedListRef.current.scrollTop = claimedListRef.current.scrollHeight
@@ -1037,6 +1108,110 @@ export default function TaskGroupsPage() {
 
   function renderRightContent() {
     const pg = tabPage[rightTab]
+
+    if (rightTab === 'recommend') {
+      const pg_rec = tabPage['recommend']
+      return (
+        <div>
+          {/* sub-tabs */}
+          <div className="flex border border-gray-200 rounded-lg overflow-hidden mb-4 w-fit">
+            {(['rules', 'competitors'] as RecSubTab[]).map(st => (
+              <button key={st} onClick={() => { setRecSubTab(st); setPage('recommend', 0) }}
+                className={`px-4 py-1.5 text-sm font-medium transition-colors ${recSubTab === st ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                {st === 'rules' ? '规则推荐' : '竞品词'}
+              </button>
+            ))}
+          </div>
+
+          {recSubTab === 'rules' && (
+            (!radarLoaded || radarLoading) ? <Spinner /> : recKeywords.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">暂无推荐词</div>
+            ) : (
+              <>
+                <table className="w-full table-fixed">
+                  <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+                    <th className="px-3 py-2 text-left font-medium">关键词</th>
+                    <th className="px-2 py-2 text-center font-medium w-32">来源</th>
+                    <th className="px-2 py-2 text-center font-medium w-20">搜索量</th>
+                    <th className="w-14" />
+                  </tr></thead>
+                  <tbody>
+                    {recKeywords.slice(pg_rec * PAGE_SIZE, (pg_rec + 1) * PAGE_SIZE).map((w, i) => {
+                      const claimed = claimedSet.has(w.keyword)
+                      return (
+                        <tr key={`${w.keyword}|${i}`} onDoubleClick={() => claimKeyword(w.keyword, '今日推荐', w.volume)}
+                          className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
+                          title={claimed ? '已认领' : '双击认领'}>
+                          <td className="px-3 py-2">
+                            <span className="text-sm text-gray-800 select-text cursor-text"
+                              onDoubleClick={e => { e.stopPropagation(); claimKeyword(w.keyword, '今日推荐', w.volume) }}>
+                              {w.keyword.length > 22 ? w.keyword.slice(0, 22) + '…' : w.keyword}
+                            </span>
+                            {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <div className="flex gap-1 justify-center flex-wrap">
+                              {w.sources.map(s => (
+                                <span key={s} className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-50 text-purple-600">{s}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-center text-xs text-gray-500">{w.volume > 0 ? w.volume.toLocaleString() : '—'}</td>
+                          <td className="px-2 py-2 text-right">
+                            <button onClick={() => openDetail(w.keyword, '今日推荐')}
+                              className="text-xs border rounded px-1.5 py-0.5 text-gray-400 hover:text-gray-600 border-gray-200 transition-colors">详情</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <Pager page={pg_rec} total={recKeywords.length} onPage={p => setPage('recommend', p)} />
+              </>
+            )
+          )}
+
+          {recSubTab === 'competitors' && (
+            compRecLoading ? <Spinner /> : compRecData.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">暂无竞品昨日新增词</div>
+            ) : (
+              <div className="space-y-4">
+                {compRecData.map(({ domain, keywords }) => (
+                  <div key={domain}>
+                    <div className="text-xs font-medium text-gray-500 mb-1.5 px-1">{domain}</div>
+                    <table className="w-full table-fixed">
+                      <tbody>
+                        {keywords.slice(0, 30).map((kw, i) => {
+                          const claimed = claimedSet.has(kw.keyword)
+                          return (
+                            <tr key={`${kw.keyword}|${i}`} onDoubleClick={() => claimKeyword(kw.keyword, '竞品词', kw.search_volume)}
+                              className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
+                              title={claimed ? '已认领' : '双击认领'}>
+                              <td className="px-3 py-2">
+                                <span className="text-sm text-gray-800 select-text cursor-text"
+                                  onDoubleClick={e => { e.stopPropagation(); claimKeyword(kw.keyword, '竞品词', kw.search_volume) }}>
+                                  {kw.keyword.length > 22 ? kw.keyword.slice(0, 22) + '…' : kw.keyword}
+                                </span>
+                                {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
+                              </td>
+                              <td className="px-2 py-2 text-right text-xs text-gray-500">{kw.search_volume > 0 ? kw.search_volume.toLocaleString() : '—'}</td>
+                              <td className="px-2 py-2 w-14 text-right">
+                                <button onClick={() => openDetail(kw.keyword, '竞品词')}
+                                  className="text-xs border rounded px-1.5 py-0.5 text-gray-400 hover:text-gray-600 border-gray-200 transition-colors">详情</button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      )
+    }
 
     if (rightTab === 'search') {
       const totalPages = Math.ceil(searchTotal / PAGE_SIZE)
@@ -1304,7 +1479,7 @@ export default function TaskGroupsPage() {
   if (loading) return <div className="p-6"><Spinner /></div>
 
   const RIGHT_TABS: [RightTab, string][] = [
-    ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
+    ['recommend', '今日推荐'], ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
     ['streak', '连续上涨词'], ['newWords', '共新增词'], ['wordLib', '更新词库'],
   ]
 
@@ -1411,7 +1586,7 @@ export default function TaskGroupsPage() {
         <div className="card overflow-hidden">
           <div className="flex items-center gap-1.5 px-4 pt-3 pb-0 border-b border-gray-100 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
             {groups.map(g => (
-              <button key={g.id} onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null); setTabPage({ search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 }) }}
+              <button key={g.id} onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null); setTabPage({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 }) }}
                 className={`px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap border-b-2 transition-colors ${activeGroupId === g.id ? 'border-green-500 text-green-700 bg-green-50/60' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
                 {g.name}
               </button>
