@@ -127,7 +127,7 @@ export default function Sidebar() {
       </div>
 
       {/* ── Nav ── */}
-      <nav className="flex-1 px-3 pb-3 overflow-y-auto space-y-0.5">
+      <nav className="flex-1 px-3 pb-3 overflow-y-auto space-y-0.5" style={{ scrollbarWidth: 'none' }}>
         {NAV_GROUPS.flatMap(group => group.items).filter(item => {
           if ('superOnly' in item && item.superOnly && role !== 'super') return false
           if ('hideNormal' in item && item.hideNormal && role === 'normal') return false
