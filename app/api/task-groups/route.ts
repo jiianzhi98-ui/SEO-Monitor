@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { type, members, name: nameInput, rank_domains, new_domains, associated_domains, competitor_domains } = await req.json() as {
+  const { type, members, name: nameInput, rank_domains, new_domains, associated_domains, competitor_domains, site_domains } = await req.json() as {
     type: 'game' | 'app' | 'both'
     members: { user_id: string; username: string; member_type?: string }[]
     name?: string
@@ -60,6 +60,7 @@ export async function POST(req: Request) {
     new_domains?: string[]
     associated_domains?: string[]
     competitor_domains?: string[]
+    site_domains?: string[]
   }
 
   if (!type || !members || members.length === 0) {
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
 
   const { data: group, error } = await service
     .from('task_groups')
-    .insert({ name, type, rank_domains: rank_domains || [], new_domains: new_domains || [], associated_domains: associated_domains || [], competitor_domains: competitor_domains || [] })
+    .insert({ name, type, rank_domains: rank_domains || [], new_domains: new_domains || [], associated_domains: associated_domains || [], competitor_domains: competitor_domains || [], site_domains: site_domains || [] })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
