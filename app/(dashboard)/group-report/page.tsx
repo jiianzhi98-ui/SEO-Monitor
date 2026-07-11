@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useUser } from '@/lib/user-context'
 
 const ACCORDION_PAGE_SIZE = 20
+const KW_PAGE_SIZE = 50
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -278,6 +279,7 @@ function ManageCompetitorsModal({ groupName, initialDomains, onSave, onClose }: 
 
 function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
   const [openDates, setOpenDates] = useState<Set<string>>(new Set())
+  const [dateKwPage, setDateKwPage] = useState<Record<string, number>>({})
 
   if (keywords.length === 0) {
     return (
@@ -288,7 +290,6 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
     )
   }
 
-  // Group by content_date
   const byDate = new Map<string, CompetitorKw[]>()
   for (const kw of keywords) {
     const d = kw.content_date || '未知日期'
@@ -299,6 +300,7 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
 
   function toggle(d: string) {
     setOpenDates(prev => { const s = new Set(prev); s.has(d) ? s.delete(d) : s.add(d); return s })
+    setDateKwPage(prev => ({ ...prev, [d]: 0 }))
   }
 
   return (
@@ -306,6 +308,9 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
       {dates.map(date => {
         const kws = byDate.get(date)!
         const isOpen = openDates.has(date)
+        const kwPg = dateKwPage[date] ?? 0
+        const kwPages = Math.ceil(kws.length / KW_PAGE_SIZE)
+        const kwSlice = kws.slice(kwPg * KW_PAGE_SIZE, (kwPg + 1) * KW_PAGE_SIZE)
         return (
           <div key={date}>
             <button className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
@@ -319,21 +324,12 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
             </button>
             {isOpen && (
               <div className="border-t border-gray-50">
-                <div className="grid grid-cols-[1fr_140px_auto] gap-x-3 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
-                  <span>关键词</span><span>来源页面</span><span className="text-right">类型</span>
+                <div className="grid grid-cols-[1fr_auto] gap-x-4 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
+                  <span>关键词</span><span className="text-right">类型</span>
                 </div>
-                {kws.map((kw, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_140px_auto] gap-x-3 items-center px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
+                {kwSlice.map((kw, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto] gap-x-4 items-center px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
                     <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
-                    <div className="min-w-0">
-                      {kw.source_url
-                        ? <a href={kw.source_url} target="_blank" rel="noopener noreferrer"
-                            className="text-xs text-blue-500 hover:underline font-mono truncate block"
-                            title={kw.source_url}>
-                            {kw.source_url.replace(/^https?:\/\//, '').slice(0, 30)}{kw.source_url.replace(/^https?:\/\//, '').length > 30 ? '…' : ''}
-                          </a>
-                        : <span className="text-xs text-gray-300">—</span>}
-                    </div>
                     <div className="flex justify-end">
                       {kw.content_type
                         ? <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${kw.content_type === 'app' ? 'bg-blue-50 text-blue-600' : kw.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>{kw.content_type}</span>
@@ -341,6 +337,19 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
                     </div>
                   </div>
                 ))}
+                {kwPages > 1 && (
+                  <div className="flex items-center justify-between px-5 py-2 border-t border-gray-100 bg-gray-50/40">
+                    <span className="text-xs text-gray-400">{kws.length} 词 · {kwPg + 1}/{kwPages} 页</span>
+                    <div className="flex items-center gap-1">
+                      <button disabled={kwPg === 0}
+                        onClick={() => setDateKwPage(p => ({ ...p, [date]: kwPg - 1 }))}
+                        className="px-2.5 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition-colors">上 {KW_PAGE_SIZE} 条</button>
+                      <button disabled={kwPg >= kwPages - 1}
+                        onClick={() => setDateKwPage(p => ({ ...p, [date]: kwPg + 1 }))}
+                        className="px-2.5 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition-colors">下 {KW_PAGE_SIZE} 条</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -605,6 +614,7 @@ export default function GroupReportPage() {
   const [report, setReport] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const [entryKwPage, setEntryKwPage] = useState<Record<string, number>>({})
   const [accordionPage, setAccordionPage] = useState(0)
   const [filterUserId, setFilterUserId] = useState('all')
   const [groupsLoading, setGroupsLoading] = useState(true)
@@ -721,6 +731,7 @@ export default function GroupReportPage() {
     setLoading(true)
     setReport(null)
     setExpandedKeys(new Set())
+    setEntryKwPage({})
     setAccordionPage(0)
     setFilterUserId('all')
     const url = period === 'custom'
@@ -1721,35 +1732,54 @@ export default function GroupReportPage() {
                               <span className="text-xs text-gray-400 flex-shrink-0">{entry.count} 词</span>
                               <span className="text-xs text-gray-500 font-medium flex-shrink-0 ml-3 w-20 text-right">{fmtVol(entry.volume)} 搜索量</span>
                             </button>
-                            {isOpen && (
-                              <div className="border-t border-gray-50">
-                                <div className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
-                                  <span>关键词 / 最终词</span><span>页面URL</span><span className="text-right">搜索量</span><span className="text-right">来源</span>
-                                </div>
-                                {entry.keywords.map((kw, i) => (
-                                  <div key={i} className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 items-start px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
-                                        {kw.operation_type && (
-                                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${kw.operation_type === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{kw.operation_type}</span>
-                                        )}
-                                      </div>
-                                      {kw.final_keyword && <span className="text-xs text-green-600 truncate block" title={kw.final_keyword}>→ {kw.final_keyword}</span>}
-                                    </div>
-                                    <div className="min-w-0">
-                                      {kw.page_url
-                                        ? <a href={kw.page_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={kw.page_url}>
-                                            {kw.page_url.replace(/^https?:\/\//, '').slice(0, 28)}{kw.page_url.replace(/^https?:\/\//, '').length > 28 ? '…' : ''}
-                                          </a>
-                                        : <span className="text-xs text-gray-300">—</span>}
-                                    </div>
-                                    <span className="text-sm text-gray-500 text-right tabular-nums">{fmtVol(kw.search_volume)}</span>
-                                    <div className="flex justify-end"><SourceTag source={kw.source} /></div>
+                            {isOpen && (() => {
+                              const kwPg = entryKwPage[entry.key] ?? 0
+                              const kwTotal = entry.keywords.length
+                              const kwPages = Math.ceil(kwTotal / KW_PAGE_SIZE)
+                              const kwSlice = entry.keywords.slice(kwPg * KW_PAGE_SIZE, (kwPg + 1) * KW_PAGE_SIZE)
+                              return (
+                                <div className="border-t border-gray-50">
+                                  <div className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
+                                    <span>关键词 / 最终词</span><span>页面URL</span><span className="text-right">搜索量</span><span className="text-right">来源</span>
                                   </div>
-                                ))}
-                              </div>
-                            )}
+                                  {kwSlice.map((kw, i) => (
+                                    <div key={i} className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 items-start px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
+                                          {kw.operation_type && (
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${kw.operation_type === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{kw.operation_type}</span>
+                                          )}
+                                        </div>
+                                        {kw.final_keyword && <span className="text-xs text-green-600 truncate block" title={kw.final_keyword}>→ {kw.final_keyword}</span>}
+                                      </div>
+                                      <div className="min-w-0">
+                                        {kw.page_url
+                                          ? <a href={kw.page_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={kw.page_url}>
+                                              {kw.page_url.replace(/^https?:\/\//, '').slice(0, 28)}{kw.page_url.replace(/^https?:\/\//, '').length > 28 ? '…' : ''}
+                                            </a>
+                                          : <span className="text-xs text-gray-300">—</span>}
+                                      </div>
+                                      <span className="text-sm text-gray-500 text-right tabular-nums">{fmtVol(kw.search_volume)}</span>
+                                      <div className="flex justify-end"><SourceTag source={kw.source} /></div>
+                                    </div>
+                                  ))}
+                                  {kwPages > 1 && (
+                                    <div className="flex items-center justify-between px-5 py-2 border-t border-gray-100 bg-gray-50/40">
+                                      <span className="text-xs text-gray-400">{kwTotal} 词 · {kwPg + 1}/{kwPages} 页</span>
+                                      <div className="flex items-center gap-1">
+                                        <button disabled={kwPg === 0}
+                                          onClick={() => setEntryKwPage(p => ({ ...p, [entry.key]: kwPg - 1 }))}
+                                          className="px-2.5 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition-colors">上 {KW_PAGE_SIZE} 条</button>
+                                        <button disabled={kwPg >= kwPages - 1}
+                                          onClick={() => setEntryKwPage(p => ({ ...p, [entry.key]: kwPg + 1 }))}
+                                          className="px-2.5 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition-colors">下 {KW_PAGE_SIZE} 条</button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
                         )
                       })}
