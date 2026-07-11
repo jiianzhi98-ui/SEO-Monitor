@@ -33,7 +33,7 @@ export async function GET(req: Request) {
   if (tab === 'keywords') {
     const { data: kwRows } = await service
       .from('raw_keywords')
-      .select('keyword, content_type, content_date')
+      .select('keyword, content_type, content_date, source_url')
       .eq('site_id', site.id)
       .gte('content_date', dateStart)
       .lte('content_date', dateEnd)
@@ -42,12 +42,13 @@ export async function GET(req: Request) {
       .order('keyword', { ascending: true })
       .limit(500)
 
-    const keywords = (kwRows || []).map((r: { keyword: string; content_type: string | null; content_date: string }) => ({
+    const keywords = (kwRows || []).map((r: { keyword: string; content_type: string | null; content_date: string; source_url: string | null }) => ({
       keyword: r.keyword,
       search_volume: 0,
       source: r.content_type || '',
       content_type: r.content_type,
       content_date: r.content_date,
+      source_url: r.source_url,
     }))
 
     return NextResponse.json({ site, date: dateStart, keywords, rankup: [], rankdown: [], outcomes: [], outcomeSummary: null })

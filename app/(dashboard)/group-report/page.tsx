@@ -49,7 +49,7 @@ interface ReportData {
   members: MemberReport[]
 }
 
-interface CompetitorKw { keyword: string; search_volume: number; source: string; content_type: string | null; content_date: string }
+interface CompetitorKw { keyword: string; search_volume: number; source: string; content_type: string | null; content_date: string; source_url?: string | null }
 interface CompetitorRankRow { keyword: string; volume: number; rank_position: number | null; title: string | null }
 interface CompetitorOutcomeRow {
   keyword: string
@@ -277,6 +277,8 @@ function ManageCompetitorsModal({ groupName, initialDomains, onSave, onClose }: 
 // ── Competitor Keywords Table ──────────────────────────────────────────────────
 
 function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
+  const [openDates, setOpenDates] = useState<Set<string>>(new Set())
+
   if (keywords.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-14 text-gray-300">
@@ -285,20 +287,65 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
       </div>
     )
   }
+
+  // Group by content_date
+  const byDate = new Map<string, CompetitorKw[]>()
+  for (const kw of keywords) {
+    const d = kw.content_date || '未知日期'
+    if (!byDate.has(d)) byDate.set(d, [])
+    byDate.get(d)!.push(kw)
+  }
+  const dates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a))
+
+  function toggle(d: string) {
+    setOpenDates(prev => { const s = new Set(prev); s.has(d) ? s.delete(d) : s.add(d); return s })
+  }
+
   return (
-    <div>
-      <div className="grid grid-cols-[1fr_80px_100px] px-5 py-2 bg-gray-50/60 text-[11px] font-medium text-gray-400 border-b border-gray-100">
-        <span>关键词</span><span className="text-right">搜索量</span><span className="text-right">来源</span>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {keywords.map((kw, i) => (
-          <div key={i} className="grid grid-cols-[1fr_80px_100px] px-5 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
-            <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
-            <span className="text-sm text-gray-600 text-right tabular-nums">{fmtVol(kw.search_volume)}</span>
-            <div className="flex justify-end"><SourceTag source={kw.source} /></div>
+    <div className="divide-y divide-gray-50">
+      {dates.map(date => {
+        const kws = byDate.get(date)!
+        const isOpen = openDates.has(date)
+        return (
+          <div key={date}>
+            <button className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
+              onClick={() => toggle(date)}>
+              <svg className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-150 ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              <span className="text-sm font-medium text-gray-700 w-14 flex-shrink-0">{fmtDate(date)}</span>
+              <span className="flex-1" />
+              <span className="text-xs text-gray-400">{kws.length} 词</span>
+            </button>
+            {isOpen && (
+              <div className="border-t border-gray-50">
+                <div className="grid grid-cols-[1fr_140px_auto] gap-x-3 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
+                  <span>关键词</span><span>来源页面</span><span className="text-right">类型</span>
+                </div>
+                {kws.map((kw, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_140px_auto] gap-x-3 items-center px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
+                    <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
+                    <div className="min-w-0">
+                      {kw.source_url
+                        ? <a href={kw.source_url} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-blue-500 hover:underline font-mono truncate block"
+                            title={kw.source_url}>
+                            {kw.source_url.replace(/^https?:\/\//, '').slice(0, 30)}{kw.source_url.replace(/^https?:\/\//, '').length > 30 ? '…' : ''}
+                          </a>
+                        : <span className="text-xs text-gray-300">—</span>}
+                    </div>
+                    <div className="flex justify-end">
+                      {kw.content_type
+                        ? <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${kw.content_type === 'app' ? 'bg-blue-50 text-blue-600' : kw.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>{kw.content_type}</span>
+                        : <span className="text-xs text-gray-300">—</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ))}
-      </div>
+        )
+      })}
     </div>
   )
 }
