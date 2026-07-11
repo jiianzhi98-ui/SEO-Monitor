@@ -31,18 +31,26 @@ export async function GET(req: Request) {
 
   // ── 提交记录 ──────────────────────────────────────────────────────────────────
   if (tab === 'keywords') {
-    const { data: keywords } = await service
+    const { data: kwRows } = await service
       .from('raw_keywords')
-      .select('keyword, search_volume, source, content_type, content_date')
+      .select('keyword, content_type, content_date')
       .eq('site_id', site.id)
       .gte('content_date', dateStart)
       .lte('content_date', dateEnd)
       .not('keyword', 'like', '%电脑版%')
       .order('content_date', { ascending: false })
-      .order('search_volume', { ascending: false })
+      .order('keyword', { ascending: true })
       .limit(500)
 
-    return NextResponse.json({ site, date: dateStart, keywords: keywords || [], rankup: [], rankdown: [], outcomes: [], outcomeSummary: null })
+    const keywords = (kwRows || []).map((r: { keyword: string; content_type: string | null; content_date: string }) => ({
+      keyword: r.keyword,
+      search_volume: 0,
+      source: r.content_type || '',
+      content_type: r.content_type,
+      content_date: r.content_date,
+    }))
+
+    return NextResponse.json({ site, date: dateStart, keywords, rankup: [], rankdown: [], outcomes: [], outcomeSummary: null })
   }
 
   // ── 成效追踪 ──────────────────────────────────────────────────────────────────
@@ -50,7 +58,7 @@ export async function GET(req: Request) {
     // 1. Keywords published in date range
     const { data: kwRows } = await service
       .from('raw_keywords')
-      .select('keyword, content_type, content_date, discovered_at, search_volume')
+      .select('keyword, content_type, content_date, discovered_at')
       .eq('site_id', site.id)
       .gte('content_date', dateStart)
       .lte('content_date', dateEnd)
@@ -83,7 +91,7 @@ export async function GET(req: Request) {
     // Merge keywords with rank data, dedupe by keyword
     const seen = new Set<string>()
     const outcomes = []
-    for (const kw of (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; discovered_at: string; search_volume: number | null }[]) {
+    for (const kw of (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; discovered_at: string }[]) {
       if (seen.has(kw.keyword)) continue
       seen.add(kw.keyword)
       const rank = rankMap.get(kw.keyword)
@@ -92,7 +100,7 @@ export async function GET(req: Request) {
         content_type: kw.content_type,
         content_date: kw.content_date,
         discovered_at: kw.discovered_at,
-        volume: rank?.volume ?? kw.search_volume ?? 0,
+        volume: rank?.volume ?? 0,
         rank_position: rank?.rank_position ?? null,
         rank_type: rank?.rank_type ?? null,
         rank_date: rank?.stat_date ?? null,

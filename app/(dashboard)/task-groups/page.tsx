@@ -673,19 +673,19 @@ export default function TaskGroupsPage() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: kwData } = await (supabase.from('raw_keywords') as any)
-        .select('site_id, keyword, search_volume, content_type')
+        .select('site_id, keyword, content_type')
         .in('site_id', siteIds)
         .eq('content_date', yesterday)
         .not('keyword', 'like', '%电脑版%')
-        .order('search_volume', { ascending: false })
+        .order('keyword', { ascending: true })
         .limit(1000)
 
       const grouped = new Map<string, { keyword: string; search_volume: number; content_type: string | null }[]>()
-      for (const kw of (kwData || []) as { site_id: string; keyword: string; search_volume: number; content_type: string | null }[]) {
+      for (const kw of (kwData || []) as { site_id: string; keyword: string; content_type: string | null }[]) {
         const domain = idToDomain.get(kw.site_id) || ''
         if (!domain) continue
         if (!grouped.has(domain)) grouped.set(domain, [])
-        grouped.get(domain)!.push({ keyword: kw.keyword, search_volume: kw.search_volume || 0, content_type: kw.content_type })
+        grouped.get(domain)!.push({ keyword: kw.keyword, search_volume: 0, content_type: kw.content_type })
       }
       setCompRecData(compDomains.filter(d => grouped.has(d)).map(d => ({ domain: d, keywords: grouped.get(d)! })))
     } finally { setCompRecLoading(false) }
