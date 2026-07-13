@@ -44,14 +44,18 @@ jobs:
           SB_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
           SB_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
 
-          # Today's date in MYT (UTC+8)
-          TODAY=$(python3 -c "
-          from datetime import datetime, timezone, timedelta
-          now = datetime.now(timezone(timedelta(hours=8)))
-          print(now.strftime('%Y-%m-%d'))
+          # Today's date in MYT (UTC+8), with UTC boundaries for the curl URL
+          # Note: avoid + in URL query strings (parsed as space by HTTP servers)
+          read TODAY TODAY_START TODAY_END <<< $(python3 -c "
+from datetime import datetime, timezone, timedelta
+myt = timezone(timedelta(hours=8))
+now = datetime.now(myt)
+today = now.strftime('%Y-%m-%d')
+# MYT midnight in UTC (subtract 8h)
+start_utc = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=myt).astimezone(timezone.utc)
+end_utc   = datetime(now.year, now.month, now.day, 23, 59, 59, tzinfo=myt).astimezone(timezone.utc)
+print(today, start_utc.strftime('%Y-%m-%dT%H:%M:%SZ'), end_utc.strftime('%Y-%m-%dT%H:%M:%SZ'))
           ")
-          TODAY_START="${TODAY}T00:00:00+08:00"
-          TODAY_END="${TODAY}T23:59:59.999+08:00"
 
           # Step 1: Get today's activity IDs for this step
           ACTS=$(curl -sf \
