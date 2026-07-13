@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useUser } from '@/lib/user-context'
+import { getBrowserClient } from '@/lib/supabase'
 
 const ACCORDION_PAGE_SIZE = 20
 const KW_PAGE_SIZE = 50
@@ -111,9 +112,17 @@ interface Rule {
 
 interface ExtSiteProfile {
   id: string; domain: string; name: string
-  site_weight: number | null; site_ip: string | null; site_index_count: number | null
   post_start_hour: number | null; post_end_hour: number | null; post_interval_minutes: number | null
 }
+interface SiteFull {
+  id: string; domain: string; name: string
+  category: string; has_rank_title: boolean; is_enabled: boolean
+}
+interface WeightSnapshot {
+  pc_weight: number; mobile_weight: number
+  pc_ip: number; pc_ip_max: number; mobile_ip: number; mobile_ip_max: number
+}
+interface IndexSnapshot { index_count: number }
 interface CompetitorProfileData {
   domain: string; site_type: string | null; site_weight: number | null
   site_ip: string | null; site_index_count: number | null
@@ -227,68 +236,141 @@ function ReportCard({ title, memberType, total, bySource, isTotal }: {
 
 // ── Manage Competitors Modal ───────────────────────────────────────────────────
 
-function ManageCompetitorsModal({ groupName, initialDomains, onSave, onClose }: {
-  groupName: string; initialDomains: string[]
+const CAT_LABELS_COMP: Record<string, string> = { large: '大站', medium: '中站', small: '小站' }
+
+function ManageCompetitorsModal({ groupName, initialDomains, allSites, onSave, onClose }: {
+  groupName: string; initialDomains: string[]; allSites: SiteFull[]
   onSave: (domains: string[]) => Promise<void>; onClose: () => void
 }) {
-  const [domains, setDomains] = useState<string[]>(initialDomains)
-  const [input, setInput] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialDomains))
+  const [search, setSearch] = useState('')
+  const [manualInput, setManualInput] = useState('')
   const [saving, setSaving] = useState(false)
 
-  function addDomain() {
-    const d = input.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '')
-    if (!d || domains.includes(d)) { setInput(''); return }
-    setDomains(prev => [...prev, d])
-    setInput('')
+  // Sites with 竞品追踪 enabled
+  const competitorSites = allSites.filter(s => s.has_rank_title)
+  const cats = ['large', 'medium', 'small'] as const
+
+  function toggleDomain(domain: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(domain) ? next.delete(domain) : next.add(domain)
+      return next
+    })
+  }
+
+  function addManual() {
+    const d = manualInput.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '')
+    if (!d) return
+    setSelected(prev => new Set([...Array.from(prev), d]))
+    setManualInput('')
+  }
+
+  function removeExtra(d: string) {
+    setSelected(prev => { const next = new Set(prev); next.delete(d); return next })
   }
 
   async function handleSave() {
     setSaving(true)
-    try { await onSave(domains) } finally { setSaving(false) }
+    try { await onSave(Array.from(selected)) } finally { setSaving(false) }
   }
+
+  const knownDomains = new Set(competitorSites.map(s => s.domain))
+  const extraDomains = Array.from(selected).filter(d => !knownDomains.has(d))
+
+  const filtered = search
+    ? competitorSites.filter(s => s.domain.includes(search) || (s.name || '').includes(search))
+    : competitorSites
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
           <div>
             <h3 className="text-base font-semibold text-gray-900">管理竞品追踪</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{groupName}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{groupName} · 已选 {selected.size} 个站点</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        <div className="px-6 py-4 space-y-2 max-h-64 overflow-y-auto">
-          {domains.length === 0
-            ? <p className="text-sm text-gray-400 text-center py-4">暂无追踪竞品，请在下方添加域名</p>
-            : domains.map(d => (
-              <div key={d} className="flex items-center justify-between bg-orange-50 border border-orange-100 rounded-lg px-3 py-2">
-                <span className="text-sm text-gray-700 font-mono">{d}</span>
-                <button onClick={() => setDomains(prev => prev.filter(x => x !== d))}
-                  className="text-gray-400 hover:text-red-500 transition-colors ml-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+        <div className="px-6 pt-4 flex-shrink-0">
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="搜索竞品站点…"
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700" />
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-6 py-3 space-y-4">
+          {competitorSites.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">
+              网站管理中暂无开启「竞品追踪」的站点<br />
+              <span className="text-xs">请先在网站管理中为对应站点开启橙色竞品追踪开关</span>
+            </p>
+          ) : (
+            cats.map(cat => {
+              const catSites = filtered.filter(s => s.category === cat)
+              if (catSites.length === 0) return null
+              const allSel = catSites.every(s => selected.has(s.domain))
+              return (
+                <div key={cat}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{CAT_LABELS_COMP[cat]}</span>
+                    <button onClick={() => {
+                      const next = new Set(selected)
+                      allSel ? catSites.forEach(s => next.delete(s.domain)) : catSites.forEach(s => next.add(s.domain))
+                      setSelected(next)
+                    }} className="text-[11px] text-orange-500 hover:text-orange-600 font-medium">
+                      {allSel ? '全取消' : '全选'}
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    {catSites.map(s => (
+                      <button key={s.id} onClick={() => toggleDomain(s.domain)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors text-left ${selected.has(s.domain) ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
+                        <span className={`w-5 h-5 flex-shrink-0 rounded-md flex items-center justify-center transition-all ${selected.has(s.domain) ? 'bg-orange-500 border-2 border-orange-500' : 'border-2 border-gray-200 bg-white'}`}>
+                          {selected.has(s.domain) && <svg viewBox="0 0 10 8" className="w-3 h-2.5"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                        </span>
+                        <span className="text-sm text-gray-800 font-medium">{s.domain}</span>
+                        {s.name && <span className="text-xs text-gray-400">{s.name}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })
+          )}
+
+          {/* Extra manually-added domains not in site management */}
+          {extraDomains.length > 0 && (
+            <div>
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">手动添加</span>
+              <div className="mt-2 space-y-1">
+                {extraDomains.map(d => (
+                  <div key={d} className="flex items-center gap-3 px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg">
+                    <span className="text-sm text-gray-700 font-mono flex-1">{d}</span>
+                    <button onClick={() => removeExtra(d)} className="text-gray-400 hover:text-red-500 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
         </div>
 
-        <div className="px-6 pb-4">
+        <div className="px-6 pb-3 flex-shrink-0 border-t border-gray-100 pt-3">
+          <p className="text-xs text-gray-400 mb-2">添加不在网站管理中的域名（可选）</p>
           <div className="flex gap-2">
-            <input value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addDomain()}
-              placeholder="输入域名，如 example.com"
+            <input value={manualInput} onChange={e => setManualInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addManual()}
+              placeholder="example.com"
               className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700" />
-            <button onClick={addDomain}
-              className="px-4 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex-shrink-0">
-              添加
-            </button>
+            <button onClick={addManual} className="px-4 py-2 text-sm font-medium bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors flex-shrink-0">添加</button>
           </div>
-          <p className="text-[11px] text-gray-400 mt-1.5">输入不含 http:// 的纯域名，按回车或点击添加</p>
         </div>
 
-        <div className="px-6 pb-5 flex justify-end gap-2 border-t border-gray-100 pt-4">
+        <div className="px-6 pb-5 flex justify-end gap-2 border-t border-gray-100 pt-3 flex-shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
           <button onClick={handleSave} disabled={saving}
             className="px-4 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors">
@@ -687,12 +769,16 @@ export default function GroupReportPage() {
   const [competitorData, setCompetitorData] = useState<CompetitorData | null>(null)
   const [competitorLoading, setCompetitorLoading] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
+  const [allSites, setAllSites] = useState<SiteFull[]>([])
 
   // Site profile (规则中心 — 站点档案)
   const [groupExtProfiles, setGroupExtProfiles] = useState<Record<string, ExtSiteProfile>>({})
   const [expandedSiteProfile, setExpandedSiteProfile] = useState<string | null>(null)
-  const [profileForm, setProfileForm] = useState<{ site_weight: string; site_ip: string; site_index_count: string; post_start_hour: string; post_end_hour: string; post_interval_minutes: string }>({ site_weight: '', site_ip: '', site_index_count: '', post_start_hour: '', post_end_hour: '', post_interval_minutes: '' })
+  const [profileForm, setProfileForm] = useState<{ post_start_hour: string; post_end_hour: string; post_interval_minutes: string }>({ post_start_hour: '', post_end_hour: '', post_interval_minutes: '' })
   const [profileSaving, setProfileSaving] = useState(false)
+  // Monitored weight & index data (auto-loaded from weight_history / index_snapshots)
+  const [siteWeightData, setSiteWeightData] = useState<Record<string, WeightSnapshot>>({})
+  const [siteIndexData, setSiteIndexData] = useState<Record<string, IndexSnapshot>>({})
   const [kwAnalysis, setKwAnalysis] = useState<Record<string, KwAnalysisResult>>({})
   const [kwAnalysisLoading, setKwAnalysisLoading] = useState<Record<string, boolean>>({})
   // Competitor profile (规则中心 — 竞品档案)
@@ -839,12 +925,40 @@ export default function GroupReportPage() {
     if (domains.length === 0) return
     fetch('/api/sites')
       .then(r => r.json())
-      .then(d => {
+      .then(async (d) => {
         const map: Record<string, ExtSiteProfile> = {}
+        const siteIds: string[] = []
         for (const s of (d.sites ?? [])) {
-          if (domains.includes(s.domain)) map[s.domain] = s
+          if (domains.includes(s.domain)) {
+            map[s.domain] = s
+            siteIds.push(s.id)
+          }
         }
         setGroupExtProfiles(prev => ({ ...prev, ...map }))
+        if (siteIds.length === 0) return
+        // Load latest weight & index from monitored tables
+        const db = getBrowserClient()
+        const [{ data: wRows }, { data: iRows }] = await Promise.all([
+          db.from('weight_history').select('site_id, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max').in('site_id', siteIds).order('record_date', { ascending: false }),
+          db.from('index_snapshots').select('site_id, index_count').in('site_id', siteIds).order('snapshot_date', { ascending: false }),
+        ])
+        const wMap: Record<string, WeightSnapshot> = {}
+        for (const r of ((wRows ?? []) as (WeightSnapshot & { site_id: string })[])) {
+          if (!wMap[r.site_id]) wMap[r.site_id] = r
+        }
+        const iMap: Record<string, IndexSnapshot> = {}
+        for (const r of ((iRows ?? []) as (IndexSnapshot & { site_id: string })[])) {
+          if (!iMap[r.site_id]) iMap[r.site_id] = r
+        }
+        // Re-key by domain for easy lookup
+        const wByDomain: Record<string, WeightSnapshot> = {}
+        const iByDomain: Record<string, IndexSnapshot> = {}
+        for (const s of (d.sites ?? [])) {
+          if (wMap[s.id]) wByDomain[s.domain] = wMap[s.id]
+          if (iMap[s.id]) iByDomain[s.domain] = iMap[s.id]
+        }
+        setSiteWeightData(prev => ({ ...prev, ...wByDomain }))
+        setSiteIndexData(prev => ({ ...prev, ...iByDomain }))
       })
   }, [activeGroupId, reportTab, groups])
 
@@ -927,6 +1041,14 @@ export default function GroupReportPage() {
     })
   }
 
+  async function openManageModal() {
+    if (allSites.length === 0) {
+      const d = await fetch('/api/sites').then(r => r.json())
+      setAllSites(d.sites ?? [])
+    }
+    setShowManageModal(true)
+  }
+
   async function saveCompetitorDomains(domains: string[]) {
     await fetch(`/api/task-groups/${competitorGroupId}/competitor-domains`, {
       method: 'PATCH',
@@ -949,9 +1071,6 @@ export default function GroupReportPage() {
     setExpandedSiteProfile(domain)
     const p = groupExtProfiles[domain]
     setProfileForm({
-      site_weight: p?.site_weight?.toString() ?? '',
-      site_ip: p?.site_ip ?? '',
-      site_index_count: p?.site_index_count?.toString() ?? '',
       post_start_hour: p?.post_start_hour?.toString() ?? '',
       post_end_hour: p?.post_end_hour?.toString() ?? '',
       post_interval_minutes: p?.post_interval_minutes?.toString() ?? '',
@@ -964,9 +1083,6 @@ export default function GroupReportPage() {
     setProfileSaving(true)
     try {
       const body = {
-        site_weight: profileForm.site_weight ? Number(profileForm.site_weight) : null,
-        site_ip: profileForm.site_ip || null,
-        site_index_count: profileForm.site_index_count ? Number(profileForm.site_index_count) : null,
         post_start_hour: profileForm.post_start_hour ? Number(profileForm.post_start_hour) : null,
         post_end_hour: profileForm.post_end_hour ? Number(profileForm.post_end_hour) : null,
         post_interval_minutes: profileForm.post_interval_minutes ? Number(profileForm.post_interval_minutes) : null,
@@ -1163,7 +1279,7 @@ export default function GroupReportPage() {
                   {competitorDomains.length > 0 && <span className="text-xs text-gray-400">{competitorDomains.length} 个竞品站</span>}
                 </div>
                 {canSeeAll && (
-                  <button onClick={() => setShowManageModal(true)}
+                  <button onClick={openManageModal}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-600 border border-orange-200 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                     管理竞品
@@ -1176,7 +1292,7 @@ export default function GroupReportPage() {
                   <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                   <span className="text-sm">尚未配置竞品站</span>
                   {canSeeAll && (
-                    <button onClick={() => setShowManageModal(true)} className="text-sm text-orange-500 hover:text-orange-600 font-medium">
+                    <button onClick={openManageModal} className="text-sm text-orange-500 hover:text-orange-600 font-medium">
                       点击"管理竞品"添加追踪域名 →
                     </button>
                   )}
@@ -1600,28 +1716,51 @@ export default function GroupReportPage() {
                         <button onClick={() => toggleSiteProfileExpand(domain)}
                           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
                           <span className="text-sm font-medium text-gray-800 flex-1">{domain}</span>
-                          {extP && (
-                            <div className="flex items-center gap-3 text-xs text-gray-400">
-                              {extP.site_weight != null && <span>权重 {extP.site_weight}</span>}
-                              {extP.site_index_count != null && <span>收录 {extP.site_index_count.toLocaleString()}</span>}
-                              {extP.post_start_hour != null && <span>{extP.post_start_hour}:00~{extP.post_end_hour}:00</span>}
-                            </div>
-                          )}
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            {siteWeightData[domain] && (
+                              <span>PC权重 {siteWeightData[domain].pc_weight} / 移动 {siteWeightData[domain].mobile_weight}</span>
+                            )}
+                            {siteIndexData[domain] && (
+                              <span>收录 {siteIndexData[domain].index_count.toLocaleString()}</span>
+                            )}
+                            {extP?.post_start_hour != null && <span>{extP.post_start_hour}:00~{extP.post_end_hour}:00</span>}
+                          </div>
                           <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
                         </button>
                         {isExpanded && (
                           <div className="px-4 pb-4 border-t border-gray-100 space-y-4 pt-3">
-                            {/* Stats grid */}
-                            <div className="grid grid-cols-3 gap-3">
-                              {([['site_weight', '权重', 'number'], ['site_ip', 'IP', 'text'], ['site_index_count', '收录量', 'number']] as [keyof typeof profileForm, string, string][]).map(([key, label, type]) => (
-                                <div key={key}>
-                                  <label className="text-xs text-gray-400 block mb-1">{label}</label>
-                                  <input type={type} value={profileForm[key] ?? ''} onChange={e => setProfileForm(p => ({ ...p, [key]: e.target.value }))}
-                                    placeholder="—" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                            {/* Monitored stats — read-only */}
+                            <div>
+                              <p className="text-xs text-gray-500 font-medium mb-2">监控数据（自动抓取）</p>
+                              {(siteWeightData[domain] || siteIndexData[domain]) ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                  {siteWeightData[domain] && (() => {
+                                    const w = siteWeightData[domain]
+                                    const pcIp = Math.round((w.pc_ip + w.pc_ip_max) / 2)
+                                    const mIp = Math.round((w.mobile_ip + w.mobile_ip_max) / 2)
+                                    return (<>
+                                      <div className="bg-blue-50 rounded-lg px-3 py-2">
+                                        <p className="text-[10px] text-blue-400 font-medium mb-0.5">PC 权重 / 日IP</p>
+                                        <p className="text-sm font-semibold text-blue-700">{w.pc_weight} <span className="text-xs font-normal text-blue-500">/ {pcIp.toLocaleString()}</span></p>
+                                      </div>
+                                      <div className="bg-indigo-50 rounded-lg px-3 py-2">
+                                        <p className="text-[10px] text-indigo-400 font-medium mb-0.5">移动权重 / 日IP</p>
+                                        <p className="text-sm font-semibold text-indigo-700">{w.mobile_weight} <span className="text-xs font-normal text-indigo-500">/ {mIp.toLocaleString()}</span></p>
+                                      </div>
+                                    </>)
+                                  })()}
+                                  {siteIndexData[domain] && (
+                                    <div className="bg-green-50 rounded-lg px-3 py-2 col-span-2">
+                                      <p className="text-[10px] text-green-400 font-medium mb-0.5">百度收录量</p>
+                                      <p className="text-sm font-semibold text-green-700">{siteIndexData[domain].index_count.toLocaleString()}</p>
+                                    </div>
+                                  )}
                                 </div>
-                              ))}
+                              ) : (
+                                <p className="text-xs text-gray-400 py-2">暂无监控数据（需开启权重监控和收录监控）</p>
+                              )}
                             </div>
-                            {/* Posting schedule */}
+                            {/* Posting schedule — editable */}
                             <div>
                               <p className="text-xs text-gray-500 font-medium mb-2">发布时间段</p>
                               <div className="grid grid-cols-3 gap-3">
@@ -1637,7 +1776,7 @@ export default function GroupReportPage() {
                             {canSeeAll && (
                               <button onClick={() => saveSiteProfile(domain)} disabled={profileSaving}
                                 className="px-3 py-1.5 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors">
-                                {profileSaving ? '保存中…' : '保存档案'}
+                                {profileSaving ? '保存中…' : '保存发布时段'}
                               </button>
                             )}
                             {/* Keyword analysis */}
@@ -2250,6 +2389,7 @@ export default function GroupReportPage() {
         <ManageCompetitorsModal
           groupName={activeCompetitorGroup.name}
           initialDomains={competitorDomains}
+          allSites={allSites}
           onSave={saveCompetitorDomains}
           onClose={() => setShowManageModal(false)}
         />
