@@ -1,57 +1,45 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 
-export async function GET(_req: Request, { params: _params }: { params: Promise<{ id: string }> }) {
+// GET /api/task-groups/[id]/rules?competitor=1
+// Returns rules applied to this group's sites (or competitor domains if ?competitor=1)
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const authClient = createClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
+  const { id } = await params
+  const isCompetitor = new URL(req.url).searchParams.get('competitor') === '1'
 
-  const { data, error } = await service
-    .from('rules')
-    .select('*')
-    .order('rule_number', { ascending: true })
+  // Get the group
+  const { data: group } = await service
+    .from('task_groups').select('site_domains, competitor_domains').eq('id', id).single()
+  if (!group) return NextResponse.json({ rules: [] })
 
+  const { data: allRules, error } = await service
+    .from('rules').select('*').order('rule_number', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ rules: data ?? [] })
-}
 
-export async function POST(req: Request, { params: _params }: { params: Promise<{ id: string }> }) {
-  const authClient = createClient()
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const service = createServiceClient() as any
-
-  const { data: profile } = await service
-    .from('user_profiles').select('role').eq('id', user.id).single()
-  if (!['super', 'admin'].includes(profile?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (isCompetitor) {
+    const groupDomains: string[] = group.competitor_domains ?? []
+    const filtered = (allRules ?? []).filter((r: { competitor_domains?: string[] }) =>
+      (r.competitor_domains ?? []).some((d: string) => groupDomains.includes(d))
+    )
+    return NextResponse.json({ rules: filtered })
   }
 
-  const body = await req.json()
+  // Own-site rules: resolve site_domains → site IDs
+  const domains: string[] = group.site_domains ?? []
+  if (domains.length === 0) return NextResponse.json({ rules: [] })
 
-  const { data, error } = await service
-    .from('rules')
-    .insert({
-      name:                body.name,
-      type:                body.type,
-      status:              body.status ?? 'active',
-      source:              body.source ?? 'manual',
-      stage_applicability: body.stage_applicability ?? [],
-      description:         body.description ?? null,
-      confidence:          body.confidence ?? 0,
-      success_count:       body.success_count ?? 0,
-      fail_count:          body.fail_count ?? 0,
-      priority:            body.priority ?? 0,
-      created_by:          user.id,
-    })
-    .select()
-    .single()
+  const { data: sites } = await service
+    .from('sites').select('id').in('domain', domains)
+  const siteIds = (sites ?? []).map((s: { id: string }) => s.id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ rule: data })
+  const filtered = (allRules ?? []).filter((r: { site_ids?: string[] }) =>
+    (r.site_ids ?? []).some((sid: string) => siteIds.includes(sid))
+  )
+  return NextResponse.json({ rules: filtered })
 }

@@ -17,14 +17,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params
   const body = await req.json()
 
-  const allowed = ['site_stage', 'site_focus', 'site_strategy']
+  const allowed = [
+    'site_stage', 'site_focus', 'site_strategy',
+    'site_weight', 'site_ip', 'site_index_count',
+    'post_start_hour', 'post_end_hour', 'post_interval_minutes',
+  ]
   const patch: Record<string, unknown> = {}
   for (const key of allowed) {
-    if (key in body) patch[key] = body[key] || null
+    if (key in body) patch[key] = body[key] ?? null
   }
 
   const { data, error } = await service
-    .from('sites').update(patch).eq('id', id).select('id, domain, name, site_stage, site_focus, site_strategy').single()
+    .from('sites').update(patch).eq('id', id)
+    .select('id, domain, name, site_stage, site_focus, site_strategy, site_weight, site_ip, site_index_count, post_start_hour, post_end_hour, post_interval_minutes')
+    .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ site: data })

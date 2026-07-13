@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useUser } from '@/lib/user-context'
 
+interface SiteInfo { id: string; domain: string; name: string }
+
 interface Rule {
   id: string
   rule_number: number
@@ -16,6 +18,8 @@ interface Rule {
   success_count: number
   fail_count: number
   priority: number
+  site_ids: string[]
+  competitor_domains: string[]
   created_at: string
 }
 
@@ -30,12 +34,15 @@ interface RuleForm {
   success_count: number
   fail_count: number
   priority: number
+  site_ids: string[]
+  competitor_domains: string[]
 }
 
 const EMPTY_FORM: RuleForm = {
   name: '', type: 'add', status: 'active', source: 'manual',
   stage_applicability: [],
   description: '', confidence: 0, success_count: 0, fail_count: 0, priority: 0,
+  site_ids: [], competitor_domains: [],
 }
 
 const STAGE_TYPES = ['起站期', '成长期', '成熟期', '通用']
@@ -71,6 +78,8 @@ export default function RulesPage() {
 
   const [rules, setRules] = useState<Rule[]>([])
   const [loading, setLoading] = useState(true)
+  const [allSites, setAllSites] = useState<SiteInfo[]>([])
+  const [allCompetitorDomains, setAllCompetitorDomains] = useState<string[]>([])
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('')
@@ -84,13 +93,32 @@ export default function RulesPage() {
   const [editingRule, setEditingRule] = useState<Rule | null>(null)
   const [form, setForm] = useState<RuleForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [siteQ, setSiteQ] = useState('')
+  const [compQ, setCompQ] = useState('')
 
   useEffect(() => {
     setLoading(true)
     fetch('/api/rules')
       .then(r => r.json())
-      .then(d => setRules(d.rules ?? []))
+      .then(d => setRules((d.rules ?? []).map((r: Rule) => ({ ...r, site_ids: r.site_ids ?? [], competitor_domains: r.competitor_domains ?? [] }))))
       .finally(() => setLoading(false))
+
+    // Load sites and competitor domains in parallel
+    fetch('/api/sites')
+      .then(r => r.json())
+      .then(d => setAllSites((d.sites ?? []).map((s: SiteInfo) => ({ id: s.id, domain: s.domain, name: s.name }))))
+
+    fetch('/api/task-groups')
+      .then(r => r.json())
+      .then(d => {
+        const domains: string[] = []
+        for (const g of (d.groups ?? [])) {
+          for (const domain of (g.competitor_domains ?? [])) {
+            if (!domains.includes(domain)) domains.push(domain)
+          }
+        }
+        setAllCompetitorDomains(domains.sort())
+      })
   }, [])
 
   const filtered = useMemo(() => rules.filter(r => {
@@ -104,9 +132,7 @@ export default function RulesPage() {
   }), [rules, filterStatus, filterType, filterSource, filterStage, filterQ])
 
   function openNew() {
-    setEditingRule(null)
-    setForm(EMPTY_FORM)
-    setShowModal(true)
+    setEditingRule(null); setForm(EMPTY_FORM); setSiteQ(''); setCompQ(''); setShowModal(true)
   }
 
   function openEdit(rule: Rule) {
@@ -117,9 +143,13 @@ export default function RulesPage() {
       description: rule.description ?? '',
       confidence: rule.confidence, success_count: rule.success_count,
       fail_count: rule.fail_count, priority: rule.priority,
+      site_ids: rule.site_ids ?? [],
+      competitor_domains: rule.competitor_domains ?? [],
     })
-    setShowModal(true)
+    setSiteQ(''); setCompQ(''); setShowModal(true)
   }
+
+  function closeModal() { setShowModal(false); setEditingRule(null); setForm(EMPTY_FORM) }
 
   async function saveRule() {
     if (!form.name.trim()) return
@@ -132,7 +162,7 @@ export default function RulesPage() {
         })
         if (res.ok) {
           const { rule } = await res.json()
-          setRules(prev => prev.map(r => r.id === rule.id ? rule : r))
+          setRules(prev => prev.map(r => r.id === rule.id ? { ...rule, site_ids: rule.site_ids ?? [], competitor_domains: rule.competitor_domains ?? [] } : r))
         }
       } else {
         const res = await fetch('/api/rules', {
@@ -141,12 +171,10 @@ export default function RulesPage() {
         })
         if (res.ok) {
           const { rule } = await res.json()
-          setRules(prev => [...prev, rule])
+          setRules(prev => [...prev, { ...rule, site_ids: rule.site_ids ?? [], competitor_domains: rule.competitor_domains ?? [] }])
         }
       }
-      setShowModal(false)
-      setEditingRule(null)
-      setForm(EMPTY_FORM)
+      closeModal()
     } finally { setSaving(false) }
   }
 
@@ -158,7 +186,7 @@ export default function RulesPage() {
     })
     if (res.ok) {
       const { rule: updated } = await res.json()
-      setRules(prev => prev.map(r => r.id === updated.id ? updated : r))
+      setRules(prev => prev.map(r => r.id === updated.id ? { ...updated, site_ids: updated.site_ids ?? [], competitor_domains: updated.competitor_domains ?? [] } : r))
     }
   }
 
@@ -175,17 +203,45 @@ export default function RulesPage() {
     })
   }
 
+  function toggleSiteId(siteId: string) {
+    setForm(prev => ({
+      ...prev,
+      site_ids: prev.site_ids.includes(siteId) ? prev.site_ids.filter(id => id !== siteId) : [...prev.site_ids, siteId],
+    }))
+  }
+
+  function toggleCompDomain(domain: string) {
+    setForm(prev => ({
+      ...prev,
+      competitor_domains: prev.competitor_domains.includes(domain) ? prev.competitor_domains.filter(d => d !== domain) : [...prev.competitor_domains, domain],
+    }))
+  }
+
   const successRate = (r: Rule) => {
     const total = r.success_count + r.fail_count
     return total > 0 ? Math.round(r.success_count / total * 100) : null
   }
+
+  const filteredModalSites = siteQ.trim()
+    ? allSites.filter(s => s.domain.includes(siteQ) || s.name.toLowerCase().includes(siteQ.toLowerCase()))
+    : allSites
+  const filteredModalComps = compQ.trim()
+    ? allCompetitorDomains.filter(d => d.includes(compQ))
+    : allCompetitorDomains
+
+  // Build a siteId → domain lookup for displaying badges
+  const siteIdToDomain = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of allSites) m.set(s.id, s.domain)
+    return m
+  }, [allSites])
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">规则中心</h1>
-        <p className="text-sm text-gray-400 mt-0.5">全局共享规则库 — 记录各阶段站点有效的 SEO 操作规律</p>
+        <p className="text-sm text-gray-400 mt-0.5">全局实验室 — 创建规则并分配到各站点</p>
       </div>
 
       {/* Toolbar */}
@@ -264,14 +320,13 @@ export default function RulesPage() {
             const tl = TYPE_LABELS[rule.type]
             const sl = SOURCE_LABELS[rule.source]
             const stl = STATUS_LABELS[rule.status]
+            const appliedSiteDomains = rule.site_ids.map(id => siteIdToDomain.get(id)).filter(Boolean) as string[]
             return (
               <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
                 <div className="px-4 py-3 flex items-start gap-3">
-                  {/* Number */}
                   <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
                     <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
                   </div>
-                  {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
@@ -289,8 +344,24 @@ export default function RulesPage() {
                         ))}
                       </div>
                     )}
+                    {/* Applied sites + competitor badges */}
+                    {(appliedSiteDomains.length > 0 || rule.competitor_domains.length > 0) && (
+                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                        {appliedSiteDomains.slice(0, 4).map(d => (
+                          <span key={d} className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100">{d}</span>
+                        ))}
+                        {appliedSiteDomains.length > 4 && (
+                          <span className="text-[10px] text-gray-400">+{appliedSiteDomains.length - 4} 站点</span>
+                        )}
+                        {rule.competitor_domains.slice(0, 3).map(d => (
+                          <span key={d} className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded border border-orange-100">{d}</span>
+                        ))}
+                        {rule.competitor_domains.length > 3 && (
+                          <span className="text-[10px] text-gray-400">+{rule.competitor_domains.length - 3} 竞品</span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {/* Stats */}
                   <div className="flex-shrink-0 text-right space-y-1">
                     {sr !== null ? (
                       <div>
@@ -304,7 +375,6 @@ export default function RulesPage() {
                       </div>
                     ) : null}
                   </div>
-                  {/* Actions */}
                   {canEdit && (
                     <div className="flex-shrink-0 flex items-center gap-1 ml-1">
                       <button onClick={() => openEdit(rule)} title="编辑"
@@ -333,10 +403,10 @@ export default function RulesPage() {
       {/* Create/Edit modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh] overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[92vh] overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h3 className="text-base font-semibold text-gray-800">{editingRule ? `编辑规则 #${editingRule.rule_number}` : '新建规则'}</h3>
-              <button onClick={() => { setShowModal(false); setEditingRule(null); setForm(EMPTY_FORM) }} className="text-gray-400 hover:text-gray-600">
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             </div>
@@ -421,9 +491,64 @@ export default function RulesPage() {
                     className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
                 </div>
               </div>
+
+              {/* Apply to own sites */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  应用到自有站点
+                  {form.site_ids.length > 0 && <span className="ml-2 text-indigo-500 font-normal">已选 {form.site_ids.length} 个</span>}
+                </label>
+                <input
+                  type="text" value={siteQ} onChange={e => setSiteQ(e.target.value)}
+                  placeholder="搜索站点…"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-700"
+                />
+                <div className="max-h-36 overflow-y-auto border border-gray-100 rounded-lg bg-gray-50 p-2 space-y-1">
+                  {filteredModalSites.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-2">无匹配站点</p>
+                  ) : filteredModalSites.map(s => (
+                    <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-white px-2 py-1 rounded transition-colors">
+                      <input type="checkbox"
+                        checked={form.site_ids.includes(s.id)}
+                        onChange={() => toggleSiteId(s.id)}
+                        className="rounded border-gray-300 text-indigo-500 focus:ring-indigo-300 flex-shrink-0" />
+                      <span className="text-sm text-gray-700 truncate">{s.domain}</span>
+                      {s.name && <span className="text-xs text-gray-400 truncate">{s.name}</span>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Apply to competitors */}
+              {allCompetitorDomains.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    应用到竞品
+                    {form.competitor_domains.length > 0 && <span className="ml-2 text-orange-500 font-normal">已选 {form.competitor_domains.length} 个</span>}
+                  </label>
+                  {allCompetitorDomains.length > 6 && (
+                    <input
+                      type="text" value={compQ} onChange={e => setCompQ(e.target.value)}
+                      placeholder="搜索竞品…"
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-orange-200 text-gray-700"
+                    />
+                  )}
+                  <div className="max-h-28 overflow-y-auto border border-gray-100 rounded-lg bg-gray-50 p-2 space-y-1">
+                    {filteredModalComps.map(d => (
+                      <label key={d} className="flex items-center gap-2 cursor-pointer hover:bg-white px-2 py-1 rounded transition-colors">
+                        <input type="checkbox"
+                          checked={form.competitor_domains.includes(d)}
+                          onChange={() => toggleCompDomain(d)}
+                          className="rounded border-gray-300 text-orange-500 focus:ring-orange-300 flex-shrink-0" />
+                        <span className="text-sm text-gray-700">{d}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2 flex-shrink-0">
-              <button onClick={() => { setShowModal(false); setEditingRule(null); setForm(EMPTY_FORM) }}
+              <button onClick={closeModal}
                 className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
               <button onClick={saveRule} disabled={saving || !form.name.trim()}
                 className="px-4 py-2 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors">

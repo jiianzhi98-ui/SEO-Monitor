@@ -22,6 +22,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     'name', 'type', 'status', 'source',
     'stage_applicability',
     'description', 'confidence', 'success_count', 'fail_count', 'priority',
+    'site_ids', 'competitor_domains',
   ]
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   for (const key of allowed) {

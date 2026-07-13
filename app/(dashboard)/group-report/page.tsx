@@ -104,7 +104,25 @@ interface Rule {
   success_count: number
   fail_count: number
   priority: number
+  site_ids: string[]
+  competitor_domains: string[]
   created_at: string
+}
+
+interface ExtSiteProfile {
+  id: string; domain: string; name: string
+  site_weight: number | null; site_ip: string | null; site_index_count: number | null
+  post_start_hour: number | null; post_end_hour: number | null; post_interval_minutes: number | null
+}
+interface CompetitorProfileData {
+  domain: string; site_type: string | null; site_weight: number | null
+  site_ip: string | null; site_index_count: number | null
+  post_start_hour: number | null; post_end_hour: number | null
+  post_interval_minutes: number | null; notes: string | null
+}
+interface KwAnalysisResult {
+  exactDuplicates: { keyword: string; dates: string[]; occurrences: number }[]
+  topicClusters: { root: string; keywords: string[]; dates: string[]; date_range: string }[]
 }
 
 interface RuleForm {
@@ -670,6 +688,20 @@ export default function GroupReportPage() {
   const [competitorLoading, setCompetitorLoading] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
 
+  // Site profile (规则中心 — 站点档案)
+  const [groupExtProfiles, setGroupExtProfiles] = useState<Record<string, ExtSiteProfile>>({})
+  const [expandedSiteProfile, setExpandedSiteProfile] = useState<string | null>(null)
+  const [profileForm, setProfileForm] = useState<{ site_weight: string; site_ip: string; site_index_count: string; post_start_hour: string; post_end_hour: string; post_interval_minutes: string }>({ site_weight: '', site_ip: '', site_index_count: '', post_start_hour: '', post_end_hour: '', post_interval_minutes: '' })
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [kwAnalysis, setKwAnalysis] = useState<Record<string, KwAnalysisResult>>({})
+  const [kwAnalysisLoading, setKwAnalysisLoading] = useState<Record<string, boolean>>({})
+  // Competitor profile (规则中心 — 竞品档案)
+  const [compProfile, setCompProfile] = useState<Record<string, CompetitorProfileData | null>>({})
+  const [compProfileLoading, setCompProfileLoading] = useState<Record<string, boolean>>({})
+  const [editingCompDomain, setEditingCompDomain] = useState<string | null>(null)
+  const [compProfileForm, setCompProfileForm] = useState({ site_type: '', site_weight: '', site_ip: '', site_index_count: '', post_start_hour: '', post_end_hour: '', post_interval_minutes: '', notes: '' })
+  const [compProfileSaving, setCompProfileSaving] = useState(false)
+
   const today = useMemo(() => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), [])
   const yesterday = useMemo(() => new Date(Date.now() + 8 * 3600000 - 86400000).toISOString().slice(0, 10), [])
 
@@ -791,12 +823,56 @@ export default function GroupReportPage() {
   useEffect(() => {
     const needRules = reportTab === 'rules' || (activeTabId === 'competitors' && competitorInnerTab === 'rules')
     if (!rulesGroupId || !needRules) return
+    const isCompetitor = activeTabId === 'competitors' && competitorInnerTab === 'rules'
     setRulesLoading(true)
-    fetch(`/api/task-groups/${rulesGroupId}/rules`)
+    fetch(`/api/task-groups/${rulesGroupId}/rules${isCompetitor ? '?competitor=1' : ''}`)
       .then(r => r.json())
-      .then(d => setRules(d.rules ?? []))
+      .then(d => setRules((d.rules ?? []).map((r: Rule) => ({ ...r, site_ids: r.site_ids ?? [], competitor_domains: r.competitor_domains ?? [] }))))
       .finally(() => setRulesLoading(false))
   }, [rulesGroupId, reportTab, activeTabId, competitorInnerTab])
+
+  // Load extended site profiles when own-site rules tab is active
+  useEffect(() => {
+    if (reportTab !== 'rules' || !activeGroupId) return
+    const group = groups.find(g => g.id === activeGroupId)
+    const domains = group?.site_domains ?? []
+    if (domains.length === 0) return
+    fetch('/api/sites')
+      .then(r => r.json())
+      .then(d => {
+        const map: Record<string, ExtSiteProfile> = {}
+        for (const s of (d.sites ?? [])) {
+          if (domains.includes(s.domain)) map[s.domain] = s
+        }
+        setGroupExtProfiles(prev => ({ ...prev, ...map }))
+      })
+  }, [activeGroupId, reportTab, groups])
+
+  // Load competitor profile when competitor rules tab is active
+  useEffect(() => {
+    if (activeTabId !== 'competitors' || competitorInnerTab !== 'rules' || !activeCompetitorDomain) return
+    if (compProfile[activeCompetitorDomain] !== undefined) return
+    setCompProfileLoading(prev => ({ ...prev, [activeCompetitorDomain]: true }))
+    fetch(`/api/competitor-profiles/${encodeURIComponent(activeCompetitorDomain)}`)
+      .then(r => r.json())
+      .then(d => {
+        setCompProfile(prev => ({ ...prev, [activeCompetitorDomain]: d.profile ?? null }))
+        if (d.profile) {
+          setCompProfileForm({
+            site_type: d.profile.site_type ?? '',
+            site_weight: d.profile.site_weight?.toString() ?? '',
+            site_ip: d.profile.site_ip ?? '',
+            site_index_count: d.profile.site_index_count?.toString() ?? '',
+            post_start_hour: d.profile.post_start_hour?.toString() ?? '',
+            post_end_hour: d.profile.post_end_hour?.toString() ?? '',
+            post_interval_minutes: d.profile.post_interval_minutes?.toString() ?? '',
+            notes: d.profile.notes ?? '',
+          })
+        }
+      })
+      .finally(() => setCompProfileLoading(prev => ({ ...prev, [activeCompetitorDomain]: false })))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabId, competitorInnerTab, activeCompetitorDomain])
 
   async function openTargetModal() {
     const activeGroup = groups.find(g => g.id === activeGroupId)
@@ -864,6 +940,73 @@ export default function GroupReportPage() {
       setActiveCompetitorDomain('')
     }
     setShowManageModal(false)
+  }
+
+  // ── Site profile helpers ─────────────────────────────────────────────────────
+
+  function toggleSiteProfileExpand(domain: string) {
+    if (expandedSiteProfile === domain) { setExpandedSiteProfile(null); return }
+    setExpandedSiteProfile(domain)
+    const p = groupExtProfiles[domain]
+    setProfileForm({
+      site_weight: p?.site_weight?.toString() ?? '',
+      site_ip: p?.site_ip ?? '',
+      site_index_count: p?.site_index_count?.toString() ?? '',
+      post_start_hour: p?.post_start_hour?.toString() ?? '',
+      post_end_hour: p?.post_end_hour?.toString() ?? '',
+      post_interval_minutes: p?.post_interval_minutes?.toString() ?? '',
+    })
+  }
+
+  async function saveSiteProfile(domain: string) {
+    const p = groupExtProfiles[domain]
+    if (!p) return
+    setProfileSaving(true)
+    try {
+      const body = {
+        site_weight: profileForm.site_weight ? Number(profileForm.site_weight) : null,
+        site_ip: profileForm.site_ip || null,
+        site_index_count: profileForm.site_index_count ? Number(profileForm.site_index_count) : null,
+        post_start_hour: profileForm.post_start_hour ? Number(profileForm.post_start_hour) : null,
+        post_end_hour: profileForm.post_end_hour ? Number(profileForm.post_end_hour) : null,
+        post_interval_minutes: profileForm.post_interval_minutes ? Number(profileForm.post_interval_minutes) : null,
+      }
+      await fetch(`/api/sites/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      setGroupExtProfiles(prev => ({ ...prev, [domain]: { ...prev[domain], ...body } }))
+    } finally { setProfileSaving(false) }
+  }
+
+  async function loadKwAnalysis(domain: string) {
+    const p = groupExtProfiles[domain]
+    if (!p) return
+    setKwAnalysisLoading(prev => ({ ...prev, [domain]: true }))
+    try {
+      const res = await fetch(`/api/sites/${p.id}/keyword-analysis`)
+      const d = await res.json()
+      setKwAnalysis(prev => ({ ...prev, [domain]: d }))
+    } finally { setKwAnalysisLoading(prev => ({ ...prev, [domain]: false })) }
+  }
+
+  async function saveCompProfileForDomain(domain: string) {
+    setCompProfileSaving(true)
+    try {
+      const body = {
+        site_type: compProfileForm.site_type || null,
+        site_weight: compProfileForm.site_weight ? Number(compProfileForm.site_weight) : null,
+        site_ip: compProfileForm.site_ip || null,
+        site_index_count: compProfileForm.site_index_count ? Number(compProfileForm.site_index_count) : null,
+        post_start_hour: compProfileForm.post_start_hour ? Number(compProfileForm.post_start_hour) : null,
+        post_end_hour: compProfileForm.post_end_hour ? Number(compProfileForm.post_end_hour) : null,
+        post_interval_minutes: compProfileForm.post_interval_minutes ? Number(compProfileForm.post_interval_minutes) : null,
+        notes: compProfileForm.notes || null,
+      }
+      const res = await fetch(`/api/competitor-profiles/${encodeURIComponent(domain)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      const d = await res.json()
+      setCompProfile(prev => ({ ...prev, [domain]: d.profile }))
+      setEditingCompDomain(null)
+    } finally { setCompProfileSaving(false) }
   }
 
   const accordionEntries = useMemo(() => {
@@ -1220,6 +1363,83 @@ export default function GroupReportPage() {
                               })}
                             </div>
                           )}
+
+                          {/* ── 竞品档案 ── */}
+                          {!rulesLoading && activeCompetitorDomain && (
+                            <div className="border-t border-gray-100 pt-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">竞品档案</p>
+                                {canSeeAll && (
+                                  editingCompDomain === activeCompetitorDomain ? (
+                                    <div className="flex items-center gap-3">
+                                      <button onClick={() => setEditingCompDomain(null)} className="text-xs text-gray-500 hover:text-gray-700">取消</button>
+                                      <button onClick={() => saveCompProfileForDomain(activeCompetitorDomain)} disabled={compProfileSaving}
+                                        className="text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50">{compProfileSaving ? '保存中…' : '保存'}</button>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => {
+                                      setEditingCompDomain(activeCompetitorDomain)
+                                      const p = compProfile[activeCompetitorDomain]
+                                      if (p) setCompProfileForm({ site_type: p.site_type ?? '', site_weight: p.site_weight?.toString() ?? '', site_ip: p.site_ip ?? '', site_index_count: p.site_index_count?.toString() ?? '', post_start_hour: p.post_start_hour?.toString() ?? '', post_end_hour: p.post_end_hour?.toString() ?? '', post_interval_minutes: p.post_interval_minutes?.toString() ?? '', notes: p.notes ?? '' })
+                                      else setCompProfileForm({ site_type: '', site_weight: '', site_ip: '', site_index_count: '', post_start_hour: '', post_end_hour: '', post_interval_minutes: '', notes: '' })
+                                    }} className="text-xs text-orange-500 hover:text-orange-600 font-medium">编辑档案</button>
+                                  )
+                                )}
+                              </div>
+                              {compProfileLoading[activeCompetitorDomain] ? (
+                                <div className="flex items-center justify-center py-3"><div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /></div>
+                              ) : editingCompDomain === activeCompetitorDomain ? (
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-4 gap-2">
+                                    <div>
+                                      <label className="text-xs text-gray-400 block mb-0.5">类型</label>
+                                      <select value={compProfileForm.site_type} onChange={e => setCompProfileForm(p => ({ ...p, site_type: e.target.value }))}
+                                        className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700 bg-white">
+                                        <option value="">未知</option>
+                                        <option value="game">游戏</option>
+                                        <option value="app">应用</option>
+                                        <option value="mixed">混合</option>
+                                      </select>
+                                    </div>
+                                    {([['site_weight','权重'], ['site_ip','IP'], ['site_index_count','收录量']] as [keyof typeof compProfileForm, string][]).map(([key, label]) => (
+                                      <div key={key}>
+                                        <label className="text-xs text-gray-400 block mb-0.5">{label}</label>
+                                        <input type={key === 'site_ip' ? 'text' : 'number'} value={compProfileForm[key]} onChange={e => setCompProfileForm(p => ({ ...p, [key]: e.target.value }))}
+                                          placeholder="—" className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {([['post_start_hour','开始（时）'], ['post_end_hour','结束（时）'], ['post_interval_minutes','间隔（分钟）']] as [keyof typeof compProfileForm, string][]).map(([key, label]) => (
+                                      <div key={key}>
+                                        <label className="text-xs text-gray-400 block mb-0.5">{label}</label>
+                                        <input type="number" value={compProfileForm[key]} onChange={e => setCompProfileForm(p => ({ ...p, [key]: e.target.value }))}
+                                          placeholder="—" className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-400 block mb-0.5">备注</label>
+                                    <textarea value={compProfileForm.notes} onChange={e => setCompProfileForm(p => ({ ...p, notes: e.target.value }))} rows={2}
+                                      className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700 resize-none" />
+                                  </div>
+                                </div>
+                              ) : (() => {
+                                const p = compProfile[activeCompetitorDomain]
+                                if (!p) return <p className="text-xs text-gray-400">暂无档案 — 点击「编辑档案」添加竞品信息</p>
+                                return (
+                                  <div className="flex flex-wrap gap-x-6 gap-y-1.5">
+                                    {p.site_type && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">类型</span>{p.site_type === 'game' ? '游戏' : p.site_type === 'app' ? '应用' : '混合'}</span>}
+                                    {p.site_weight != null && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">权重</span>{p.site_weight}</span>}
+                                    {p.site_ip && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">IP</span>{p.site_ip}</span>}
+                                    {p.site_index_count != null && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">收录</span>{p.site_index_count.toLocaleString()}</span>}
+                                    {(p.post_start_hour != null || p.post_end_hour != null) && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">活跃</span>{p.post_start_hour ?? '?'}:00~{p.post_end_hour ?? '?'}:00{p.post_interval_minutes ? ` 间隔${p.post_interval_minutes}min` : ''}</span>}
+                                    {p.notes && <div className="w-full text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">{p.notes}</div>}
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )}
                         </div>
                       ) : competitorInnerTab === 'keywords' ? (
                         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -1360,6 +1580,117 @@ export default function GroupReportPage() {
                             )}
                           </div>
                         </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* ── 站点档案 ── */}
+              {!rulesLoading && activeGroup && (activeGroup.site_domains ?? []).length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">站点档案</p>
+                  {(activeGroup.site_domains ?? []).map(domain => {
+                    const extP = groupExtProfiles[domain]
+                    const isExpanded = expandedSiteProfile === domain
+                    const analysis = kwAnalysis[domain]
+                    const analysisLoading = kwAnalysisLoading[domain]
+                    return (
+                      <div key={domain} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                        <button onClick={() => toggleSiteProfileExpand(domain)}
+                          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
+                          <span className="text-sm font-medium text-gray-800 flex-1">{domain}</span>
+                          {extP && (
+                            <div className="flex items-center gap-3 text-xs text-gray-400">
+                              {extP.site_weight != null && <span>权重 {extP.site_weight}</span>}
+                              {extP.site_index_count != null && <span>收录 {extP.site_index_count.toLocaleString()}</span>}
+                              {extP.post_start_hour != null && <span>{extP.post_start_hour}:00~{extP.post_end_hour}:00</span>}
+                            </div>
+                          )}
+                          <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        {isExpanded && (
+                          <div className="px-4 pb-4 border-t border-gray-100 space-y-4 pt-3">
+                            {/* Stats grid */}
+                            <div className="grid grid-cols-3 gap-3">
+                              {([['site_weight', '权重', 'number'], ['site_ip', 'IP', 'text'], ['site_index_count', '收录量', 'number']] as [keyof typeof profileForm, string, string][]).map(([key, label, type]) => (
+                                <div key={key}>
+                                  <label className="text-xs text-gray-400 block mb-1">{label}</label>
+                                  <input type={type} value={profileForm[key] ?? ''} onChange={e => setProfileForm(p => ({ ...p, [key]: e.target.value }))}
+                                    placeholder="—" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                                </div>
+                              ))}
+                            </div>
+                            {/* Posting schedule */}
+                            <div>
+                              <p className="text-xs text-gray-500 font-medium mb-2">发布时间段</p>
+                              <div className="grid grid-cols-3 gap-3">
+                                {([['post_start_hour', '开始（时）'], ['post_end_hour', '结束（时）'], ['post_interval_minutes', '间隔（分钟）']] as [keyof typeof profileForm, string][]).map(([key, label]) => (
+                                  <div key={key}>
+                                    <label className="text-xs text-gray-400 block mb-1">{label}</label>
+                                    <input type="number" value={profileForm[key] ?? ''} onChange={e => setProfileForm(p => ({ ...p, [key]: e.target.value }))}
+                                      placeholder="—" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            {canSeeAll && (
+                              <button onClick={() => saveSiteProfile(domain)} disabled={profileSaving}
+                                className="px-3 py-1.5 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors">
+                                {profileSaving ? '保存中…' : '保存档案'}
+                              </button>
+                            )}
+                            {/* Keyword analysis */}
+                            <div className="border-t border-gray-100 pt-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-medium text-gray-700">关键词模式分析（近30天）</p>
+                                <button onClick={() => loadKwAnalysis(domain)} disabled={!!analysisLoading}
+                                  className="text-xs text-green-600 hover:text-green-700 font-medium disabled:opacity-50">
+                                  {analysisLoading ? '分析中…' : analysis ? '重新分析' : '开始分析'}
+                                </button>
+                              </div>
+                              {analysis && (
+                                <div className="space-y-3">
+                                  {analysis.exactDuplicates.length > 0 && (
+                                    <div>
+                                      <p className="text-xs text-amber-600 font-medium mb-1.5">重复词 / 疑似更新 — {analysis.exactDuplicates.length} 个</p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {analysis.exactDuplicates.slice(0, 20).map(d => (
+                                          <div key={d.keyword} className="flex items-center gap-1 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
+                                            <span className="text-xs text-amber-800 font-medium">{d.keyword}</span>
+                                            <span className="text-[10px] text-amber-500">{d.dates.map(dt => dt.slice(5)).join(' / ')}</span>
+                                          </div>
+                                        ))}
+                                        {analysis.exactDuplicates.length > 20 && <span className="text-xs text-gray-400 self-center">+{analysis.exactDuplicates.length - 20} 个</span>}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {analysis.topicClusters.length > 0 && (
+                                    <div>
+                                      <p className="text-xs text-purple-600 font-medium mb-1.5">主题词聚合 / 疑似更新 — {analysis.topicClusters.length} 组</p>
+                                      <div className="space-y-2">
+                                        {analysis.topicClusters.slice(0, 10).map(c => (
+                                          <div key={c.root} className="bg-purple-50 border border-purple-100 rounded-lg px-3 py-2">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <span className="text-xs font-semibold text-purple-700">「{c.root}」系列</span>
+                                              <span className="text-[10px] text-purple-400">{c.date_range}</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1">
+                                              {c.keywords.map(kw => <span key={kw} className="text-[10px] bg-white border border-purple-100 text-purple-600 px-1.5 py-0.5 rounded">{kw}</span>)}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {analysis.exactDuplicates.length === 0 && analysis.topicClusters.length === 0 && (
+                                    <p className="text-xs text-gray-400 text-center py-2">近30天无发现明显更新模式</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
