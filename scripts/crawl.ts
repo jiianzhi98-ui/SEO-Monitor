@@ -631,11 +631,10 @@ async function main() {
   if (error) throw error
 
   const allSites = (sitesRaw || []) as SiteRecord[]
-  // 分组只用"至少有一个抓取开关打开"的站点，避免已停用站点占用分组名额
-  // siteFilter 单站模式不过滤（确保指定站点能进入本组）
-  const partitionBase = siteFilter
-    ? allSites
-    : allSites.filter(s => s.is_enabled || s.has_rank_data || s.has_index_pages)
+  // 权重+收录对所有站点都抓取，不依赖 is_enabled；各步骤内部有自己的过滤：
+  //   keywords → filter(s.is_enabled)  rank → filter(s.has_rank_data)  index-pages → filter(s.has_index_pages)
+  // siteFilter 单站模式始终不过滤
+  const partitionBase = allSites
   // 多组时按域名排序确保分组稳定；单组时随机打乱
   let sites = totalGroups > 1
     ? [...partitionBase].sort((a, b) => a.domain.localeCompare(b.domain)).filter((_, i) => i % totalGroups === group)
