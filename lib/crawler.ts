@@ -48,6 +48,24 @@ const DOWNLOAD_KEYWORDS = [
   '老版本', '网页版', 'h5版', '不用登录', '离线版',
 ]
 
+// Build headers that look like same-site navigation (avoids 403 from Referer/Sec-Fetch-Site checks)
+function getSiteHeaders(url: string, cookieJar?: string): Record<string, string> {
+  const origin = new URL(url).origin
+  const h: Record<string, string> = {
+    ...getBrowserHeaders(),
+    Referer: origin + '/',
+    'Sec-Fetch-Site': 'same-origin',
+  }
+  if (cookieJar) h['Cookie'] = cookieJar
+  return h
+}
+
+// Warm-up headers: simulate direct URL visit (no Referer, Sec-Fetch-Site: none)
+function getDirectHeaders(): Record<string, string> {
+  const { Referer: _r, 'Sec-Fetch-Site': _s, ...base } = getBrowserHeaders()
+  return { ...base, 'Sec-Fetch-Site': 'none' }
+}
+
 // Fetch HTML with automatic charset detection (handles GBK/GB2312 sites)
 async function fetchHtmlDecoded(url: string, headers: Record<string, string>): Promise<{ ok: boolean; html: string; status?: number; setCookies: string[] }> {
   try {
@@ -73,7 +91,7 @@ export async function fetchHtmlList(
   titleSelector: string,
   dateSelector: string
 ): Promise<PageEntry[]> {
-  const { ok, html, status } = await fetchHtmlDecoded(url, getBrowserHeaders())
+  const { ok, html, status } = await fetchHtmlDecoded(url, getSiteHeaders(url))
   if (!ok) throw new Error(`Failed to fetch HTML list: ${status}`)
   const $ = cheerio.load(html)
 
@@ -151,7 +169,7 @@ export async function fetchHtmlListPages(
     let cookieJar = ''
     try {
       const origin = new URL(source.url).origin
-      const { setCookies } = await fetchHtmlDecoded(origin, getBrowserHeaders())
+      const { setCookies } = await fetchHtmlDecoded(origin, getDirectHeaders())
       if (setCookies.length) {
         cookieJar = setCookies.map((c) => c.split(';')[0]).join('; ')
         await randomDelay(1000, 2000)
@@ -161,10 +179,7 @@ export async function fetchHtmlListPages(
     while (currentUrl && page < maxPages) {
       page++
       try {
-        const reqHeaders = cookieJar
-          ? { ...getBrowserHeaders(), Cookie: cookieJar }
-          : getBrowserHeaders()
-        const { ok, html, setCookies } = await fetchHtmlDecoded(currentUrl, reqHeaders)
+        const { ok, html, setCookies } = await fetchHtmlDecoded(currentUrl, getSiteHeaders(currentUrl, cookieJar || undefined))
 
         // Accumulate cookies for subsequent page requests
         if (setCookies.length) {
