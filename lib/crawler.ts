@@ -147,10 +147,31 @@ export async function fetchHtmlListPages(
     let currentUrl: string | null = source.url
     let page = 0
 
+    // Warm-up request to root domain so sites with cookie challenges serve real content
+    let cookieJar = ''
+    try {
+      const origin = new URL(source.url).origin
+      const { setCookies } = await fetchHtmlDecoded(origin, getBrowserHeaders())
+      if (setCookies.length) {
+        cookieJar = setCookies.map((c) => c.split(';')[0]).join('; ')
+        await randomDelay(1000, 2000)
+      }
+    } catch { /* warmup failure is non-fatal */ }
+
     while (currentUrl && page < maxPages) {
       page++
       try {
-        const { ok, html } = await fetchHtmlDecoded(currentUrl, getBrowserHeaders())
+        const reqHeaders = cookieJar
+          ? { ...getBrowserHeaders(), Cookie: cookieJar }
+          : getBrowserHeaders()
+        const { ok, html, setCookies } = await fetchHtmlDecoded(currentUrl, reqHeaders)
+
+        // Accumulate cookies for subsequent page requests
+        if (setCookies.length) {
+          const fresh = setCookies.map((c) => c.split(';')[0]).join('; ')
+          cookieJar = cookieJar ? `${cookieJar}; ${fresh}` : fresh
+        }
+
         if (!ok) break
         const $ = cheerio.load(html)
 
