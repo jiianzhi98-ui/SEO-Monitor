@@ -709,7 +709,7 @@ function CompetitorOutcomesPanel({
 
 // ── Mock Data (set USE_MOCK_DATA = false to disable) ──────────────────────────
 
-const USE_MOCK_DATA = true
+const USE_MOCK_DATA = false
 
 const MOCK_GROUP: Group = {
   id: 'mock-group-1',
