@@ -707,6 +707,62 @@ function CompetitorOutcomesPanel({
   )
 }
 
+// ── Mock Data (set USE_MOCK_DATA = false to disable) ──────────────────────────
+
+const USE_MOCK_DATA = true
+
+const MOCK_COMPETITOR_DATA: CompetitorData = {
+  site: { id: 'mock-1', domain: 'example.com', has_rank_title: true },
+  date: '2026-07-13',
+  keywords: [
+    { keyword: '微信营销工具', search_volume: 3200, source: 'aizhan', content_type: 'app', content_date: '2026-07-13', source_url: null },
+    { keyword: '社交媒体管理软件', search_volume: 1800, source: 'aizhan', content_type: 'app', content_date: '2026-07-13', source_url: null },
+    { keyword: '企业微信助手', search_volume: 2100, source: 'aizhan', content_type: 'app', content_date: '2026-07-13', source_url: null },
+    { keyword: '小程序开发教程', search_volume: 890, source: 'aizhan', content_type: 'game', content_date: '2026-07-13', source_url: null },
+    { keyword: '抖音涨粉技巧', search_volume: 5600, source: 'aizhan', content_type: 'app', content_date: '2026-07-13', source_url: null },
+    { keyword: '直播带货运营', search_volume: 4200, source: 'aizhan', content_type: 'app', content_date: '2026-07-12', source_url: null },
+    { keyword: '短视频剪辑软件', search_volume: 7800, source: 'aizhan', content_type: 'app', content_date: '2026-07-12', source_url: null },
+    { keyword: '内容创作平台', search_volume: 1200, source: 'aizhan', content_type: 'app', content_date: '2026-07-12', source_url: null },
+    { keyword: 'SEO工具推荐', search_volume: 960, source: 'aizhan', content_type: 'app', content_date: '2026-07-11', source_url: null },
+    { keyword: '关键词排名监控', search_volume: 540, source: 'aizhan', content_type: 'app', content_date: '2026-07-11', source_url: null },
+  ],
+  rankup: [
+    { keyword: '微信营销工具', volume: 3200, rank_position: 3, title: '10款最好用的微信营销工具推荐' },
+    { keyword: '企业微信助手', volume: 2100, rank_position: 7, title: '企业微信助手功能详解' },
+    { keyword: '抖音涨粉技巧', volume: 5600, rank_position: 5, title: '2026抖音涨粉方法大全' },
+  ],
+  rankdown: [
+    { keyword: '直播带货运营', volume: 4200, rank_position: 15, title: '直播带货完整运营手册' },
+    { keyword: '内容创作平台', volume: 1200, rank_position: 22, title: '内容创作者必备平台汇总' },
+  ],
+  outcomes: [
+    { keyword: '微信营销工具', content_type: 'app', content_date: '2026-07-13', discovered_at: '2026-07-13T02:00:00Z', volume: 3200, rank_position: 3, rank_type: 'rankup', rank_date: '2026-07-14' },
+    { keyword: '社交媒体管理软件', content_type: 'app', content_date: '2026-07-13', discovered_at: '2026-07-13T02:00:00Z', volume: 1800, rank_position: null, rank_type: null, rank_date: null },
+    { keyword: '企业微信助手', content_type: 'app', content_date: '2026-07-13', discovered_at: '2026-07-13T02:00:00Z', volume: 2100, rank_position: 7, rank_type: 'rankup', rank_date: '2026-07-14' },
+    { keyword: '小程序开发教程', content_type: 'game', content_date: '2026-07-13', discovered_at: '2026-07-13T02:00:00Z', volume: 890, rank_position: null, rank_type: null, rank_date: null },
+    { keyword: '抖音涨粉技巧', content_type: 'app', content_date: '2026-07-13', discovered_at: '2026-07-13T02:00:00Z', volume: 5600, rank_position: 5, rank_type: 'rankup', rank_date: '2026-07-14' },
+    { keyword: '直播带货运营', content_type: 'app', content_date: '2026-07-12', discovered_at: '2026-07-12T02:00:00Z', volume: 4200, rank_position: 15, rank_type: 'rankdown', rank_date: '2026-07-14' },
+    { keyword: '短视频剪辑软件', content_type: 'app', content_date: '2026-07-12', discovered_at: '2026-07-12T02:00:00Z', volume: 7800, rank_position: null, rank_type: null, rank_date: null },
+    { keyword: '内容创作平台', content_type: 'app', content_date: '2026-07-12', discovered_at: '2026-07-12T02:00:00Z', volume: 1200, rank_position: 22, rank_type: 'rankdown', rank_date: '2026-07-14' },
+    { keyword: 'SEO工具推荐', content_type: 'app', content_date: '2026-07-11', discovered_at: '2026-07-11T02:00:00Z', volume: 960, rank_position: 8, rank_type: 'rankup', rank_date: '2026-07-14' },
+    { keyword: '关键词排名监控', content_type: 'app', content_date: '2026-07-11', discovered_at: '2026-07-11T02:00:00Z', volume: 540, rank_position: null, rank_type: null, rank_date: null },
+  ],
+  outcomeSummary: { total: 10, hasRank: 6, rankup: 4, rankdown: 2, top10: 4 },
+}
+
+const MOCK_RULES: Rule[] = [
+  { id: 'mock-r1', rule_number: 1, name: '同词不同下拉词 = 更新', type: 'update', status: 'active', source: 'data', stage_applicability: ['新站', '成长期'], description: '当竞品在同一天对同一核心词新增3个以上不同下拉词，判定为内容更新。', confidence: 85, success_count: 12, fail_count: 2, priority: 1, site_ids: [], competitor_domains: ['example.com'], created_at: '2026-06-01T00:00:00Z' },
+  { id: 'mock-r2', rule_number: 2, name: '完全相同名称不同日期 = 更新', type: 'update', status: 'active', source: 'manual', stage_applicability: ['成长期', '成熟期'], description: '某关键词在历史中已出现过，再次出现于新日期时判定为内容更新（刷新文章）。', confidence: 90, success_count: 8, fail_count: 1, priority: 2, site_ids: [], competitor_domains: ['example.com'], created_at: '2026-06-05T00:00:00Z' },
+  { id: 'mock-r3', rule_number: 3, name: '连续3天同主题新增 = 批量更新', type: 'mixed', status: 'testing', source: 'ai', stage_applicability: ['成熟期'], description: '若连续3天内发现的词都属于同一主题类别，判定竞品正在进行批量内容更新。', confidence: 65, success_count: 3, fail_count: 3, priority: 3, site_ids: [], competitor_domains: ['example.com'], created_at: '2026-06-20T00:00:00Z' },
+  { id: 'mock-r4', rule_number: 4, name: '工作日早9-11点新增 = 定时发布', type: 'add', status: 'active', source: 'data', stage_applicability: ['新站', '成长期', '成熟期'], description: '竞品约80%的新内容在工作日上午9-11点出现，视为定时任务发布。', confidence: 78, success_count: 20, fail_count: 4, priority: 4, site_ids: [], competitor_domains: ['example.com'], created_at: '2026-07-01T00:00:00Z' },
+]
+
+const MOCK_COMP_PROFILE: CompetitorProfileData = {
+  domain: 'example.com', site_type: null, site_weight: null, site_ip: null, site_index_count: null,
+  post_start_hour: 9, post_end_hour: 11, post_interval_minutes: 30, notes: null,
+  same_base_diff_sub_is_update: true, same_name_diff_date_is_update: true,
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function GroupReportPage() {
@@ -748,7 +804,7 @@ export default function GroupReportPage() {
   const [oPageSize, setOPageSize] = useState(20)
 
   // Rules tab state
-  const [rules, setRules] = useState<Rule[]>([])
+  const [rules, setRules] = useState<Rule[]>(USE_MOCK_DATA ? MOCK_RULES : [])
   const [rulesLoading, setRulesLoading] = useState(false)
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [editingRule, setEditingRule] = useState<Rule | null>(null)
@@ -768,7 +824,7 @@ export default function GroupReportPage() {
   const [competitorDate, setCompetitorDate] = useState('')
   const [competitorDateEnd, setCompetitorDateEnd] = useState('')
   const [competitorPeriod, setCompetitorPeriod] = useState<Period>('yesterday')
-  const [competitorData, setCompetitorData] = useState<CompetitorData | null>(null)
+  const [competitorData, setCompetitorData] = useState<CompetitorData | null>(USE_MOCK_DATA ? MOCK_COMPETITOR_DATA : null)
   const [competitorLoading, setCompetitorLoading] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
   const [allSites, setAllSites] = useState<SiteFull[]>([])
@@ -784,7 +840,7 @@ export default function GroupReportPage() {
   const [kwAnalysis, setKwAnalysis] = useState<Record<string, KwAnalysisResult>>({})
   const [kwAnalysisLoading, setKwAnalysisLoading] = useState<Record<string, boolean>>({})
   // Competitor profile (提交记录 — 发布规则)
-  const [compProfile, setCompProfile] = useState<Record<string, CompetitorProfileData | null>>({})
+  const [compProfile, setCompProfile] = useState<Record<string, CompetitorProfileData | null>>(USE_MOCK_DATA ? { 'example.com': MOCK_COMP_PROFILE } : {})
   const [compProfileLoading, setCompProfileLoading] = useState<Record<string, boolean>>({})
   const [compRuleModalOpen, setCompRuleModalOpen] = useState(false)
   const [compProfileForm, setCompProfileForm] = useState({ post_start_hour: '', post_end_hour: '', post_interval_minutes: '', same_base_diff_sub_is_update: false, same_name_diff_date_is_update: false })
@@ -830,6 +886,7 @@ export default function GroupReportPage() {
 
   // When competitorGroupId changes: reset competitor domain to first of that group
   useEffect(() => {
+    if (USE_MOCK_DATA) { setActiveCompetitorDomain('example.com'); return }
     const g = groups.find(gr => gr.id === competitorGroupId)
     const domains = g?.competitor_domains || []
     setActiveCompetitorDomain(domains.length > 0 ? domains[0] : '')
@@ -838,6 +895,7 @@ export default function GroupReportPage() {
 
   // Load competitor data (skip for rules tab — no API call needed)
   useEffect(() => {
+    if (USE_MOCK_DATA) return
     if (!activeCompetitorDomain || competitorInnerTab === 'rules') return
     const { start, end } = competitorDateRange
     if (!start) return
@@ -909,6 +967,7 @@ export default function GroupReportPage() {
 
   // Load rules data for whichever tab (own-site or competitor) is showing the rules panel
   useEffect(() => {
+    if (USE_MOCK_DATA) return
     const needRules = reportTab === 'rules' || (activeTabId === 'competitors' && competitorInnerTab === 'rules')
     if (!rulesGroupId || !needRules) return
     const isCompetitor = activeTabId === 'competitors' && competitorInnerTab === 'rules'
@@ -1213,7 +1272,7 @@ export default function GroupReportPage() {
   const activeGroup = groups.find(g => g.id === activeGroupId)
   const activeCompetitorGroup = groups.find(g => g.id === competitorGroupId)
   const hasData = report && (report.groupTotal?.total.count ?? report.members.reduce((s, m) => s + m.total.count, 0)) > 0
-  const competitorDomains = activeCompetitorGroup?.competitor_domains || []
+  const competitorDomains = USE_MOCK_DATA ? ['example.com', 'rival-site.com'] : (activeCompetitorGroup?.competitor_domains || [])
 
   return (
     <div className="min-h-screen bg-slate-50">
