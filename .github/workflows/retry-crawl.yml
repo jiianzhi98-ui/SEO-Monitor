@@ -74,7 +74,7 @@ jobs:
             SITE_LOGS=$(curl -sf \
               -H "apikey: ${SB_KEY}" \
               -H "Authorization: Bearer ${SB_KEY}" \
-              "${SB_URL}/rest/v1/activity_site_log?select=domain&activity_id=in.(${IDS})&status=in.(fail,empty)")
+              "${SB_URL}/rest/v1/activity_site_log?select=domain&activity_id=in.(${IDS})&status=in.(fail,empty,suspect)")
             FAILED_COUNT=$(echo "$SITE_LOGS" | python3 -c "
           import json, sys
           data = json.load(sys.stdin)

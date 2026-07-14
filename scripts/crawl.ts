@@ -279,7 +279,7 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
   console.log(`  RANK   日期=${today}   ${ts()}`)
   console.log(`${'═'.repeat(60)}`)
 
-  let ok = 0, failed = 0, emptyCount = 0, totalRows = 0, consecutiveEmpty = 0
+  let ok = 0, failed = 0, emptyCount = 0, suspectCount = 0, totalRows = 0, consecutiveEmpty = 0
   const retryQueue: SiteRecord[] = [] // 因限流而为空的站，熔断后补抓
 
   // 将一个站点的抓取结果写入数据库
@@ -339,7 +339,7 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
 
     try {
       let rankupEntries = await fetchRankChanges(site.domain, today, 'rankup')
-      await delay(2000)
+      await delay(3000 + Math.floor(Math.random() * 2000)) // 随机 3-5 秒，减少爱站限流概率
       let rankdownEntries = await fetchRankChanges(site.domain, today, 'rankdown')
       await delay(2000)
 
@@ -359,6 +359,9 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
       await saveRankResult(site, rankupEntries, rankdownEntries)
 
       const bothZero = rankupEntries.length === 0 && rankdownEntries.length === 0
+      // If one side has > 150 entries but the other is 0, the 0 is almost certainly a crawl failure
+      const upSuspect   = rankupEntries.length   === 0 && rankdownEntries.length > 150
+      const downSuspect = rankdownEntries.length === 0 && rankupEntries.length   > 150
       const written = rankupEntries.length + rankdownEntries.length
       if (bothZero) {
         consecutiveEmpty++
@@ -366,6 +369,15 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
         retryQueue.push(site)
         console.log(`${prefix} ✓  涨入=   0  跌出=   0  ⚠ 涨跌均为空 (连续${consecutiveEmpty}站)`)
         if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail: '涨入0 | 跌出0（疑似限流）' })
+      } else if (upSuspect || downSuspect) {
+        const missing = upSuspect ? '涨入' : '跌出'
+        const present = upSuspect ? rankdownEntries.length : rankupEntries.length
+        consecutiveEmpty = 0
+        retryQueue.length = 0
+        totalRows += written
+        suspectCount++
+        console.log(`${prefix} ⚠  涨入=${String(rankupEntries.length).padStart(4)}  跌出=${String(rankdownEntries.length).padStart(4)}  ← ${missing}=0 但另侧=${present}，已标记重抓`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'suspect', detail: `${missing}=0 但另侧=${present}，疑似漏抓` })
       } else {
         consecutiveEmpty = 0
         retryQueue.length = 0
@@ -385,11 +397,12 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
   }
 
   const durationMs = Date.now() - stepStart
-  console.log(`\n  RANK 完成  ✓${ok}  ⚠${emptyCount}  ✗${failed}  耗时=${elapsed(durationMs)}`)
+  console.log(`\n  RANK 完成  ✓${ok}  ⚠${emptyCount}  ⚑${suspectCount}  ✗${failed}  耗时=${elapsed(durationMs)}`)
+  if (suspectCount > 0) console.log(`  ⚑ 有 ${suspectCount} 站单侧>150但另侧=0，已标记 suspect，将由 retry-crawl 于 05:00 MYT 重抓`)
   if (activityId) await activityEnd(supabase, activityId, {
-    status: failed > 0 ? 'warn' : emptyCount > 0 ? 'warn' : 'done',
-    ok: ok - emptyCount, empty: emptyCount, fail: failed, rowsWritten: totalRows, durationMs,
-    summary: `涨跌词 ${totalRows} 条，${emptyCount} 站为空，${failed} 站失败`,
+    status: failed > 0 ? 'warn' : (emptyCount > 0 || suspectCount > 0) ? 'warn' : 'done',
+    ok: ok - emptyCount - suspectCount, empty: emptyCount, fail: failed, rowsWritten: totalRows, durationMs,
+    summary: `涨跌词 ${totalRows} 条，${emptyCount} 站为空，${suspectCount} 站疑似漏抓，${failed} 站失败`,
   })
 }
 
@@ -648,15 +661,15 @@ async function main() {
       return
     }
 
-    // 查这些活动里失败/空的站点域名
+    // 查这些活动里失败/空/疑似漏抓的站点域名
     const { data: failedLogs } = await supabase
       .from('activity_site_log')
       .select('domain')
       .in('activity_id', activityIds)
-      .in('status', ['fail', 'empty'])
+      .in('status', ['fail', 'empty', 'suspect'])
 
     const failedDomains = new Set(((failedLogs || []) as { domain: string }[]).map(l => l.domain))
-    console.log(`  重试模式：今日 ${step} 失败/空共 ${failedDomains.size} 站`)
+    console.log(`  重试模式：今日 ${step} 失败/空/疑似漏抓共 ${failedDomains.size} 站`)
 
     if (failedDomains.size === 0) {
       console.log('  无失败站点，退出\n')

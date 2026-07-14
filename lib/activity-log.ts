@@ -5,7 +5,7 @@
 type Sb = any
 
 export type ActivityType = 'cron_task' | 'cron_manual' | 'search'
-export type SiteLogStatus = 'ok' | 'empty' | 'skip' | 'fail'
+export type SiteLogStatus = 'ok' | 'empty' | 'skip' | 'fail' | 'suspect'
 
 export async function activityStart(sb: Sb, opts: {
   type: ActivityType
