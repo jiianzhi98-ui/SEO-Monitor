@@ -42,14 +42,79 @@ export async function GET(req: Request) {
       .order('keyword', { ascending: true })
       .limit(500)
 
-    const keywords = (kwRows || []).map((r: { keyword: string; content_type: string | null; content_date: string; source_url: string | null }) => ({
-      keyword: r.keyword,
-      search_volume: 0,
-      source: r.content_type || '',
-      content_type: r.content_type,
-      content_date: r.content_date,
-      source_url: r.source_url,
-    }))
+    const allKws = (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; source_url: string | null }[]
+    const kwList = allKws.map(r => r.keyword)
+
+    // Fetch volumes from keyword_volume
+    const { data: volRows } = await service
+      .from('keyword_volume')
+      .select('keyword, volume')
+      .in('keyword', kwList.slice(0, 500))
+    const volMap = new Map(((volRows || []) as { keyword: string; volume: number }[]).map(r => [r.keyword, r.volume]))
+
+    // Fetch titles from site_keyword_ranks (most recent non-null title)
+    const { data: titleRows } = await service
+      .from('site_keyword_ranks')
+      .select('keyword, title')
+      .eq('site_id', site.id)
+      .in('keyword', kwList.slice(0, 500))
+      .not('title', 'is', null)
+      .order('stat_date', { ascending: false })
+      .limit(1000)
+    const titleMap = new Map<string, string>()
+    for (const r of (titleRows || []) as { keyword: string; title: string }[]) {
+      if (!titleMap.has(r.keyword)) titleMap.set(r.keyword, r.title)
+    }
+
+    // Fetch competitor profile for update detection rules
+    const { data: profile } = await service
+      .from('competitor_profiles')
+      .select('same_name_diff_date_is_update, same_base_diff_sub_is_update')
+      .eq('domain', domain)
+      .maybeSingle()
+    const sameNameDiffDate: boolean = profile?.same_name_diff_date_is_update ?? false
+    const sameBaseDiffSub: boolean  = profile?.same_base_diff_sub_is_update ?? false
+
+    // For same_name_diff_date: check if keywords appeared before this date range
+    const historicalKws = new Set<string>()
+    if (sameNameDiffDate && kwList.length > 0) {
+      const { data: histRows } = await service
+        .from('raw_keywords')
+        .select('keyword')
+        .eq('site_id', site.id)
+        .lt('content_date', dateStart)
+        .in('keyword', kwList.slice(0, 500))
+      for (const r of (histRows || []) as { keyword: string }[]) historicalKws.add(r.keyword)
+    }
+
+    // For same_base_diff_sub: count keywords per date per 4-char prefix
+    const baseDateCount = new Map<string, number>()
+    if (sameBaseDiffSub) {
+      for (const r of allKws) {
+        const key = `${r.content_date}|${r.keyword.slice(0, 4)}`
+        baseDateCount.set(key, (baseDateCount.get(key) ?? 0) + 1)
+      }
+    }
+
+    const keywords = allKws.map(r => {
+      let operation_type: '新增' | '更新' = '新增'
+      if (sameNameDiffDate && historicalKws.has(r.keyword)) {
+        operation_type = '更新'
+      } else if (sameBaseDiffSub) {
+        const key = `${r.content_date}|${r.keyword.slice(0, 4)}`
+        if ((baseDateCount.get(key) ?? 0) >= 3) operation_type = '更新'
+      }
+      return {
+        keyword: r.keyword,
+        search_volume: volMap.get(r.keyword) ?? 0,
+        title: titleMap.get(r.keyword) ?? null,
+        operation_type,
+        source: r.content_type || '',
+        content_type: r.content_type,
+        content_date: r.content_date,
+        source_url: r.source_url,
+      }
+    })
 
     return NextResponse.json({ site, date: dateStart, keywords, rankup: [], rankdown: [], outcomes: [], outcomeSummary: null })
   }
@@ -59,7 +124,7 @@ export async function GET(req: Request) {
     // 1. Keywords published in date range
     const { data: kwRows } = await service
       .from('raw_keywords')
-      .select('keyword, content_type, content_date, discovered_at')
+      .select('keyword, content_type, content_date, discovered_at, source_url')
       .eq('site_id', site.id)
       .gte('content_date', dateStart)
       .lte('content_date', dateEnd)
@@ -92,7 +157,7 @@ export async function GET(req: Request) {
     // Merge keywords with rank data, dedupe by keyword
     const seen = new Set<string>()
     const outcomes = []
-    for (const kw of (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; discovered_at: string }[]) {
+    for (const kw of (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; discovered_at: string; source_url: string | null }[]) {
       if (seen.has(kw.keyword)) continue
       seen.add(kw.keyword)
       const rank = rankMap.get(kw.keyword)
@@ -101,6 +166,7 @@ export async function GET(req: Request) {
         content_type: kw.content_type,
         content_date: kw.content_date,
         discovered_at: kw.discovered_at,
+        source_url: kw.source_url,
         volume: rank?.volume ?? 0,
         rank_position: rank?.rank_position ?? null,
         rank_type: rank?.rank_type ?? null,

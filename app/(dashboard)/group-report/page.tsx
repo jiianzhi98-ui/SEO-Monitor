@@ -51,13 +51,14 @@ interface ReportData {
   members: MemberReport[]
 }
 
-interface CompetitorKw { keyword: string; search_volume: number; source: string; content_type: string | null; content_date: string; source_url?: string | null }
+interface CompetitorKw { keyword: string; search_volume: number; title: string | null; operation_type: '新增' | '更新'; source: string; content_type: string | null; content_date: string; source_url?: string | null }
 interface CompetitorRankRow { keyword: string; volume: number; rank_position: number | null; title: string | null }
 interface CompetitorOutcomeRow {
   keyword: string
   content_type: string | null
   content_date: string
   discovered_at: string
+  source_url: string | null
   volume: number
   rank_position: number | null
   rank_type: string | null
@@ -420,6 +421,7 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
         const kwPg = dateKwPage[date] ?? 0
         const kwPages = Math.ceil(kws.length / KW_PAGE_SIZE)
         const kwSlice = kws.slice(kwPg * KW_PAGE_SIZE, (kwPg + 1) * KW_PAGE_SIZE)
+        const totalVol = kws.reduce((s, k) => s + (k.search_volume || 0), 0)
         return (
           <div key={date}>
             <button className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
@@ -429,17 +431,32 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
               </svg>
               <span className="text-sm font-medium text-gray-700 w-14 flex-shrink-0">{fmtDate(date)}</span>
               <span className="flex-1" />
-              <span className="text-xs text-gray-400">{kws.length} 词</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">{kws.length} 词</span>
+              {totalVol > 0 && <span className="text-xs text-gray-500 font-medium flex-shrink-0 ml-3 w-20 text-right">{fmtVol(totalVol)} 搜索量</span>}
             </button>
             {isOpen && (
               <div className="border-t border-gray-50">
-                <div className="grid grid-cols-[1fr_auto] gap-x-4 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
-                  <span>关键词</span><span className="text-right">类型</span>
+                <div className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
+                  <span>关键词 / 内容标题</span><span>内容链接</span><span className="text-right">搜索量</span><span className="text-center">类型</span>
                 </div>
                 {kwSlice.map((kw, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_auto] gap-x-4 items-center px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
-                    <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
-                    <div className="flex justify-end">
+                  <div key={i} className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 items-start px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 font-medium ${kw.operation_type === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{kw.operation_type ?? '新增'}</span>
+                      </div>
+                      {kw.title && <span className="text-xs text-orange-500 truncate block mt-0.5" title={kw.title}>→ {kw.title}</span>}
+                    </div>
+                    <div className="min-w-0">
+                      {kw.source_url
+                        ? <a href={kw.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={kw.source_url}>
+                            {kw.source_url.replace(/^https?:\/\//, '').slice(0, 28)}{kw.source_url.replace(/^https?:\/\//, '').length > 28 ? '…' : ''}
+                          </a>
+                        : <span className="text-xs text-gray-300">—</span>}
+                    </div>
+                    <span className="text-sm text-gray-500 text-right tabular-nums">{kw.search_volume ? fmtVol(kw.search_volume) : '—'}</span>
+                    <div className="flex justify-center">
                       {kw.content_type
                         ? <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${kw.content_type === 'app' ? 'bg-blue-50 text-blue-600' : kw.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>{kw.content_type}</span>
                         : <span className="text-xs text-gray-300">—</span>}
@@ -655,20 +672,28 @@ function CompetitorOutcomesPanel({
         ) : (
           <>
             <div className="overflow-x-auto">
-              <div className="grid grid-cols-[48px_2fr_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 text-[11px] font-medium text-gray-400 min-w-[620px]">
+              <div className="grid grid-cols-[48px_2fr_120px_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 text-[11px] font-medium text-gray-400 min-w-[760px]">
                 <span className="text-center">日期</span>
                 <span>关键词</span>
+                <span>内容链接</span>
                 <span className="text-center">类型</span>
                 <span className="text-right">搜索量</span>
                 <span className="text-center">当前排名</span>
                 <span className="text-center">趋势</span>
                 <span className="text-center">排名日期</span>
               </div>
-              <div className="divide-y divide-gray-50 min-w-[620px]">
+              <div className="divide-y divide-gray-50 min-w-[760px]">
                 {paged.map((r, i) => (
-                  <div key={i} className="grid grid-cols-[48px_2fr_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
+                  <div key={i} className="grid grid-cols-[48px_2fr_120px_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
                     <span className="text-xs text-gray-400 text-center">{r.content_date.slice(5).replace('-', '/')}</span>
                     <span className="text-sm text-gray-800 truncate" title={r.keyword}>{r.keyword}</span>
+                    <div className="min-w-0">
+                      {r.source_url
+                        ? <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={r.source_url}>
+                            {r.source_url.replace(/^https?:\/\//, '').slice(0, 22)}{r.source_url.replace(/^https?:\/\//, '').length > 22 ? '…' : ''}
+                          </a>
+                        : <span className="text-xs text-gray-300">—</span>}
+                    </div>
                     <div className="flex justify-center">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                         {r.content_type === 'game' ? '游戏' : '应用'}
