@@ -30,7 +30,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ domain: 
 
   const { domain } = await params
   const body = await req.json()
-  const allowed = ['site_type', 'site_weight', 'site_ip', 'site_index_count', 'post_start_hour', 'post_end_hour', 'post_interval_minutes', 'notes']
+  const allowed = ['site_type', 'site_weight', 'site_ip', 'site_index_count', 'post_start_hour', 'post_end_hour', 'post_interval_minutes', 'notes', 'same_base_diff_sub_is_update', 'same_name_diff_date_is_update']
   const patch: Record<string, unknown> = { domain: decodeURIComponent(domain), updated_at: new Date().toISOString() }
   for (const key of allowed) {
     if (key in body) patch[key] = body[key] ?? null

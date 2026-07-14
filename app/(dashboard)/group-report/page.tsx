@@ -128,6 +128,8 @@ interface CompetitorProfileData {
   site_ip: string | null; site_index_count: number | null
   post_start_hour: number | null; post_end_hour: number | null
   post_interval_minutes: number | null; notes: string | null
+  same_base_diff_sub_is_update: boolean
+  same_name_diff_date_is_update: boolean
 }
 interface KwAnalysisResult {
   exactDuplicates: { keyword: string; dates: string[]; occurrences: number }[]
@@ -781,11 +783,11 @@ export default function GroupReportPage() {
   const [siteIndexData, setSiteIndexData] = useState<Record<string, IndexSnapshot>>({})
   const [kwAnalysis, setKwAnalysis] = useState<Record<string, KwAnalysisResult>>({})
   const [kwAnalysisLoading, setKwAnalysisLoading] = useState<Record<string, boolean>>({})
-  // Competitor profile (规则中心 — 竞品档案)
+  // Competitor profile (提交记录 — 发布规则)
   const [compProfile, setCompProfile] = useState<Record<string, CompetitorProfileData | null>>({})
   const [compProfileLoading, setCompProfileLoading] = useState<Record<string, boolean>>({})
-  const [editingCompDomain, setEditingCompDomain] = useState<string | null>(null)
-  const [compProfileForm, setCompProfileForm] = useState({ site_type: '', site_weight: '', site_ip: '', site_index_count: '', post_start_hour: '', post_end_hour: '', post_interval_minutes: '', notes: '' })
+  const [compRuleModalOpen, setCompRuleModalOpen] = useState(false)
+  const [compProfileForm, setCompProfileForm] = useState({ post_start_hour: '', post_end_hour: '', post_interval_minutes: '', same_base_diff_sub_is_update: false, same_name_diff_date_is_update: false })
   const [compProfileSaving, setCompProfileSaving] = useState(false)
 
   const today = useMemo(() => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), [])
@@ -962,27 +964,16 @@ export default function GroupReportPage() {
       })
   }, [activeGroupId, reportTab, groups])
 
-  // Load competitor profile when competitor rules tab is active
+  // Load competitor profile when competitor keywords (提交记录) tab is active
   useEffect(() => {
-    if (activeTabId !== 'competitors' || competitorInnerTab !== 'rules' || !activeCompetitorDomain) return
+    if (activeTabId !== 'competitors' || competitorInnerTab !== 'keywords' || !activeCompetitorDomain) return
     if (compProfile[activeCompetitorDomain] !== undefined) return
     setCompProfileLoading(prev => ({ ...prev, [activeCompetitorDomain]: true }))
     fetch(`/api/competitor-profiles/${encodeURIComponent(activeCompetitorDomain)}`)
       .then(r => r.json())
       .then(d => {
         setCompProfile(prev => ({ ...prev, [activeCompetitorDomain]: d.profile ?? null }))
-        if (d.profile) {
-          setCompProfileForm({
-            site_type: d.profile.site_type ?? '',
-            site_weight: d.profile.site_weight?.toString() ?? '',
-            site_ip: d.profile.site_ip ?? '',
-            site_index_count: d.profile.site_index_count?.toString() ?? '',
-            post_start_hour: d.profile.post_start_hour?.toString() ?? '',
-            post_end_hour: d.profile.post_end_hour?.toString() ?? '',
-            post_interval_minutes: d.profile.post_interval_minutes?.toString() ?? '',
-            notes: d.profile.notes ?? '',
-          })
-        }
+        // form populated on modal open instead
       })
       .finally(() => setCompProfileLoading(prev => ({ ...prev, [activeCompetitorDomain]: false })))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1103,25 +1094,22 @@ export default function GroupReportPage() {
     } finally { setKwAnalysisLoading(prev => ({ ...prev, [domain]: false })) }
   }
 
-  async function saveCompProfileForDomain(domain: string) {
+  async function saveCompRule(domain: string) {
     setCompProfileSaving(true)
     try {
       const body = {
-        site_type: compProfileForm.site_type || null,
-        site_weight: compProfileForm.site_weight ? Number(compProfileForm.site_weight) : null,
-        site_ip: compProfileForm.site_ip || null,
-        site_index_count: compProfileForm.site_index_count ? Number(compProfileForm.site_index_count) : null,
-        post_start_hour: compProfileForm.post_start_hour ? Number(compProfileForm.post_start_hour) : null,
-        post_end_hour: compProfileForm.post_end_hour ? Number(compProfileForm.post_end_hour) : null,
-        post_interval_minutes: compProfileForm.post_interval_minutes ? Number(compProfileForm.post_interval_minutes) : null,
-        notes: compProfileForm.notes || null,
+        post_start_hour: compProfileForm.post_start_hour !== '' ? Number(compProfileForm.post_start_hour) : null,
+        post_end_hour: compProfileForm.post_end_hour !== '' ? Number(compProfileForm.post_end_hour) : null,
+        post_interval_minutes: compProfileForm.post_interval_minutes !== '' ? Number(compProfileForm.post_interval_minutes) : null,
+        same_base_diff_sub_is_update: compProfileForm.same_base_diff_sub_is_update,
+        same_name_diff_date_is_update: compProfileForm.same_name_diff_date_is_update,
       }
       const res = await fetch(`/api/competitor-profiles/${encodeURIComponent(domain)}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
       const d = await res.json()
       setCompProfile(prev => ({ ...prev, [domain]: d.profile }))
-      setEditingCompDomain(null)
+      setCompRuleModalOpen(false)
     } finally { setCompProfileSaving(false) }
   }
 
@@ -1480,92 +1468,65 @@ export default function GroupReportPage() {
                             </div>
                           )}
 
-                          {/* ── 竞品档案 ── */}
-                          {!rulesLoading && activeCompetitorDomain && (
-                            <div className="border-t border-gray-100 pt-4 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">竞品档案</p>
-                                {canSeeAll && (
-                                  editingCompDomain === activeCompetitorDomain ? (
-                                    <div className="flex items-center gap-3">
-                                      <button onClick={() => setEditingCompDomain(null)} className="text-xs text-gray-500 hover:text-gray-700">取消</button>
-                                      <button onClick={() => saveCompProfileForDomain(activeCompetitorDomain)} disabled={compProfileSaving}
-                                        className="text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50">{compProfileSaving ? '保存中…' : '保存'}</button>
-                                    </div>
-                                  ) : (
-                                    <button onClick={() => {
-                                      setEditingCompDomain(activeCompetitorDomain)
-                                      const p = compProfile[activeCompetitorDomain]
-                                      if (p) setCompProfileForm({ site_type: p.site_type ?? '', site_weight: p.site_weight?.toString() ?? '', site_ip: p.site_ip ?? '', site_index_count: p.site_index_count?.toString() ?? '', post_start_hour: p.post_start_hour?.toString() ?? '', post_end_hour: p.post_end_hour?.toString() ?? '', post_interval_minutes: p.post_interval_minutes?.toString() ?? '', notes: p.notes ?? '' })
-                                      else setCompProfileForm({ site_type: '', site_weight: '', site_ip: '', site_index_count: '', post_start_hour: '', post_end_hour: '', post_interval_minutes: '', notes: '' })
-                                    }} className="text-xs text-orange-500 hover:text-orange-600 font-medium">编辑档案</button>
-                                  )
-                                )}
-                              </div>
-                              {compProfileLoading[activeCompetitorDomain] ? (
-                                <div className="flex items-center justify-center py-3"><div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /></div>
-                              ) : editingCompDomain === activeCompetitorDomain ? (
-                                <div className="space-y-3">
-                                  <div className="grid grid-cols-4 gap-2">
-                                    <div>
-                                      <label className="text-xs text-gray-400 block mb-0.5">类型</label>
-                                      <select value={compProfileForm.site_type} onChange={e => setCompProfileForm(p => ({ ...p, site_type: e.target.value }))}
-                                        className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700 bg-white">
-                                        <option value="">未知</option>
-                                        <option value="game">游戏</option>
-                                        <option value="app">应用</option>
-                                        <option value="mixed">混合</option>
-                                      </select>
-                                    </div>
-                                    {([['site_weight','权重'], ['site_ip','IP'], ['site_index_count','收录量']] as [keyof typeof compProfileForm, string][]).map(([key, label]) => (
-                                      <div key={key}>
-                                        <label className="text-xs text-gray-400 block mb-0.5">{label}</label>
-                                        <input type={key === 'site_ip' ? 'text' : 'number'} value={compProfileForm[key]} onChange={e => setCompProfileForm(p => ({ ...p, [key]: e.target.value }))}
-                                          placeholder="—" className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700" />
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {([['post_start_hour','开始（时）'], ['post_end_hour','结束（时）'], ['post_interval_minutes','间隔（分钟）']] as [keyof typeof compProfileForm, string][]).map(([key, label]) => (
-                                      <div key={key}>
-                                        <label className="text-xs text-gray-400 block mb-0.5">{label}</label>
-                                        <input type="number" value={compProfileForm[key]} onChange={e => setCompProfileForm(p => ({ ...p, [key]: e.target.value }))}
-                                          placeholder="—" className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700" />
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div>
-                                    <label className="text-xs text-gray-400 block mb-0.5">备注</label>
-                                    <textarea value={compProfileForm.notes} onChange={e => setCompProfileForm(p => ({ ...p, notes: e.target.value }))} rows={2}
-                                      className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-300 text-gray-700 resize-none" />
-                                  </div>
-                                </div>
-                              ) : (() => {
-                                const p = compProfile[activeCompetitorDomain]
-                                if (!p) return <p className="text-xs text-gray-400">暂无档案 — 点击「编辑档案」添加竞品信息</p>
-                                return (
-                                  <div className="flex flex-wrap gap-x-6 gap-y-1.5">
-                                    {p.site_type && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">类型</span>{p.site_type === 'game' ? '游戏' : p.site_type === 'app' ? '应用' : '混合'}</span>}
-                                    {p.site_weight != null && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">权重</span>{p.site_weight}</span>}
-                                    {p.site_ip && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">IP</span>{p.site_ip}</span>}
-                                    {p.site_index_count != null && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">收录</span>{p.site_index_count.toLocaleString()}</span>}
-                                    {(p.post_start_hour != null || p.post_end_hour != null) && <span className="text-xs text-gray-500"><span className="text-gray-400 mr-1">活跃</span>{p.post_start_hour ?? '?'}:00~{p.post_end_hour ?? '?'}:00{p.post_interval_minutes ? ` 间隔${p.post_interval_minutes}min` : ''}</span>}
-                                    {p.notes && <div className="w-full text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">{p.notes}</div>}
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          )}
                         </div>
                       ) : competitorInnerTab === 'keywords' ? (
-                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-700">{activeCompetitorDomain}</span>
-                            <span className="text-xs text-gray-400">
-                              · {competitorDateRange.start === competitorDateRange.end ? competitorDateRange.start : `${competitorDateRange.start} ~ ${competitorDateRange.end}`} 新增词
-                            </span>
+                        <div className="space-y-3">
+                          {/* 发布规则条 */}
+                          {(() => {
+                            const p = compProfile[activeCompetitorDomain]
+                            const hasRule = p && (p.post_start_hour != null || p.post_end_hour != null || p.same_base_diff_sub_is_update || p.same_name_diff_date_is_update)
+                            return (
+                              <div className="bg-white rounded-xl border border-gray-200 px-4 py-2.5 flex items-center gap-3 flex-wrap min-h-[44px]">
+                                <div className="flex-1 flex items-center gap-2 flex-wrap text-xs">
+                                  {compProfileLoading[activeCompetitorDomain] ? (
+                                    <span className="text-gray-300">加载中…</span>
+                                  ) : !hasRule ? (
+                                    <span className="text-gray-300">暂无发布规则</span>
+                                  ) : (
+                                    <>
+                                      {(p!.post_start_hour != null || p!.post_end_hour != null) && (
+                                        <span className="bg-orange-50 text-orange-600 px-2 py-1 rounded font-medium">
+                                          发布时间 {p!.post_start_hour ?? '?'}:00 — {p!.post_end_hour ?? '?'}:00{p!.post_interval_minutes ? ` · 每${p!.post_interval_minutes}min` : ''}
+                                        </span>
+                                      )}
+                                      {p!.same_base_diff_sub_is_update && (
+                                        <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded">同词不同下拉词 = 更新</span>
+                                      )}
+                                      {p!.same_name_diff_date_is_update && (
+                                        <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded">同名不同日期 = 更新</span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                {canSeeAll && (
+                                  <button onClick={() => {
+                                    const pr = compProfile[activeCompetitorDomain]
+                                    setCompProfileForm({
+                                      post_start_hour: pr?.post_start_hour?.toString() ?? '',
+                                      post_end_hour: pr?.post_end_hour?.toString() ?? '',
+                                      post_interval_minutes: pr?.post_interval_minutes?.toString() ?? '',
+                                      same_base_diff_sub_is_update: pr?.same_base_diff_sub_is_update ?? false,
+                                      same_name_diff_date_is_update: pr?.same_name_diff_date_is_update ?? false,
+                                    })
+                                    setCompRuleModalOpen(true)
+                                  }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors flex-shrink-0">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                    新增规则
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })()}
+                          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-700">{activeCompetitorDomain}</span>
+                              <span className="text-xs text-gray-400">
+                                · {competitorDateRange.start === competitorDateRange.end ? competitorDateRange.start : `${competitorDateRange.start} ~ ${competitorDateRange.end}`} 新增词
+                              </span>
+                            </div>
+                            {competitorLoading ? <Spinner /> : <CompetitorKeywordsTable keywords={competitorData?.keywords || []} />}
                           </div>
-                          {competitorLoading ? <Spinner /> : <CompetitorKeywordsTable keywords={competitorData?.keywords || []} />}
                         </div>
                       ) : (
                         <CompetitorOutcomesPanel
@@ -2204,6 +2165,77 @@ export default function GroupReportPage() {
             )}
           </>
           )}
+        </div>
+      )}
+
+      {/* 竞品发布规则 Modal */}
+      {compRuleModalOpen && activeCompetitorDomain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setCompRuleModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">新增规则</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{activeCompetitorDomain}</p>
+              </div>
+              <button onClick={() => setCompRuleModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-5">
+              {/* 发布时间段 */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">发布时间段</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {([['post_start_hour', '开始（时）'], ['post_end_hour', '结束（时）'], ['post_interval_minutes', '间隔（分钟）']] as [keyof typeof compProfileForm, string][]).map(([key, label]) => (
+                    <div key={key}>
+                      <label className="text-xs text-gray-400 block mb-1">{label}</label>
+                      <input
+                        type="number"
+                        min={key === 'post_interval_minutes' ? 1 : 0}
+                        max={key === 'post_interval_minutes' ? undefined : 23}
+                        value={String(compProfileForm[key])}
+                        onChange={e => setCompProfileForm(p => ({ ...p, [key]: e.target.value }))}
+                        placeholder="—"
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-700"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-300 mt-1.5">用于预测该竞品的发布时间规律</p>
+              </div>
+              {/* 新增/更新判断规则 */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">判断新增还是更新</p>
+                <div className="space-y-2.5">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={compProfileForm.same_base_diff_sub_is_update}
+                      onChange={e => setCompProfileForm(p => ({ ...p, same_base_diff_sub_is_update: e.target.checked }))}
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400"
+                    />
+                    <span className="text-sm text-gray-700 leading-snug">多个相同词但不同下拉词同时新增，默认为<span className="text-orange-600 font-medium">更新</span></span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={compProfileForm.same_name_diff_date_is_update}
+                      onChange={e => setCompProfileForm(p => ({ ...p, same_name_diff_date_is_update: e.target.checked }))}
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400"
+                    />
+                    <span className="text-sm text-gray-700 leading-snug">完全相同名称在不同日期出现，视为<span className="text-orange-600 font-medium">更新</span></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setCompRuleModalOpen(false)} className="text-sm px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">取消</button>
+              <button onClick={() => saveCompRule(activeCompetitorDomain)} disabled={compProfileSaving}
+                className="text-sm px-5 py-2 rounded-lg bg-orange-500 text-white font-medium hover:bg-orange-600 disabled:opacity-50">
+                {compProfileSaving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
