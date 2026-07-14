@@ -5,7 +5,16 @@ import { usePathname, useRouter } from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
 import { useUser } from '@/lib/user-context'
 
-const NAV_GROUPS = [
+type NavItem = {
+  href: string
+  label: string
+  icon: React.ReactNode
+  superOnly?: boolean
+  hideNormal?: boolean
+  children?: { href: string; label: string; icon: React.ReactNode }[]
+}
+
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: '监控工具',
     items: [
@@ -43,26 +52,28 @@ const NAV_GROUPS = [
         href: '/site-intel',
         label: '站点情报',
         icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
-      },
-      {
-        href: '/weight-monitor',
-        label: '权重监控',
-        icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>,
-      },
-      {
-        href: '/index-monitor',
-        label: '收录监控',
-        icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16M10 11h4" /></svg>,
-      },
-      {
-        href: '/index-pages',
-        label: '收录页面',
-        icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
-      },
-      {
-        href: '/competitor-daily',
-        label: '竞品日收',
-        icon: <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
+        children: [
+          {
+            href: '/weight-monitor',
+            label: '权重监控',
+            icon: <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>,
+          },
+          {
+            href: '/index-monitor',
+            label: '收录监控',
+            icon: <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16M10 11h4" /></svg>,
+          },
+          {
+            href: '/competitor-daily',
+            label: '竞品日收',
+            icon: <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
+          },
+          {
+            href: '/index-pages',
+            label: '收录页面',
+            icon: <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
+          },
+        ],
       },
     ],
   },
@@ -103,6 +114,12 @@ export default function Sidebar() {
     router.refresh()
   }
 
+  const allItems = NAV_GROUPS.flatMap(group => group.items).filter(item => {
+    if (item.superOnly && role !== 'super') return false
+    if (item.hideNormal && role === 'normal') return false
+    return true
+  })
+
   return (
     <aside
       className="fixed inset-y-0 left-0 w-[220px] flex flex-col z-50"
@@ -128,11 +145,48 @@ export default function Sidebar() {
 
       {/* ── Nav ── */}
       <nav className="flex-1 px-3 pb-3 overflow-y-auto space-y-0.5" style={{ scrollbarWidth: 'none' }}>
-        {NAV_GROUPS.flatMap(group => group.items).filter(item => {
-          if ('superOnly' in item && item.superOnly && role !== 'super') return false
-          if ('hideNormal' in item && item.hideNormal && role === 'normal') return false
-          return true
-        }).map(item => {
+        {allItems.map(item => {
+          if (item.children) {
+            const isParentActive = pathname === item.href
+            const hasActiveChild = item.children.some(c => pathname.startsWith(c.href))
+            return (
+              <div key={item.href}>
+                <Link
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    isParentActive
+                      ? 'bg-green-600 text-white'
+                      : hasActiveChild
+                      ? 'text-white/80 hover:bg-white/5'
+                      : 'text-white/45 hover:bg-white/8 hover:text-white/90'
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+                <div className="ml-3 mt-0.5 space-y-0.5">
+                  {item.children.map(child => {
+                    const isChildActive = pathname.startsWith(child.href)
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                          isChildActive
+                            ? 'bg-green-600 text-white'
+                            : 'text-white/40 hover:bg-white/8 hover:text-white/80'
+                        }`}
+                      >
+                        {child.icon}
+                        {child.label}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          }
+
           const isActive = item.href === '/'
             ? pathname === '/'
             : pathname.startsWith(item.href)

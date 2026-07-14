@@ -22,6 +22,7 @@ interface Site {
   is_enabled: boolean
   has_rank_data: boolean
   has_rank_title: boolean
+  has_index_pages: boolean
   created_at: string
 }
 
@@ -33,6 +34,7 @@ interface SiteTableProps {
   onToggle: (site: Site) => void
   onToggleRank: (site: Site) => void
   onToggleRankTitle: (site: Site) => void
+  onToggleIndexPages: (site: Site) => void
 }
 
 const categoryLabel: Record<string, string> = {
@@ -51,12 +53,12 @@ const frequencyLabel: Record<string, string> = {
   daily: '每天',
 }
 
-export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank, onToggleRankTitle }: SiteTableProps) {
+export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle, onToggleRank, onToggleRankTitle, onToggleIndexPages }: SiteTableProps) {
   const [page, setPage] = useState(0)
-  const [sortCol, setSortCol] = useState<'isEnabled' | 'hasRankData' | 'hasRankTitle' | null>(null)
+  const [sortCol, setSortCol] = useState<'isEnabled' | 'hasRankData' | 'hasRankTitle' | 'hasIndexPages' | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  function handleSort(col: 'isEnabled' | 'hasRankData' | 'hasRankTitle', dir: 'asc' | 'desc') {
+  function handleSort(col: 'isEnabled' | 'hasRankData' | 'hasRankTitle' | 'hasIndexPages', dir: 'asc' | 'desc') {
     if (sortCol === col && sortDir === dir) { setSortCol(null) }
     else { setSortCol(col); setSortDir(dir) }
     setPage(0)
@@ -76,12 +78,13 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
     const valOf = (s: typeof sorted[0]) =>
       sortCol === 'isEnabled' ? (s.is_enabled ? 1 : 0)
       : sortCol === 'hasRankTitle' ? (s.has_rank_title ? 1 : 0)
+      : sortCol === 'hasIndexPages' ? (s.has_index_pages ? 1 : 0)
       : (s.has_rank_data ? 1 : 0)
     return sortDir === 'asc' ? valOf(a) - valOf(b) : valOf(b) - valOf(a)
   })
   const paged = sortedDisplay.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
-  const sortIcons = (col: 'isEnabled' | 'hasRankData' | 'hasRankTitle') => {
+  const sortIcons = (col: 'isEnabled' | 'hasRankData' | 'hasRankTitle' | 'hasIndexPages') => {
     const isAsc = sortCol === col && sortDir === 'asc'
     const isDesc = sortCol === col && sortDir === 'desc'
     return (
@@ -114,6 +117,7 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
             <th className="table-th"><div className="flex items-center justify-center gap-1">关键词{sortIcons('isEnabled')}</div></th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">排名{sortIcons('hasRankData')}</div></th>
             <th className="table-th"><div className="flex items-center justify-center gap-1">竞品追踪{sortIcons('hasRankTitle')}</div></th>
+            <th className="table-th"><div className="flex items-center justify-center gap-1">收录页面{sortIcons('hasIndexPages')}</div></th>
             <th className="table-th text-right">操作</th>
           </tr>
         </thead>
@@ -168,6 +172,14 @@ export default function SiteTable({ sites, allSites, onEdit, onDelete, onToggle,
                   className={`relative w-9 h-[18px] rounded-full transition-colors ${site.has_rank_title ? 'bg-orange-500' : 'bg-gray-200'}`}
                 >
                   <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${site.has_rank_title ? 'translate-x-[18px]' : 'translate-x-0'}`} />
+                </button>
+              </td>
+              <td className="table-td text-center">
+                <button
+                  onClick={() => onToggleIndexPages(site)}
+                  className={`relative w-9 h-[18px] rounded-full transition-colors ${site.has_index_pages ? 'bg-teal-500' : 'bg-gray-200'}`}
+                >
+                  <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${site.has_index_pages ? 'translate-x-[18px]' : 'translate-x-0'}`} />
                 </button>
               </td>
               <td className="table-td text-right">

@@ -23,6 +23,7 @@ interface Site {
   is_enabled: boolean
   has_rank_data: boolean
   has_rank_title: boolean
+  has_index_pages: boolean
   created_at: string
 }
 
@@ -132,6 +133,25 @@ export default function SitesPage() {
       return
     }
     applyToggle(site, newVal, newVal ? false : site.has_rank_title).catch(err => alert(err.message))
+  }
+
+  async function handleToggleIndexPages(site: Site) {
+    try {
+      const res = await fetch('/api/sites', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...site, has_index_pages: !site.has_index_pages }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '更新失败')
+      }
+      setSites((prev) =>
+        prev.map((s) => s.id === site.id ? { ...s, has_index_pages: !s.has_index_pages } : s)
+      )
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : '更新失败')
+    }
   }
 
   function handleToggleRankTitle(site: Site) {
@@ -256,6 +276,7 @@ export default function SitesPage() {
                 onToggle={handleToggle}
                 onToggleRank={handleToggleRank}
                 onToggleRankTitle={handleToggleRankTitle}
+                onToggleIndexPages={handleToggleIndexPages}
               />
             </>
           )
