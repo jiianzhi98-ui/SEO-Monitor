@@ -12,6 +12,7 @@ interface SiteRow {
   id: string
   domain: string
   name: string
+  has_rank_title: boolean
 }
 
 interface IndexedPageRow {
@@ -198,7 +199,7 @@ export default function SiteIntelDetailPage() {
       const d30ago = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
       const { data: siteRow } = await supabase.from('sites')
-        .select('id, domain, name').eq('id', id).maybeSingle() as { data: SiteRow | null }
+        .select('id, domain, name, has_rank_title').eq('id', id).maybeSingle() as { data: SiteRow | null }
 
       if (!siteRow) { setError('站点不存在'); setLoading(false); return }
       setSite(siteRow)
@@ -216,10 +217,14 @@ export default function SiteIntelDetailPage() {
         supabase.from('index_snapshots')
           .select('snapshot_date,index_count')
           .eq('site_id', id).gte('snapshot_date', d30ago).order('snapshot_date'),
-        supabase.from('rank_changes')
-          .select('keyword,volume,type,stat_date')
-          .eq('site_id', id).gte('stat_date', d30ago)
-          .order('stat_date', { ascending: false }).limit(5000),
+        (siteRow.has_rank_title
+          ? supabase.from('site_keyword_ranks').select('keyword,volume,type,stat_date')
+              .eq('site_id', id).eq('platform', 'mobile').gt('volume', 0)
+              .gte('stat_date', d30ago).order('stat_date', { ascending: false }).limit(5000)
+          : supabase.from('rank_changes').select('keyword,volume,type,stat_date')
+              .eq('site_id', id).gte('stat_date', d30ago)
+              .order('stat_date', { ascending: false }).limit(5000)
+        ),
         supabase.from('raw_keywords')
           .select('keyword,content_date,content_type')
           .eq('site_id', id)
