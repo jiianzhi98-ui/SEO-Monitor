@@ -121,6 +121,7 @@ interface PageData {
   rankupAll: { keyword: string; volume: number }[]
   rankdownAll: { keyword: string; volume: number }[]
   unstableAll: { keyword: string; volume: number; upDays: number; downDays: number }[]
+  rankAllData: { keyword: string; volume: number; type: string; stat_date: string }[]
 }
 
 export default function SiteIntelDetailPage() {
@@ -149,11 +150,45 @@ export default function SiteIntelDetailPage() {
   const [unstableModal, setUnstableModal] = useState(false)
   const [unstableModalPage, setUnstableModalPage] = useState(0)
 
+  const [kwModalDate, setKwModalDate] = useState('')
+  const [kwModalLoading, setKwModalLoading] = useState(false)
+  const [kwModalAppAll, setKwModalAppAll] = useState<{ keyword: string }[]>([])
+  const [kwModalGameAll, setKwModalGameAll] = useState<{ keyword: string }[]>([])
+  const [kwModalAppCount, setKwModalAppCount] = useState(0)
+  const [kwModalGameCount, setKwModalGameCount] = useState(0)
+  const [rankModalDate, setRankModalDate] = useState('')
+
   useEffect(() => {
     if (!id) return
     loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  async function handleKwDateChange(date: string) {
+    if (!date || !id) return
+    setKwModalDate(date)
+    setKwModalPage(0)
+    setKwModalLoading(true)
+    try {
+      const supabase = getBrowserClient()
+      const [appRes, gameRes, appCnt, gameCnt] = await Promise.all([
+        supabase.from('raw_keywords').select('keyword').eq('site_id', id).eq('content_date', date)
+          .or('content_type.eq.app,content_type.is.null').not('keyword', 'like', '%电脑版%').limit(5000),
+        supabase.from('raw_keywords').select('keyword').eq('site_id', id).eq('content_date', date)
+          .eq('content_type', 'game').not('keyword', 'like', '%电脑版%').limit(5000),
+        supabase.from('raw_keywords').select('id', { count: 'exact', head: true }).eq('site_id', id).eq('content_date', date)
+          .or('content_type.eq.app,content_type.is.null').not('keyword', 'like', '%电脑版%'),
+        supabase.from('raw_keywords').select('id', { count: 'exact', head: true }).eq('site_id', id).eq('content_date', date)
+          .eq('content_type', 'game').not('keyword', 'like', '%电脑版%'),
+      ])
+      setKwModalAppAll((appRes.data || []).map((r: { keyword: string }) => ({ keyword: r.keyword })))
+      setKwModalGameAll((gameRes.data || []).map((r: { keyword: string }) => ({ keyword: r.keyword })))
+      setKwModalAppCount(appCnt.count ?? 0)
+      setKwModalGameCount(gameCnt.count ?? 0)
+    } finally {
+      setKwModalLoading(false)
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -208,7 +243,7 @@ export default function SiteIntelDetailPage() {
         weightTrend: [], indexTrend: [], ipTrend: [],
         kwDate: '', appKw: [], gameKw: [], appKwAll: [], gameKwAll: [],
         appCount: 0, gameCount: 0,
-        rankDate: '', rankupAll: [], rankdownAll: [], unstableAll: [],
+        rankDate: '', rankupAll: [], rankdownAll: [], unstableAll: [], rankAllData: [],
       }
 
       // Weight history
@@ -246,6 +281,7 @@ export default function SiteIntelDetailPage() {
       const rdArr = (rd || []) as RD[]
       const latestRankDate = rdArr.length > 0 ? rdArr[0].stat_date : ''
       result.rankDate = latestRankDate
+      result.rankAllData = rdArr
       if (latestRankDate) {
         const today = rdArr.filter(r => r.stat_date === latestRankDate)
         result.rankupAll = today.filter(r => r.type === 'rankup').map(r => ({ keyword: r.keyword, volume: r.volume })).sort((a, b) => b.volume - a.volume)
@@ -486,7 +522,14 @@ export default function SiteIntelDetailPage() {
                 </div>
                 {kwCount > 12 && (
                   <div className="mt-3 flex justify-center">
-                    <button onClick={() => { setKwModal(true); setKwModalTab(kwTab); setKwModalPage(0) }}
+                    <button onClick={() => {
+                      setKwModal(true); setKwModalTab(kwTab); setKwModalPage(0)
+                      setKwModalDate(data.kwDate)
+                      setKwModalAppAll(data.appKwAll)
+                      setKwModalGameAll(data.gameKwAll)
+                      setKwModalAppCount(data.appCount)
+                      setKwModalGameCount(data.gameCount)
+                    }}
                       className="text-xs border rounded px-2 py-0.5 transition-colors text-green-500 hover:text-green-700 border-green-100 hover:border-green-200">
                       查看全部 {kwCount} 条
                     </button>
@@ -540,8 +583,8 @@ export default function SiteIntelDetailPage() {
                 </div>
                 {rankCount > 12 && (
                   <div className="mt-3 flex justify-center">
-                    <button onClick={() => { setRankModal(true); setRankModalTab(rankTab); setRankModalPage(0) }}
-                      className="text-xs border rounded px-2 py-0.5 transition-colors text-purple-500 hover:text-purple-700 border-purple-100 hover:border-purple-200">
+                    <button onClick={() => { setRankModal(true); setRankModalTab(rankTab); setRankModalPage(0); setRankModalDate(data.rankDate) }}
+                      className="text-xs border rounded px-2 py-0.5 transition-colors text-green-500 hover:text-green-700 border-green-100 hover:border-green-200">
                       查看全部 {rankCount} 条
                     </button>
                   </div>
@@ -580,7 +623,7 @@ export default function SiteIntelDetailPage() {
                 {data.unstableAll.length > 12 && (
                   <div className="mt-3 flex justify-center">
                     <button onClick={() => { setUnstableModal(true); setUnstableModalPage(0) }}
-                      className="text-xs border rounded px-2 py-0.5 transition-colors text-rose-500 hover:text-rose-700 border-rose-100 hover:border-rose-200">
+                      className="text-xs border rounded px-2 py-0.5 transition-colors text-green-500 hover:text-green-700 border-green-100 hover:border-green-200">
                       查看全部 {data.unstableAll.length} 条
                     </button>
                   </div>
@@ -593,21 +636,13 @@ export default function SiteIntelDetailPage() {
         {/* Row 4: Indexed pages large card */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700">收录页面</h3>
-              {indexedPagesTotal > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">共 {indexedPagesTotal.toLocaleString()} 条</p>
-              )}
-            </div>
+            <h3 className="text-sm font-semibold text-gray-700">收录页面</h3>
             {indexedPagesTotal > 0 && (
               <Link
                 href={`/index-pages?siteId=${id}`}
-                className="text-xs text-green-600 hover:underline flex items-center gap-1"
+                className="text-xs border rounded px-2 py-0.5 transition-colors text-green-500 hover:text-green-700 border-green-100 hover:border-green-200"
               >
-                更多
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
+                查看全部 {indexedPagesTotal.toLocaleString()} 条
               </Link>
             )}
           </div>
@@ -643,15 +678,21 @@ export default function SiteIntelDetailPage() {
 
       {/* 关键词 Modal */}
       {kwModal && (() => {
-        const list = kwModalTab === 'app' ? data.appKwAll : data.gameKwAll
+        const list = kwModalTab === 'app' ? kwModalAppAll : kwModalGameAll
         const paged = list.slice(kwModalPage * modalPageSize, (kwModalPage + 1) * modalPageSize)
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
-                <div>
+                <div className="flex items-center gap-3">
                   <h3 className="font-semibold text-gray-900">{site.domain} · 最近新增关键词</h3>
-                  {data.kwDate && <p className="text-xs text-gray-400 mt-0.5">{data.kwDate}</p>}
+                  {kwModalLoading ? (
+                    <span className="text-xs text-gray-400">加载中…</span>
+                  ) : (
+                    <input type="date" value={kwModalDate}
+                      onChange={e => handleKwDateChange(e.target.value)}
+                      className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none" />
+                  )}
                 </div>
                 <button onClick={() => setKwModal(false)} className="text-gray-400 hover:text-gray-600">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -662,12 +703,20 @@ export default function SiteIntelDetailPage() {
                   <button key={t} onClick={() => { setKwModalTab(t); setKwModalPage(0) }}
                     className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${kwModalTab === t ? (t === 'app' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600') : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                     {t === 'app' ? '应用' : '游戏'}
-                    <span className="ml-1.5 text-xs text-gray-400">({t === 'app' ? data.appCount : data.gameCount})</span>
+                    <span className="ml-1.5 text-xs text-gray-400">({t === 'app' ? kwModalAppCount : kwModalGameCount})</span>
                   </button>
                 ))}
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-3">
-                {paged.length === 0 ? (
+                {kwModalLoading ? (
+                  <div className="flex items-center justify-center py-16 text-gray-400 gap-2 text-sm">
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    加载中…
+                  </div>
+                ) : paged.length === 0 ? (
                   <p className="text-center text-gray-400 py-10 text-sm">暂无数据</p>
                 ) : (
                   <ul className="divide-y divide-gray-100">
@@ -687,15 +736,20 @@ export default function SiteIntelDetailPage() {
 
       {/* 排名波动 Modal */}
       {rankModal && (() => {
-        const list = rankModalTab === 'up' ? data.rankupAll : data.rankdownAll
+        const filteredDate = rankModalDate || data.rankDate
+        const filteredUp = data.rankAllData.filter(r => r.stat_date === filteredDate && r.type === 'rankup').sort((a, b) => b.volume - a.volume)
+        const filteredDown = data.rankAllData.filter(r => r.stat_date === filteredDate && r.type === 'rankdown').sort((a, b) => b.volume - a.volume)
+        const list = rankModalTab === 'up' ? filteredUp : filteredDown
         const paged = list.slice(rankModalPage * modalPageSize, (rankModalPage + 1) * modalPageSize)
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
-                <div>
+                <div className="flex items-center gap-3">
                   <h3 className="font-semibold text-gray-900">{site.domain} · 排名波动</h3>
-                  {data.rankDate && <p className="text-xs text-gray-400 mt-0.5">{data.rankDate}</p>}
+                  <input type="date" value={rankModalDate}
+                    onChange={e => { setRankModalDate(e.target.value); setRankModalPage(0) }}
+                    className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none" />
                 </div>
                 <button onClick={() => setRankModal(false)} className="text-gray-400 hover:text-gray-600">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -706,7 +760,7 @@ export default function SiteIntelDetailPage() {
                   <button key={t} onClick={() => { setRankModalTab(t); setRankModalPage(0) }}
                     className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors mr-2 ${rankModalTab === t ? (t === 'up' ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600') : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                     {t === 'up' ? '涨入' : '跌出'}
-                    <span className="ml-1.5 text-xs text-gray-400">({t === 'up' ? data.rankupAll.length : data.rankdownAll.length})</span>
+                    <span className="ml-1.5 text-xs text-gray-400">({t === 'up' ? filteredUp.length : filteredDown.length})</span>
                   </button>
                 ))}
               </div>
