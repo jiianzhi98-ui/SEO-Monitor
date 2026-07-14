@@ -49,13 +49,13 @@ export default function SiteIntelPage() {
   }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-8 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">站点情报</h1>
         <p className="text-gray-500 text-sm mt-1">搜索已追踪站点，查看权重、收录、关键词等完整数据</p>
       </div>
 
-      <form onSubmit={handleSearch} className="flex gap-3 mb-6">
+      <form onSubmit={handleSearch} className="flex gap-3 mb-6 max-w-xl">
         <div className="relative flex-1">
           <input
             type="text"
