@@ -90,7 +90,7 @@ export const CRAWL_RULES: RuleSection[] = [
       { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 18 * * * UTC = 02:00 MYT)，动态 matrix job 并行（每2个站点1个job）；retry-crawl.yml (cron 30 21 UTC = 05:30 MYT) 智能重试：setup job 查询 activity_site_log 统计今日失败/空站数，仅为失败站创建 job（每站1个），scripts/crawl-rank.ts 以 --retry-failed 模式运行只处理当日失败站点；脚本：scripts/crawl-rank.ts；支持手动 workflow_dispatch 选 step=rank-title' },
       { label: '抓取对象', text: 'sites 表中 has_rank_title=true 的站点；动态读取，每次运行重新查询' },
       { label: '数据来源', text: '爱站 baidurank.aizhan.com，移动端（/mobile/）+ PC端（/baidu/），各抓涨入和跌出，共 4 个组合；含标题（title）和排名页 URL（url）' },
-      { label: '并行策略', text: '排名段 1-5 同时并行，段内按页顺序，每页间隔 300ms；4 个组合顺序执行，组合间隔 2 秒；站点间间隔 60 秒' },
+      { label: '并行策略', text: '排名段 1-5 同时并行，段内按页顺序，每页间隔 300ms；4 个组合顺序执行，组合间隔随机 3-5 秒；站点间间隔 60 秒' },
       { label: '翻页上限', text: '每段最多 15 页；抓取全部词（不过滤 volume=0）' },
       { label: '排名字段', text: '新排名（rank_position）= "第11名" → 11；原排名（prev_rank）= "50名外" → NULL；含页面标题（title）和排名页 URL' },
       { label: '写入表', text: 'site_keyword_ranks（永久保留，含 prev_rank + title + url，按 site_id+keyword+stat_date+platform+type 唯一，每次运行先删当日全部记录再写入）/ keyword_volume（仅移动端 rankup 且 volume>0 的词，upsert）' },

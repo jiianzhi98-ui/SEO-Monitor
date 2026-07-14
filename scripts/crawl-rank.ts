@@ -149,7 +149,7 @@ async function main() {
           if (entries.length === 0) {
             console.log(`    ${label.padEnd(16)} ⚠  无数据（疑似限流或无词）`)
             siteDetails.push(`${label}=0`)
-            await delay(2000)
+            await delay(3000 + Math.floor(Math.random() * 2000))
             continue
           }
 
@@ -194,7 +194,7 @@ async function main() {
           totalFailed++
         }
 
-        await delay(2000)
+        await delay(3000 + Math.floor(Math.random() * 2000))
       }
     }
 
