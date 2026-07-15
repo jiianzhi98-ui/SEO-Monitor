@@ -659,7 +659,7 @@ function CompetitorOutcomesPanel({
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
-          <span className="text-sm font-semibold text-gray-700">竞品关键词成效明细</span>
+          <span className="text-sm font-semibold text-gray-700">动作成效明细</span>
           <span className="text-xs text-gray-400 ml-2">期间内发现词的当前排名情况</span>
         </div>
         {loading ? <Spinner /> : outcomes.length === 0 ? (
@@ -672,45 +672,60 @@ function CompetitorOutcomesPanel({
         ) : (
           <>
             <div className="overflow-x-auto">
-              <div className="grid grid-cols-[48px_2fr_120px_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 text-[11px] font-medium text-gray-400 min-w-[760px]">
-                <span className="text-center">日期</span>
-                <span>关键词</span>
-                <span>内容链接</span>
-                <span className="text-center">类型</span>
-                <span className="text-right">搜索量</span>
-                <span className="text-center">当前排名</span>
-                <span className="text-center">趋势</span>
-                <span className="text-center">排名日期</span>
+              <div className="grid grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px] gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[860px]">
+                <span className="text-[11px] font-medium text-gray-400 text-center">发现日期</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">发布日期</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">类型</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">操作</span>
+                <span className="text-[11px] font-medium text-gray-400">关键词 / 内容链接</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">搜索量</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">收录</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">排名</span>
+                <span className="text-[11px] font-medium text-gray-400">排名词</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">排名量</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">成效</span>
               </div>
-              <div className="divide-y divide-gray-50 min-w-[760px]">
+              <div className="divide-y divide-gray-50 min-w-[860px]">
                 {paged.map((r, i) => (
-                  <div key={i} className="grid grid-cols-[48px_2fr_120px_52px_80px_72px_72px_72px] gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
-                    <span className="text-xs text-gray-400 text-center">{r.content_date.slice(5).replace('-', '/')}</span>
-                    <span className="text-sm text-gray-800 truncate" title={r.keyword}>{r.keyword}</span>
-                    <div className="min-w-0">
-                      {r.source_url
-                        ? <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={r.source_url}>
-                            {r.source_url.replace(/^https?:\/\//, '').slice(0, 22)}{r.source_url.replace(/^https?:\/\//, '').length > 22 ? '…' : ''}
-                          </a>
-                        : <span className="text-xs text-gray-300">—</span>}
-                    </div>
+                  <div key={i} className="grid grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px] gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
+                    <span className="text-sm text-gray-500 text-center">{r.content_date.slice(5).replace('-', '/')}</span>
+                    <span className="text-sm text-gray-300 text-center">—</span>
                     <div className="flex justify-center">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                        {r.content_type === 'game' ? '游戏' : '应用'}
-                      </span>
-                    </div>
-                    <span className="text-sm text-gray-600 tabular-nums text-right">{r.volume ? fmtVol(r.volume) : '—'}</span>
-                    <div className="text-center">
-                      {r.rank_position != null
-                        ? <span className="text-sm text-gray-700">第{r.rank_position}名</span>
+                      {r.content_type
+                        ? <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>{r.content_type === 'game' ? '游戏' : '应用'}</span>
                         : <span className="text-sm text-gray-300">—</span>}
                     </div>
                     <div className="flex justify-center">
-                      {r.rank_type === 'rankup'   && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">涨↑</span>}
-                      {r.rank_type === 'rankdown'  && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">跌↓</span>}
-                      {!r.rank_type && <span className="text-xs text-gray-300">—</span>}
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">新增</span>
                     </div>
-                    <span className="text-xs text-gray-400 text-center">{r.rank_date ? r.rank_date.slice(5).replace('-', '/') : '—'}</span>
+                    <div className="min-w-0">
+                      <div className="text-sm text-gray-800 truncate" title={r.keyword}>{r.keyword}</div>
+                      {r.source_url
+                        ? <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={r.source_url}>
+                            {r.source_url.replace(/^https?:\/\//, '').slice(0, 28)}{r.source_url.replace(/^https?:\/\//, '').length > 28 ? '…' : ''}
+                          </a>
+                        : <div className="text-xs text-gray-300">—</div>}
+                    </div>
+                    <div className="text-sm text-gray-600 tabular-nums text-center">{r.volume ? fmtVol(r.volume) : '—'}</div>
+                    <div className="text-center">
+                      <span className="text-sm text-gray-300">—</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-1.5">
+                      {r.rank_position != null
+                        ? <span className="text-sm text-gray-700">第{r.rank_position}名</span>
+                        : <span className="text-sm text-gray-300">—</span>}
+                      {r.rank_type === 'rankup' && <span className="text-xs font-semibold text-green-600">↑</span>}
+                      {r.rank_type === 'rankdown' && <span className="text-xs font-semibold text-red-400">↓</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm text-gray-700 truncate" title={r.keyword}>{r.keyword}</div>
+                    </div>
+                    <div className="text-sm text-gray-300 text-center">—</div>
+                    <div className="flex justify-center">
+                      {r.rank_type === 'rankup'   && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
+                      {r.rank_type === 'rankdown'  && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">跌↓</span>}
+                      {!r.rank_type && <span className="text-xs bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1621,12 +1636,26 @@ export default function GroupReportPage() {
                               </div>
                             )
                           })()}
+                          {!competitorLoading && competitorData && (
+                            <div className="flex gap-4 overflow-x-auto pb-1">
+                              <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex-shrink-0 min-w-[140px]">
+                                <div className="text-2xl font-bold text-gray-800">{competitorData.keywords.length}</div>
+                                <div className="text-xs font-medium text-gray-600 mt-0.5">{activeCompetitorDomain}</div>
+                                <div className="text-[11px] text-gray-400">期间新增词</div>
+                              </div>
+                              <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex-shrink-0 min-w-[140px]">
+                                <div className="text-2xl font-bold text-blue-600">{fmtVol(competitorData.keywords.reduce((s, k) => s + (k.search_volume || 0), 0))}</div>
+                                <div className="text-xs font-medium text-gray-600 mt-0.5">搜索量合计</div>
+                                <div className="text-[11px] text-gray-400">期间新词总量</div>
+                              </div>
+                            </div>
+                          )}
                           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
-                              <span className="text-sm font-semibold text-gray-700">{activeCompetitorDomain}</span>
-                              <span className="text-xs text-gray-400">
-                                · {competitorDateRange.start === competitorDateRange.end ? competitorDateRange.start : `${competitorDateRange.start} ~ ${competitorDateRange.end}`} 新增词
-                              </span>
+                            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center gap-3">
+                              <div>
+                                <span className="text-sm font-semibold text-gray-700">日期明细</span>
+                                <span className="text-xs text-gray-400 ml-2">{activeCompetitorDomain} 期间新增词</span>
+                              </div>
                             </div>
                             {competitorLoading ? <Spinner /> : <CompetitorKeywordsTable keywords={competitorData?.keywords || []} />}
                           </div>
