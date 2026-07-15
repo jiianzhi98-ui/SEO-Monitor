@@ -12,6 +12,7 @@ interface Site {
   list_url: string
   title_selector: string
   date_selector: string
+  url_selector: string
   source_types: string
   crawl_frequency: 'daily'
   enable_version_clean: boolean
@@ -24,6 +25,7 @@ interface HtmlSource {
   url: string
   titleSelector: string
   dateSelector: string
+  urlSelector: string
   contentType: 'game' | 'app'
 }
 
@@ -47,6 +49,7 @@ const defaultForm: Site = {
   list_url: '',
   title_selector: '',
   date_selector: '',
+  url_selector: '',
   source_types: '',
   crawl_frequency: 'daily',
   enable_version_clean: false,
@@ -63,7 +66,7 @@ function splitSources(str: string | null | undefined): string[] {
 }
 
 function sitToSources(s: Site | null): HtmlSource[] {
-  if (!s) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+  if (!s) return [{ url: '', titleSelector: '', dateSelector: '', urlSelector: '', contentType: 'app' }]
   // New format: ||| separates sources; old format: \n separates sources (each has 1 URL)
   const isNew = (s.list_url || '').includes(SRC_SEP)
   if (isNew) {
@@ -71,11 +74,13 @@ function sitToSources(s: Site | null): HtmlSource[] {
     const titles = (s.title_selector || '').split(SRC_SEP)
     const dates = (s.date_selector || '').split(SRC_SEP)
     const types = (s.source_types || '').split(SRC_SEP)
-    if (urlBlocks.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+    const urlSels = (s.url_selector || '').split(SRC_SEP)
+    if (urlBlocks.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', urlSelector: '', contentType: 'app' }]
     return urlBlocks.map((urlBlock, i) => ({
       url: urlBlock.trim(),
       titleSelector: (titles[i] ?? titles[0] ?? '').trim(),
       dateSelector: (dates[i] ?? dates[0] ?? '').trim(),
+      urlSelector: (urlSels[i] ?? urlSels[0] ?? '').trim(),
       contentType: ((types[i] ?? '').trim() === 'game' ? 'game' : 'app') as 'game' | 'app',
     }))
   }
@@ -84,11 +89,13 @@ function sitToSources(s: Site | null): HtmlSource[] {
   const titles = (s.title_selector || '').split('\n').map((t) => t.trim())
   const dates = (s.date_selector || '').split('\n').map((d) => d.trim())
   const types = (s.source_types || '').split('\n').map((t) => t.trim())
-  if (urls.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+  const urlSels = (s.url_selector || '').split('\n').map((u) => u.trim())
+  if (urls.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', urlSelector: '', contentType: 'app' }]
   return urls.map((url, i) => ({
     url,
     titleSelector: titles[i] ?? titles[0] ?? '',
     dateSelector: dates[i] ?? dates[0] ?? '',
+    urlSelector: urlSels[i] ?? '',
     contentType: (types[i] === 'game' ? 'game' : 'app') as 'game' | 'app',
   }))
 }
@@ -120,12 +127,13 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
       list_url: valid.map((s) => s.url).join(SRC_SEP),
       title_selector: valid.map((s) => s.titleSelector).join(SRC_SEP),
       date_selector: valid.map((s) => s.dateSelector).join(SRC_SEP),
+      url_selector: valid.map((s) => s.urlSelector).join(SRC_SEP),
       source_types: valid.map((s) => s.contentType).join(SRC_SEP),
     }))
   }
 
   function addSource() {
-    setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '', contentType: 'app' }])
+    setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '', urlSelector: '', contentType: 'app' }])
   }
 
   function removeSource(idx: number) {
@@ -137,6 +145,7 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
       list_url: valid.map((s) => s.url).join(SRC_SEP),
       title_selector: valid.map((s) => s.titleSelector).join(SRC_SEP),
       date_selector: valid.map((s) => s.dateSelector).join(SRC_SEP),
+      url_selector: valid.map((s) => s.urlSelector).join(SRC_SEP),
       source_types: valid.map((s) => s.contentType).join(SRC_SEP),
     }))
   }
@@ -371,6 +380,18 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                       />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      链接CSS选择器 <span className="font-normal text-gray-400">（选填 — 用于抓取每条关键词的文章页URL）</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={src.urlSelector}
+                      onChange={(e) => updateSource(idx, 'urlSelector', e.target.value)}
+                      placeholder=".article-list a（填写后将写入 source_url，可在成效追踪中查看）"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    />
                   </div>
                 </div>
               ))}
