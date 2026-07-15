@@ -18,7 +18,7 @@ on:
     - cron: '0 17 * * *'   # 01:00 MYT (target ~02:00 MYT after ~1h queue) — rank
     - cron: '0 18 * * *'   # 02:00 MYT — rank-title
     - cron: '0 19 * * *'   # 03:00 MYT — index-pages
-    - cron: '0 23 * * *'   # 07:00 MYT — tracking（所有重试结束后）
+    - cron: '15 22 * * *'  # 06:15 MYT — tracking（rank-title retry 完成后）
 
 jobs:
   setup:
@@ -50,7 +50,7 @@ jobs:
               STEP="rank-title"
             elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
               STEP="index-pages"
-            elif [ "${{ github.event.schedule }}" = "0 23 * * *" ]; then
+            elif [ "${{ github.event.schedule }}" = "15 22 * * *" ]; then
               STEP="tracking"
             else
               STEP="all"
@@ -128,7 +128,7 @@ jobs:
             STEP="rank-title"
           elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
             STEP="index-pages"
-          elif [ "${{ github.event.schedule }}" = "0 23 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "15 22 * * *" ]; then
             STEP="tracking"
           else
             STEP="all"
