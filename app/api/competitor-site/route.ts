@@ -120,116 +120,43 @@ export async function GET(req: Request) {
   }
 
   // ── 成效追踪 ──────────────────────────────────────────────────────────────────
-  // 以排名信号为主线：日期筛选器对应的是"发现排名变动的日期"，不是提交日期
+  // 读取持久化的追踪记录（由 cron tracking 步骤每日写入），日期筛选对应 discovery_date
   if (tab === 'outcomes') {
-    // 1. 取日期范围内所有排名变动（发现日期 = stat_date）
-    const { data: rankRows } = await service
-      .from('site_keyword_ranks')
-      .select('keyword, volume, rank_position, type, stat_date')
+    const { data: trackRows } = await service
+      .from('competitor_tracking_records')
+      .select('keyword, content_type, content_date, discovery_date, operation_type, source_url, search_volume, rank_position, rank_type, rank_volume, index_first_seen, effectiveness')
       .eq('site_id', site.id)
-      .eq('platform', 'mobile')
-      .gte('stat_date', dateStart)
-      .lte('stat_date', dateEnd)
-      .order('stat_date', { ascending: false })
-      .order('volume', { ascending: false })
-      .limit(2000)
+      .gte('discovery_date', dateStart)
+      .lte('discovery_date', dateEnd)
+      .order('discovery_date', { ascending: false })
+      .order('search_volume', { ascending: false })
+      .limit(500)
 
-    const allRankRows = (rankRows || []) as { keyword: string; volume: number; rank_position: number | null; type: string; stat_date: string }[]
+    const outcomes = (trackRows || []) as {
+      keyword: string
+      content_type: string | null
+      content_date: string | null
+      discovery_date: string
+      operation_type: string
+      source_url: string | null
+      search_volume: number
+      rank_position: number | null
+      rank_type: string | null
+      rank_volume: number
+      index_first_seen: string | null
+      effectiveness: string
+    }[]
 
-    // 每个词只保留最近一条（最高量排名信号）
-    const rankMap = new Map<string, { rank_volume: number; rank_position: number | null; rank_type: string; rank_date: string }>()
-    for (const r of allRankRows) {
-      if (!rankMap.has(r.keyword)) {
-        rankMap.set(r.keyword, { rank_volume: r.volume, rank_position: r.rank_position, rank_type: r.type, rank_date: r.stat_date })
-      }
-    }
-    const kwList = Array.from(rankMap.keys())
-
-    if (kwList.length === 0) {
-      return NextResponse.json({ site, date: dateStart, keywords: [], rankup: [], rankdown: [], outcomes: [], outcomeSummary: { total: 0, hasRank: 0, rankup: 0, rankdown: 0, top10: 0 } })
-    }
-
-    // 2. 查这些词在 raw_keywords 里的最新提交记录（发布日期、类型、文章链接）
-    const { data: kwRows } = await service
-      .from('raw_keywords')
-      .select('keyword, content_type, content_date, source_url')
-      .eq('site_id', site.id)
-      .in('keyword', kwList.slice(0, 500))
-      .not('keyword', 'like', '%电脑版%')
-      .order('content_date', { ascending: false })
-
-    // 每个词取最新记录；同时统计出现次数用于判断 operation_type
-    type KwMeta = { content_type: string | null; content_date: string; source_url: string | null; count: number }
-    const kwMetaMap = new Map<string, KwMeta>()
-    for (const r of (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; source_url: string | null }[]) {
-      if (!kwMetaMap.has(r.keyword)) {
-        kwMetaMap.set(r.keyword, { content_type: r.content_type, content_date: r.content_date, source_url: r.source_url, count: 1 })
-      } else {
-        kwMetaMap.get(r.keyword)!.count++
-      }
-    }
-
-    // 3. 搜索量（从 keyword_volume）
-    const { data: svRows } = await service
-      .from('keyword_volume')
-      .select('keyword, volume')
-      .in('keyword', kwList.slice(0, 500))
-    const searchVolMap = new Map(((svRows || []) as { keyword: string; volume: number }[]).map(r => [r.keyword, r.volume]))
-
-    // 4. 收录状态：用 source_url 查 site_indexed_pages
-    const sourceUrls = Array.from(kwMetaMap.values()).map(m => m.source_url).filter((u): u is string => !!u)
-    const indexMap = new Map<string, { first_seen_date: string; last_seen_date: string }>()
-    if (sourceUrls.length > 0) {
-      const { data: idxRows } = await service
-        .from('site_indexed_pages')
-        .select('url, first_seen_date, last_seen_date')
-        .eq('site_id', site.id)
-        .in('url', sourceUrls.slice(0, 500))
-      for (const r of (idxRows || []) as { url: string; first_seen_date: string; last_seen_date: string }[]) {
-        indexMap.set(r.url, { first_seen_date: r.first_seen_date, last_seen_date: r.last_seen_date })
-      }
-    }
-
-    // 5. 竞品规则（判断 operation_type）
-    const { data: profile } = await service
-      .from('competitor_profiles')
-      .select('same_name_diff_date_is_update')
-      .eq('domain', domain)
-      .maybeSingle()
-    const sameNameDiffDate: boolean = profile?.same_name_diff_date_is_update ?? false
-
-    // 6. 组装输出：每个词一行
-    const outcomes = kwList.map(keyword => {
-      const rank = rankMap.get(keyword)!
-      const meta = kwMetaMap.get(keyword)
-      const idx = meta?.source_url ? indexMap.get(meta.source_url) : undefined
-      // 若同词多次出现在不同日期 → 更新
-      const operation_type: '新增' | '更新' = (sameNameDiffDate && (meta?.count ?? 0) > 1) ? '更新' : '新增'
-      return {
-        keyword,
-        content_type: meta?.content_type ?? null,
-        content_date: meta?.content_date ?? null,
-        search_volume: searchVolMap.get(keyword) ?? 0,
-        rank_volume: rank.rank_volume,
-        rank_position: rank.rank_position,
-        rank_type: rank.rank_type,
-        rank_date: rank.rank_date,
-        operation_type,
-        index_first_seen: idx?.first_seen_date ?? null,
-        index_last_seen: idx?.last_seen_date ?? null,
-      }
-    })
-
-    const hasRank  = outcomes.filter(o => o.rank_position != null).length
-    const rankup   = outcomes.filter(o => o.rank_type === 'rankup').length
-    const rankdown = outcomes.filter(o => o.rank_type === 'rankdown').length
-    const top10    = outcomes.filter(o => o.rank_position != null && o.rank_position <= 10).length
+    const total    = outcomes.length
+    const effective = outcomes.filter(o => o.effectiveness === '有效').length
+    const tracking  = outcomes.filter(o => o.effectiveness === '追踪中').length
+    const invalid   = outcomes.filter(o => o.effectiveness === '无效').length
 
     return NextResponse.json({
       site, date: dateStart,
       keywords: [], rankup: [], rankdown: [],
       outcomes,
-      outcomeSummary: { total: outcomes.length, hasRank, rankup, rankdown, top10 },
+      outcomeSummary: { total, effective, tracking, invalid },
     })
   }
 

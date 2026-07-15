@@ -57,16 +57,17 @@ interface CompetitorOutcomeRow {
   keyword: string
   content_type: string | null
   content_date: string | null
+  discovery_date: string
   search_volume: number
   rank_volume: number
   rank_position: number | null
   rank_type: string | null
-  rank_date: string | null
-  operation_type: '新增' | '更新'
+  operation_type: string
+  source_url: string | null
   index_first_seen: string | null
-  index_last_seen: string | null
+  effectiveness: string
 }
-interface CompetitorOutcomeSummary { total: number; hasRank: number; rankup: number; rankdown: number; top10: number }
+interface CompetitorOutcomeSummary { total: number; effective: number; tracking: number; invalid: number }
 interface CompetitorData {
   site: { id: string; domain: string; has_rank_title: boolean } | null
   date: string
@@ -608,10 +609,10 @@ function CompetitorOutcomesPanel({
       {summary && (
         <div className="grid grid-cols-4 gap-3">
           {([
-            { label: '排名信号词', value: summary.total,   sub: '期间内有排名变动',   color: '' },
-            { label: '有排名词',   value: summary.hasRank, sub: summary.total ? `${Math.round(summary.hasRank / summary.total * 100)}% 有排名` : '—', color: 'text-blue-600' },
-            { label: '涨排名词',   value: summary.rankup,  sub: '排名上升',     color: 'text-green-600' },
-            { label: '跌排名词',   value: summary.rankdown,sub: '排名下降',     color: 'text-red-400' },
+            { label: '追踪记录',  value: summary.total,    sub: '期间内发现的信号词',   color: '' },
+            { label: '有效',      value: summary.effective, sub: summary.total ? `${Math.round(summary.effective / summary.total * 100)}% 已见效` : '—', color: 'text-green-600' },
+            { label: '追踪中',    value: summary.tracking,  sub: '等待后续信号',    color: 'text-orange-500' },
+            { label: '无效',      value: summary.invalid,   sub: '60天内未见效',   color: 'text-gray-400' },
           ] as { label: string; value: number; sub: string; color: string }[]).map(s => (
             <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
               <div className={`text-2xl font-bold ${s.color || 'text-gray-800'}`}>{s.value}</div>
@@ -691,8 +692,8 @@ function CompetitorOutcomesPanel({
                   <div key={i} className="grid grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px] gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
                     {/* 发布日期 = content_date（提交日期） */}
                     <span className="text-sm text-gray-500 text-center">{r.content_date ? r.content_date.slice(5).replace('-', '/') : '—'}</span>
-                    {/* 发现日期 = rank_date（爱站抓到排名的日期） */}
-                    <span className="text-sm text-gray-500 text-center">{r.rank_date ? r.rank_date.slice(5).replace('-', '/') : '—'}</span>
+                    {/* 发现日期 = discovery_date（cron 首次检测到信号的日期） */}
+                    <span className="text-sm text-gray-500 text-center">{r.discovery_date ? r.discovery_date.slice(5).replace('-', '/') : '—'}</span>
                     <div className="flex justify-center">
                       {r.content_type
                         ? <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>{r.content_type === 'game' ? '游戏' : '应用'}</span>
@@ -702,12 +703,14 @@ function CompetitorOutcomesPanel({
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${r.operation_type === '更新' ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-600'}`}>{r.operation_type}</span>
                     </div>
                     <div className="min-w-0">
-                      <div className="text-sm text-gray-800 truncate" title={r.keyword}>{r.keyword}</div>
+                      {r.source_url
+                        ? <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate block" title={r.keyword}>{r.keyword}</a>
+                        : <div className="text-sm text-gray-800 truncate" title={r.keyword}>{r.keyword}</div>}
                     </div>
                     <div className="text-sm text-gray-600 tabular-nums text-center">{r.search_volume ? fmtVol(r.search_volume) : '—'}</div>
                     <div className="text-center">
                       {r.index_first_seen
-                        ? <span className="text-xs text-teal-600 font-medium" title={`首次收录 ${r.index_first_seen}，最近 ${r.index_last_seen}`}>✓</span>
+                        ? <span className="text-xs text-teal-600 font-medium" title={`首次收录 ${r.index_first_seen}`}>✓</span>
                         : <span className="text-sm text-gray-300">—</span>}
                     </div>
                     <div className="flex items-center justify-center gap-1.5">
@@ -722,9 +725,9 @@ function CompetitorOutcomesPanel({
                     </div>
                     <div className="text-sm tabular-nums text-center">{r.rank_volume ? fmtVol(r.rank_volume) : <span className="text-gray-300">—</span>}</div>
                     <div className="flex justify-center">
-                      {r.rank_type === 'rankup'   && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
-                      {r.rank_type === 'rankdown'  && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">跌↓</span>}
-                      {!r.rank_type && <span className="text-xs bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
+                      {r.effectiveness === '有效'   && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
+                      {r.effectiveness === '无效'   && <span className="text-xs bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">无效</span>}
+                      {r.effectiveness === '追踪中' && <span className="text-xs bg-orange-50 text-orange-500 border border-orange-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
                     </div>
                   </div>
                 ))}

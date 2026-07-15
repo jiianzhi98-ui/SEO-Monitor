@@ -113,6 +113,7 @@ interface SiteRecord {
   version_suffixes: string[]
   is_enabled: boolean
   has_rank_data: boolean
+  has_rank_title: boolean
   has_index_pages: boolean
 }
 
@@ -611,6 +612,237 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
   })
 }
 
+async function runTracking(sites: SiteRecord[], today: string, activityId: string | null = null) {
+  const stepStart = Date.now()
+  console.log(`\n${'═'.repeat(60)}`)
+  console.log(`  TRACKING   日期=${today}   ${ts()}`)
+  console.log(`${'═'.repeat(60)}`)
+
+  // Load rules with trigger logic
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rulesData } = await (supabase.from('rules') as any)
+    .select('id, trigger_type, trigger_params, tracking_window_days')
+    .not('trigger_type', 'is', null)
+  type RuleRow = { id: string; trigger_type: string; trigger_params: Record<string, number>; tracking_window_days: number }
+  const rules = (rulesData || []) as RuleRow[]
+  const rule900 = rules.find(r => r.trigger_type === 'rankdown_then_update')
+  const rule901 = rules.find(r => r.trigger_type === 'batch_prefix_update')
+
+  let ok = 0, empty = 0, failed = 0, totalRows = 0
+
+  for (let idx = 0; idx < sites.length; idx++) {
+    const site = sites[idx]
+    const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
+    try {
+      const window60 = getMalaysiaDate(-60)
+
+      // 1. Today's rank signals from site_keyword_ranks (populated by crawl-rank.ts)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: rankRows } = await (supabase.from('site_keyword_ranks') as any)
+        .select('keyword, volume, rank_position, type')
+        .eq('site_id', site.id)
+        .eq('stat_date', today)
+        .eq('platform', 'mobile')
+      type RankRow = { keyword: string; volume: number; rank_position: number | null; type: string }
+      const rankSignals = (rankRows || []) as RankRow[]
+
+      // Per-keyword best signal (rankup takes precedence over rankdown)
+      const rankMap = new Map<string, { volume: number; rank_position: number | null; type: string }>()
+      for (const r of rankSignals) {
+        if (!rankMap.has(r.keyword) || rankMap.get(r.keyword)!.type !== 'rankup') {
+          rankMap.set(r.keyword, { volume: r.volume, rank_position: r.rank_position, type: r.type })
+        }
+      }
+
+      // 2. Today's new index events → map back to keywords via raw_keywords.source_url
+      const newIndexUrls = new Set<string>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newIdxRows } = await (supabase.from('site_indexed_pages') as any)
+        .select('url')
+        .eq('site_id', site.id)
+        .eq('first_seen_date', today)
+        .limit(500)
+      for (const r of (newIdxRows || []) as { url: string }[]) newIndexUrls.add(r.url)
+
+      const newIndexKwSet = new Set<string>()
+      if (newIndexUrls.size > 0) {
+        const { data: urlKwRows } = await supabase
+          .from('raw_keywords')
+          .select('keyword, source_url')
+          .eq('site_id', site.id)
+          .in('source_url', Array.from(newIndexUrls).slice(0, 500))
+          .gte('content_date', window60)
+        for (const r of (urlKwRows || []) as { keyword: string; source_url: string }[]) {
+          newIndexKwSet.add(r.keyword)
+        }
+      }
+
+      // 3. Union of all signal keywords
+      const allSignalKws = new Set([...Array.from(rankMap.keys()), ...Array.from(newIndexKwSet)])
+      if (allSignalKws.size === 0) {
+        empty++
+        console.log(`${prefix} –  无信号`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail: '无排名/收录信号' })
+        continue
+      }
+
+      // 4. Cross-ref with raw_keywords (last 60 days) — only include keywords with submission records
+      const { data: rawKwRows } = await supabase
+        .from('raw_keywords')
+        .select('keyword, content_type, content_date, source_url')
+        .eq('site_id', site.id)
+        .in('keyword', Array.from(allSignalKws).slice(0, 500))
+        .gte('content_date', window60)
+        .order('content_date', { ascending: false })
+      type KwMeta = { content_type: string | null; content_date: string | null; source_url: string | null; count: number }
+      const kwMetaMap = new Map<string, KwMeta>()
+      for (const r of (rawKwRows || []) as { keyword: string; content_type: string | null; content_date: string; source_url: string | null }[]) {
+        if (!kwMetaMap.has(r.keyword)) {
+          kwMetaMap.set(r.keyword, { content_type: r.content_type, content_date: r.content_date, source_url: r.source_url, count: 1 })
+        } else {
+          kwMetaMap.get(r.keyword)!.count++
+        }
+      }
+      const trackedKws = Array.from(allSignalKws).filter(kw => kwMetaMap.has(kw))
+
+      if (trackedKws.length === 0) {
+        empty++
+        console.log(`${prefix} –  无匹配提交记录`)
+        if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'empty', detail: '信号词无提交记录' })
+        continue
+      }
+
+      // 5. Search volumes
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: volRows } = await (supabase.from('keyword_volume') as any)
+        .select('keyword, volume')
+        .in('keyword', trackedKws.slice(0, 500))
+      const volMap = new Map(((volRows || []) as { keyword: string; volume: number }[]).map(r => [r.keyword, r.volume]))
+
+      // 6. Index first_seen_date for source_urls
+      const sourceUrls = trackedKws.map(kw => kwMetaMap.get(kw)?.source_url).filter((u): u is string => !!u)
+      const indexFirstSeenMap = new Map<string, string>() // url → first_seen_date
+      if (sourceUrls.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: idxRows } = await (supabase.from('site_indexed_pages') as any)
+          .select('url, first_seen_date')
+          .eq('site_id', site.id)
+          .in('url', sourceUrls.slice(0, 500))
+        for (const r of (idxRows || []) as { url: string; first_seen_date: string }[]) {
+          if (r.first_seen_date) indexFirstSeenMap.set(r.url, r.first_seen_date)
+        }
+      }
+
+      // 7. Competitor profile for operation_type detection
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: profile } = await (supabase.from('competitor_profiles') as any)
+        .select('same_name_diff_date_is_update, same_base_diff_sub_is_update')
+        .eq('domain', site.domain)
+        .maybeSingle()
+      const sameNameDiffDate: boolean = (profile as { same_name_diff_date_is_update: boolean } | null)?.same_name_diff_date_is_update ?? false
+      const sameBaseDiffSub: boolean = (profile as { same_base_diff_sub_is_update: boolean } | null)?.same_base_diff_sub_is_update ?? false
+
+      // 8. Rule 901 batch-prefix count
+      const prefixDateCount = new Map<string, number>()
+      if (rule901) {
+        for (const kw of trackedKws) {
+          const meta = kwMetaMap.get(kw)
+          if (meta?.content_date) {
+            const key = `${meta.content_date}|${kw.slice(0, 4)}`
+            prefixDateCount.set(key, (prefixDateCount.get(key) ?? 0) + 1)
+          }
+        }
+      }
+
+      // 9. Build upsert rows
+      const upsertRows: Record<string, unknown>[] = []
+      for (const keyword of trackedKws) {
+        const meta = kwMetaMap.get(keyword)!
+        const rank = rankMap.get(keyword)
+        const srcUrl = meta.source_url || null
+        const indexFirstSeen = srcUrl ? (indexFirstSeenMap.get(srcUrl) ?? null) : null
+        const isNewlyIndexed = srcUrl ? newIndexUrls.has(srcUrl) : false
+
+        let operation_type = '新增'
+        if (sameNameDiffDate && (meta.count ?? 0) > 1) operation_type = '更新'
+        else if (sameBaseDiffSub && meta.content_date) {
+          const key = `${meta.content_date}|${keyword.slice(0, 4)}`
+          if ((prefixDateCount.get(key) ?? 0) >= 3) operation_type = '更新'
+        }
+
+        let effectiveness = '追踪中'
+        if (rank?.type === 'rankup') effectiveness = '有效'
+        else if (isNewlyIndexed) effectiveness = '有效'
+
+        let rule_id: string | null = null
+        if (rule900 && rank?.type === 'rankdown' && meta.content_date) {
+          const maxDaysBack = rule900.trigger_params.max_days_back ?? 7
+          if (meta.content_date >= getMalaysiaDate(-maxDaysBack)) rule_id = rule900.id
+        }
+        if (!rule_id && rule901 && meta.content_date) {
+          const minBatch = rule901.trigger_params.min_batch_size ?? 3
+          const key = `${meta.content_date}|${keyword.slice(0, 4)}`
+          if ((prefixDateCount.get(key) ?? 0) >= minBatch) rule_id = rule901.id
+        }
+
+        upsertRows.push({
+          site_id: site.id,
+          keyword,
+          discovery_date: today,
+          content_date: meta.content_date || null,
+          content_type: meta.content_type || null,
+          operation_type,
+          source_url: srcUrl,
+          search_volume: volMap.get(keyword) ?? 0,
+          rank_position: rank?.rank_position ?? null,
+          rank_type: rank?.type ?? null,
+          rank_volume: rank?.volume ?? 0,
+          index_first_seen: indexFirstSeen,
+          effectiveness,
+          rule_id,
+          updated_at: new Date().toISOString(),
+        })
+      }
+
+      if (upsertRows.length > 0) {
+        for (const chunk of chunkArray(upsertRows, 500)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('competitor_tracking_records') as any).upsert(chunk, {
+            onConflict: 'site_id,keyword,discovery_date',
+            ignoreDuplicates: false,
+          })
+        }
+      }
+
+      // 10. Mark stale '追踪中' records (>60 days without signal) as '无效'
+      const stale60 = getMalaysiaDate(-60)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from('competitor_tracking_records') as any)
+        .update({ effectiveness: '无效', updated_at: new Date().toISOString() })
+        .eq('site_id', site.id)
+        .eq('effectiveness', '追踪中')
+        .lt('discovery_date', stale60)
+
+      totalRows += upsertRows.length
+      ok++
+      console.log(`${prefix} ✓  信号=${String(allSignalKws.size).padStart(4)}  匹配=${String(trackedKws.length).padStart(4)}  写入=${String(upsertRows.length).padStart(4)}`)
+      if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'ok', rowsWritten: upsertRows.length, detail: `信号${allSignalKws.size}词，匹配${trackedKws.length}词` })
+    } catch (e) {
+      console.error(`${prefix} ✗  ${e instanceof Error ? e.message : e}`)
+      failed++
+      if (activityId) await siteLog(supabase, activityId, { domain: site.domain, status: 'fail', detail: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
+  const durationMs = Date.now() - stepStart
+  console.log(`\n  TRACKING 完成  ✓${ok}  ⚠${empty}  ✗${failed}  记录总计=${totalRows}  耗时=${elapsed(durationMs)}`)
+  if (activityId) await activityEnd(supabase, activityId, {
+    status: failed > 0 ? 'warn' : 'done',
+    ok, empty, fail: failed, rowsWritten: totalRows, durationMs,
+    summary: `竞品追踪 ${ok} 站成功，新记录 ${totalRows} 条，${empty} 站无信号，${failed} 站失败`,
+  })
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -716,6 +948,10 @@ async function main() {
     const supplementDomain = process.env.SUPPLEMENT_DOMAIN
     const indexSites = sites.filter(s => s.has_index_pages && (!supplementDomain || s.domain === supplementDomain))
     await runIndexPages(indexSites, today, aid, baiduCookie)
+  }
+  if (step === 'tracking') {
+    const aid = await activityStart(supabase, { ...logBase, step: 'tracking' })
+    await runTracking(sites.filter(s => s.has_rank_title), today, aid)
   }
 
   console.log(`\n${'✓'.repeat(60)}`)

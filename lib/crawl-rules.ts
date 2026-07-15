@@ -112,6 +112,21 @@ export const CRAWL_RULES: RuleSection[] = [
     ],
   },
   {
+    key: 'tracking',
+    title: '竞品成效追踪',
+    badge: 'step=tracking · GitHub Actions · 04:00 MYT（rank-title 完成后触发）',
+    items: [
+      { label: '触发方式', text: 'GitHub Actions 手动 workflow_dispatch 或 cron（需在 rank-title 完成后执行，以确保 site_keyword_ranks 当日数据已写入）；也可通过 /api/cron?step=tracking 手动触发；脚本：scripts/crawl.ts --step=tracking' },
+      { label: '追踪对象', text: '仅 has_rank_title=true 的竞品站点（与 rank-title 步骤相同）' },
+      { label: '信号来源', text: '① 排名信号：site_keyword_ranks 表中 stat_date=today + platform=mobile 的当日涨跌词；② 收录信号：site_indexed_pages 表中 first_seen_date=today 的新收录 URL（需通过 source_url 反查 raw_keywords 得到关键词）' },
+      { label: '过滤条件', text: '信号词必须同时存在于 raw_keywords（60天内有提交记录）才会被记录；无提交记录的信号词跳过' },
+      { label: '成效判断', text: '有效：rank_type=rankup 或 source_url 对应页面在 site_indexed_pages 中 first_seen_date=today；追踪中：rankdown 信号且 60 天内尚无改善；无效：discovery_date < today-60 且 effectiveness 仍为"追踪中"（由本步骤自动更新）' },
+      { label: '规则匹配', text: '规则 900（跌后更新观察）：rankdown 词 + 近 7 天内有提交记录 → 标记 rule_id；规则 901（批量下拉词更新）：同日期相同 4 字前缀 ≥3 个词有信号 → 标记 rule_id' },
+      { label: '写入表', text: 'competitor_tracking_records（按 site_id+keyword+discovery_date 唯一，upsert；同时将 >60 天的"追踪中"记录更新为"无效"）' },
+      { label: '数据保留', text: 'competitor_tracking_records 永久保留，不自动删除' },
+    ],
+  },
+  {
     key: 'search',
     title: '站点情报查询',
     badge: '类型：search · 触发方式：页面搜索',
@@ -132,6 +147,7 @@ export const RETENTION = {
   index_snapshots: '永久保留',
   keyword_volume: '永久保留',
   site_keyword_ranks: '永久保留',
+  competitor_tracking_records: '永久保留',
   activity_log: '7天（按 logged_at）',
   activity_site_log: '7天（随 activity_log 级联删除）',
 }
