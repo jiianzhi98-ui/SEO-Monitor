@@ -13,6 +13,7 @@ interface Site {
   title_selector: string
   date_selector: string
   source_types: string
+  url_selectors: string
   capture_source_url: boolean
   crawl_frequency: 'daily'
   enable_version_clean: boolean
@@ -26,6 +27,7 @@ interface HtmlSource {
   titleSelector: string
   dateSelector: string
   contentType: 'game' | 'app'
+  urlSelector: string
 }
 
 interface PreviewRow {
@@ -49,6 +51,7 @@ const defaultForm: Site = {
   title_selector: '',
   date_selector: '',
   source_types: '',
+  url_selectors: '',
   capture_source_url: false,
   crawl_frequency: 'daily',
   enable_version_clean: false,
@@ -65,7 +68,7 @@ function splitSources(str: string | null | undefined): string[] {
 }
 
 function sitToSources(s: Site | null): HtmlSource[] {
-  if (!s) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+  if (!s) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app', urlSelector: '' }]
   // New format: ||| separates sources; old format: \n separates sources (each has 1 URL)
   const isNew = (s.list_url || '').includes(SRC_SEP)
   if (isNew) {
@@ -73,12 +76,14 @@ function sitToSources(s: Site | null): HtmlSource[] {
     const titles = (s.title_selector || '').split(SRC_SEP)
     const dates = (s.date_selector || '').split(SRC_SEP)
     const types = (s.source_types || '').split(SRC_SEP)
-    if (urlBlocks.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+    const urlSels = (s.url_selectors || '').split(SRC_SEP)
+    if (urlBlocks.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app', urlSelector: '' }]
     return urlBlocks.map((urlBlock, i) => ({
       url: urlBlock.trim(),
       titleSelector: (titles[i] ?? titles[0] ?? '').trim(),
       dateSelector: (dates[i] ?? dates[0] ?? '').trim(),
       contentType: ((types[i] ?? '').trim() === 'game' ? 'game' : 'app') as 'game' | 'app',
+      urlSelector: (urlSels[i] ?? '').trim(),
     }))
   }
   // Old format: each \n is a separate source with one URL
@@ -86,12 +91,13 @@ function sitToSources(s: Site | null): HtmlSource[] {
   const titles = (s.title_selector || '').split('\n').map((t) => t.trim())
   const dates = (s.date_selector || '').split('\n').map((d) => d.trim())
   const types = (s.source_types || '').split('\n').map((t) => t.trim())
-  if (urls.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app' }]
+  if (urls.length === 0) return [{ url: '', titleSelector: '', dateSelector: '', contentType: 'app', urlSelector: '' }]
   return urls.map((url, i) => ({
     url,
     titleSelector: titles[i] ?? titles[0] ?? '',
     dateSelector: dates[i] ?? dates[0] ?? '',
     contentType: (types[i] === 'game' ? 'game' : 'app') as 'game' | 'app',
+    urlSelector: '',
   }))
 }
 
@@ -123,11 +129,12 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
       title_selector: valid.map((s) => s.titleSelector).join(SRC_SEP),
       date_selector: valid.map((s) => s.dateSelector).join(SRC_SEP),
       source_types: valid.map((s) => s.contentType).join(SRC_SEP),
+      url_selectors: valid.map((s) => s.urlSelector).join(SRC_SEP),
     }))
   }
 
   function addSource() {
-    setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '', contentType: 'app' }])
+    setHtmlSources([...htmlSources, { url: '', titleSelector: '', dateSelector: '', contentType: 'app', urlSelector: '' }])
   }
 
   function removeSource(idx: number) {
@@ -140,6 +147,7 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
       title_selector: valid.map((s) => s.titleSelector).join(SRC_SEP),
       date_selector: valid.map((s) => s.dateSelector).join(SRC_SEP),
       source_types: valid.map((s) => s.contentType).join(SRC_SEP),
+      url_selectors: valid.map((s) => s.urlSelector).join(SRC_SEP),
     }))
   }
 
@@ -374,6 +382,16 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                       />
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">文章链接CSS选择器 <span className="text-gray-400 font-normal">（填写才抓取文章URL；留空不记录）</span></label>
+                    <input
+                      type="text"
+                      value={src.urlSelector}
+                      onChange={(e) => updateSource(idx, 'urlSelector', e.target.value)}
+                      placeholder=".item a"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    />
+                  </div>
                 </div>
               ))}
               <button
@@ -384,24 +402,6 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
                 + 添加来源（不同页面布局）
               </button>
             </div>
-
-          {/* Capture Source URL */}
-          <div>
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <div
-                onClick={() => update('capture_source_url', !form.capture_source_url)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  form.capture_source_url ? 'bg-green-600' : 'bg-gray-300'
-                }`}
-              >
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                  form.capture_source_url ? 'translate-x-5' : 'translate-x-0'
-                }`} />
-              </div>
-              <span className="text-sm font-medium text-gray-700">记录文章链接</span>
-              <span className="text-xs text-gray-400">（开启后抓取时同步写入每条关键词的文章页URL）</span>
-            </label>
-          </div>
 
           {/* Version Clean */}
           <div>

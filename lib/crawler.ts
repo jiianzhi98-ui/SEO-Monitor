@@ -149,6 +149,7 @@ export interface HtmlSource {
   url: string
   titleSelector: string
   dateSelector: string
+  urlSelector?: string
 }
 
 // Fetch multiple HTML sources (each with own selectors) with auto-pagination
@@ -193,8 +194,14 @@ export async function fetchHtmlListPages(
         const pageEntries: PageEntry[] = []
         $(source.titleSelector).each((_, el) => {
           const title = $(el).text().trim()
-          const href = $(el).attr('href') || $(el).closest('a').attr('href') || $(el).find('a').first().attr('href') || ''
-          const fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl!).href
+          const defaultHref = $(el).attr('href') || $(el).closest('a').attr('href') || $(el).find('a').first().attr('href') || ''
+          let href = defaultHref
+          if (source.urlSelector) {
+            let container = $(el).closest('li, article, .item, tr')
+            if (!container.length) container = $(el).closest('div').parent()
+            href = container.find(source.urlSelector).first().attr('href') || ''
+          }
+          const fullUrl = href.startsWith('http') ? href : (href ? new URL(href, currentUrl!).href : '')
           let date: string | undefined
           if (source.dateSelector) {
             let container = $(el).closest('li, article, .item, tr')

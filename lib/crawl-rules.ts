@@ -22,7 +22,7 @@ export const CRAWL_RULES: RuleSection[] = [
     items: [
       { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 15 * * * UTC = 23:00 MYT 前一天)，动态 matrix job 并行（每2个站点1个job，由 setup job 查询当前站点总数自动计算），每组抓约2个站点；实际执行脚本：scripts/crawl.ts（非 /api/cron，两条路径）；GitHub runner 排队约1小时，实际执行约 00:00 MYT。失败/空站由 retry-crawl.yml (cron 45 21 UTC = 05:45 MYT) 自动补抓' },
       { label: '抓取对象', text: '仅 is_enabled=true 且 list_url 已填写的站点；is_enabled 由用户在网站管理"关键词数据"开关控制，关闭后跳过关键词抓取但权重/排名照常运行' },
-      { label: '文章链接抓取', text: '当站点开启"记录文章链接"（capture_source_url=true）时，关键词抓取同时将标题选择器提取到的文章页URL写入 raw_keywords.source_url；未开启则 source_url 为 null，不影响已有逻辑' },
+      { label: '文章链接抓取', text: '各来源可在"文章链接CSS选择器"（url_selectors 字段，||| 分隔多来源）填写指定 CSS 选择器；填写后爬虫用该选择器在每条记录的容器内查找 <a> 元素并写入 raw_keywords.source_url；留空则 source_url 为 null；支持完整URL和相对路径（相对路径自动补全域名）' },
       { label: '频率规则', text: '所有站点均为 daily（每天）' },
       { label: '翻页策略', text: '最多3页；正式 GitHub Actions 抓取每页间隔随机等待10~15秒；单站手动重试跳过等待直接顺序翻页' },
       { label: '去重', text: '与数据库同日期已有词对比去重，批次内也去重；新词写入 raw_keywords' },

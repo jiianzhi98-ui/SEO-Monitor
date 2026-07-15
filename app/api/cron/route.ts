@@ -29,7 +29,7 @@ interface SiteRecord {
   title_selector: string | null
   date_selector: string | null
   source_types: string | null
-  capture_source_url: boolean
+  url_selectors: string | null
   enable_version_clean: boolean
   version_suffixes: string[]
 }
@@ -110,9 +110,11 @@ export async function GET(request: Request) {
             const titleSels = (site.title_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
             const dateSels = (site.date_selector || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
             const sourceTypesList = (site.source_types || '').split(isNew ? SRC_SEP : '\n').map((s: string) => s.trim())
+            const urlSelsList = (site.url_selectors || '').split(SRC_SEP).map((s: string) => s.trim())
             // Process each source separately to track content_type
             for (let i = 0; i < urlBlocks.length; i++) {
               const srcType = sourceTypesList[i] === 'game' ? 'game' : 'app'
+              const srcUrlSel = urlSelsList[i] ?? urlSelsList[0] ?? ''
               const srcUrls = isNew
                 ? urlBlocks[i].split('\n').map((u: string) => u.trim()).filter(Boolean)
                 : [urlBlocks[i]]
@@ -121,10 +123,11 @@ export async function GET(request: Request) {
                   url: srcUrls[urlIdx],
                   titleSelector: titleSels[i] || titleSels[0] || '',
                   dateSelector: dateSels[i] || dateSels[0] || '',
+                  urlSelector: srcUrlSel || undefined,
                 }
                 const srcEntries = await fetchHtmlListPages([src], htmlCutoff, maxPg, isSingleSite)
                 for (const e of srcEntries) {
-                  rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType, source_url: site.capture_source_url ? (e.url || null) : null })
+                  rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType, source_url: srcUrlSel ? (e.url || null) : null })
                 }
               }
             }
@@ -200,8 +203,8 @@ export async function GET(request: Request) {
               }
             }
 
-            // Backfill source_url for existing keywords that were crawled before capture_source_url was enabled
-            if (site.capture_source_url) {
+            // Backfill source_url for existing keywords that were crawled before url_selector was configured
+            if (cleanedEntries.some(e => e.source_url)) {
               const urlMap = new Map(cleanedEntries.filter(e => e.source_url).map(e => [e.keyword, e.source_url!]))
               if (urlMap.size > 0) {
                 const { data: needBackfill } = await supabase

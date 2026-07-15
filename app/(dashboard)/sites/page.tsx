@@ -16,6 +16,7 @@ interface Site {
   title_selector: string
   date_selector: string
   source_types: string
+  url_selectors: string
   capture_source_url: boolean
   crawl_frequency: 'daily'
   enable_version_clean: boolean
