@@ -437,7 +437,7 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
             {isOpen && (
               <div className="border-t border-gray-50">
                 <div className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 px-5 py-1.5 bg-gray-50/50 text-[11px] font-medium text-gray-400">
-                  <span>关键词 / 内容标题</span><span>内容链接</span><span className="text-right">搜索量</span><span className="text-center">类型</span>
+                  <span>关键词</span><span>内容链接</span><span className="text-right">搜索量</span><span className="text-center">类型</span>
                 </div>
                 {kwSlice.map((kw, i) => (
                   <div key={i} className="grid grid-cols-[1fr_120px_80px_auto] gap-x-3 items-start px-5 py-2 border-t border-gray-50 hover:bg-gray-50/60 transition-colors">
@@ -446,7 +446,6 @@ function CompetitorKeywordsTable({ keywords }: { keywords: CompetitorKw[] }) {
                         <span className="text-sm text-gray-800 truncate" title={kw.keyword}>{kw.keyword}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 font-medium ${kw.operation_type === '新增' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>{kw.operation_type ?? '新增'}</span>
                       </div>
-                      {kw.title && <span className="text-xs text-orange-500 truncate block mt-0.5" title={kw.title}>→ {kw.title}</span>}
                     </div>
                     <div className="min-w-0">
                       {kw.source_url
