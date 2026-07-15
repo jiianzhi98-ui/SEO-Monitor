@@ -5,6 +5,7 @@ export interface PageEntry {
   title: string
   date?: string
   url: string
+  sourceUrl?: string
 }
 
 const USER_AGENTS = [
@@ -149,6 +150,7 @@ export interface HtmlSource {
   url: string
   titleSelector: string
   dateSelector: string
+  urlSelector?: string
 }
 
 // Fetch multiple HTML sources (each with own selectors) with auto-pagination
@@ -196,13 +198,21 @@ export async function fetchHtmlListPages(
           const href = $(el).attr('href') || $(el).closest('a').attr('href') || ''
           const fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl!).href
           let date: string | undefined
-          if (source.dateSelector) {
+          let sourceUrl: string | undefined
+          if (source.dateSelector || source.urlSelector) {
             let container = $(el).closest('li, article, .item, tr')
             if (!container.length) container = $(el).closest('div').parent()
-            const dateEl = container.find(source.dateSelector).first()
-            if (dateEl.length) date = dateEl.text().trim()
+            if (source.dateSelector) {
+              const dateEl = container.find(source.dateSelector).first()
+              if (dateEl.length) date = dateEl.text().trim()
+            }
+            if (source.urlSelector) {
+              const linkEl = container.find(source.urlSelector).first()
+              const rawHref = linkEl.attr('href') || ''
+              if (rawHref) sourceUrl = rawHref.startsWith('http') ? rawHref : new URL(rawHref, currentUrl!).href
+            }
           }
-          if (title) pageEntries.push({ title, date, url: fullUrl })
+          if (title) pageEntries.push({ title, date, url: fullUrl, sourceUrl })
         })
 
         all.push(...pageEntries)

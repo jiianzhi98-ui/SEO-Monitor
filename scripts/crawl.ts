@@ -107,6 +107,7 @@ interface SiteRecord {
   list_url: string | null
   title_selector: string | null
   date_selector: string | null
+  url_selector: string | null
   source_types: string | null
   enable_version_clean: boolean
   version_suffixes: string[]
@@ -130,7 +131,7 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
     const prefix = `  [${String(idx + 1).padStart(2)}/${sites.length}] ${site.domain.padEnd(30)}`
 
     try {
-      type RawEntry = { title: string; content_date: string | null; content_type?: string }
+      type RawEntry = { title: string; content_date: string | null; content_type?: string; source_url?: string | null }
       let rawEntries: RawEntry[] = []
       const hasCrawlConfig = !!(site.list_url && site.title_selector)
 
@@ -143,6 +144,7 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
         const urlBlocks = isNew ? listUrl.split(SRC_SEP) : listUrl.split('\n').map((u) => u.trim()).filter(Boolean)
         const titleSels = (site.title_selector || '').split(isNew ? SRC_SEP : '\n').map((s) => s.trim())
         const dateSels = (site.date_selector || '').split(isNew ? SRC_SEP : '\n').map((s) => s.trim())
+        const urlSels = (site.url_selector || '').split(isNew ? SRC_SEP : '\n').map((s) => s.trim())
         const sourceTypesList = (site.source_types || '').split(isNew ? SRC_SEP : '\n').map((s) => s.trim())
 
         for (let i = 0; i < urlBlocks.length; i++) {
@@ -151,14 +153,16 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
             ? urlBlocks[i].split('\n').map((u) => u.trim()).filter(Boolean)
             : [urlBlocks[i]]
           for (const u of srcUrls) {
+            const urlSel = urlSels[i] || urlSels[0] || ''
             const src: HtmlSource = {
               url: u,
               titleSelector: titleSels[i] || titleSels[0] || '',
               dateSelector: dateSels[i] || dateSels[0] || '',
+              ...(urlSel ? { urlSelector: urlSel } : {}),
             }
             const entries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
             for (const e of entries) {
-              rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType })
+              rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType, source_url: e.sourceUrl ?? null })
             }
           }
         }
@@ -170,6 +174,7 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
           keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
           content_date: e.content_date,
           content_type: e.content_type || 'app',
+          source_url: e.source_url ?? null,
         }))
         .filter((e) => {
           if (e.keyword.length === 0 || seenInBatch.has(e.keyword)) return false
@@ -210,6 +215,7 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
             discovered_at: new Date().toISOString(),
             content_date: e.content_date || yesterday,
             content_type: e.content_type || 'app',
+            source_url: e.source_url ?? null,
           }))
           for (const chunk of chunkArray(rows, 500)) {
             await withRetry(async () =>
