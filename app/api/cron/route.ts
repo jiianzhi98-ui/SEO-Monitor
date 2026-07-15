@@ -212,7 +212,8 @@ export async function GET(request: Request) {
                   .is('source_url', null)
                 for (const row of (needBackfill || []) as { id: string; keyword: string }[]) {
                   const srcUrl = urlMap.get(row.keyword)
-                  if (srcUrl) await supabase.from('raw_keywords').update({ source_url: srcUrl }).eq('id', row.id)
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  if (srcUrl) await supabase.from('raw_keywords').update({ source_url: srcUrl } as any).eq('id', row.id)
                 }
               }
             }
