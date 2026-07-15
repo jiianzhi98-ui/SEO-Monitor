@@ -6,7 +6,7 @@ on:
       step:
         description: '抓取步骤'
         type: choice
-        options: [all, keywords, rank, weight, index-pages, rank-title]
+        options: [all, keywords, rank, weight, index-pages, rank-title, tracking]
         default: all
       site:
         description: '单站域名（留空=全部站点，例如 y8l.com）'
@@ -18,6 +18,7 @@ on:
     - cron: '0 17 * * *'   # 01:00 MYT (target ~02:00 MYT after ~1h queue) — rank
     - cron: '0 18 * * *'   # 02:00 MYT — rank-title
     - cron: '0 19 * * *'   # 03:00 MYT — index-pages
+    - cron: '0 23 * * *'   # 07:00 MYT — tracking（所有重试结束后）
 
 jobs:
   setup:
@@ -49,6 +50,8 @@ jobs:
               STEP="rank-title"
             elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
               STEP="index-pages"
+            elif [ "${{ github.event.schedule }}" = "0 23 * * *" ]; then
+              STEP="tracking"
             else
               STEP="all"
             fi
@@ -58,10 +61,11 @@ jobs:
               weight)      SPG=4 ;;
               index-pages) SPG=1 ;;
               rank-title)  SPG=2 ;;
+              tracking)    SPG=5 ;;
               *)           SPG=4 ;;
             esac
-            # rank-title / index-pages 单独查询各自的开关字段；其余查询有任意抓取开关的站点
-            if [ "$STEP" = "rank-title" ]; then
+            # rank-title / index-pages / tracking 单独查询各自的开关字段；其余查询有任意抓取开关的站点
+            if [ "$STEP" = "rank-title" ] || [ "$STEP" = "tracking" ]; then
               COUNT=$(curl -sf \
                 -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
                 -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
@@ -124,6 +128,8 @@ jobs:
             STEP="rank-title"
           elif [ "${{ github.event.schedule }}" = "0 19 * * *" ]; then
             STEP="index-pages"
+          elif [ "${{ github.event.schedule }}" = "0 23 * * *" ]; then
+            STEP="tracking"
           else
             STEP="all"
           fi
