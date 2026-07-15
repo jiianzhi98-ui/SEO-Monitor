@@ -29,6 +29,7 @@ interface SiteRecord {
   title_selector: string | null
   date_selector: string | null
   source_types: string | null
+  capture_source_url: boolean
   enable_version_clean: boolean
   version_suffixes: string[]
 }
@@ -95,7 +96,7 @@ export async function GET(request: Request) {
 
       for (const site of sites) {
         try {
-          type RawEntry = { title: string; content_date: string | null; content_type?: string }
+          type RawEntry = { title: string; content_date: string | null; content_type?: string; source_url: string | null }
           let rawEntries: RawEntry[] = []
           const hasCrawlConfig = !!(site.list_url && site.title_selector)
 
@@ -123,7 +124,7 @@ export async function GET(request: Request) {
                 }
                 const srcEntries = await fetchHtmlListPages([src], htmlCutoff, maxPg, isSingleSite)
                 for (const e of srcEntries) {
-                  rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType })
+                  rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType, source_url: site.capture_source_url ? (e.url || null) : null })
                 }
               }
             }
@@ -136,6 +137,7 @@ export async function GET(request: Request) {
               keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
               content_date: e.content_date,
               content_type: e.content_type || 'app',
+              source_url: e.source_url,
             }))
             .filter((e) => {
               if (e.keyword.length === 0 || seenInBatch.has(e.keyword)) return false
@@ -190,10 +192,28 @@ export async function GET(request: Request) {
                 discovered_at: new Date().toISOString(),
                 content_date: e.content_date || yesterday,
                 content_type: e.content_type || 'app',
+                source_url: e.source_url ?? null,
               }))
               for (const chunk of chunkArray(rows, 500)) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await (supabase.from('raw_keywords') as any).upsert(chunk, { onConflict: 'site_id,content_date,keyword', ignoreDuplicates: true })
+              }
+            }
+
+            // Backfill source_url for existing keywords that were crawled before capture_source_url was enabled
+            if (site.capture_source_url) {
+              const urlMap = new Map(cleanedEntries.filter(e => e.source_url).map(e => [e.keyword, e.source_url!]))
+              if (urlMap.size > 0) {
+                const { data: needBackfill } = await supabase
+                  .from('raw_keywords')
+                  .select('id, keyword')
+                  .eq('site_id', site.id)
+                  .in('keyword', Array.from(urlMap.keys()).slice(0, 500))
+                  .is('source_url', null)
+                for (const row of (needBackfill || []) as { id: string; keyword: string }[]) {
+                  const srcUrl = urlMap.get(row.keyword)
+                  if (srcUrl) await supabase.from('raw_keywords').update({ source_url: srcUrl }).eq('id', row.id)
+                }
               }
             }
           }
