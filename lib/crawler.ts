@@ -100,7 +100,7 @@ export async function fetchHtmlList(
 
   titleEls.each((_, el) => {
     const title = $(el).text().trim()
-    const href = $(el).attr('href') || $(el).closest('a').attr('href') || ''
+    const href = $(el).attr('href') || $(el).closest('a').attr('href') || $(el).find('a').first().attr('href') || ''
     const fullUrl = href.startsWith('http') ? href : new URL(href, url).href
 
     let date: string | undefined
@@ -193,7 +193,7 @@ export async function fetchHtmlListPages(
         const pageEntries: PageEntry[] = []
         $(source.titleSelector).each((_, el) => {
           const title = $(el).text().trim()
-          const href = $(el).attr('href') || $(el).closest('a').attr('href') || ''
+          const href = $(el).attr('href') || $(el).closest('a').attr('href') || $(el).find('a').first().attr('href') || ''
           const fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl!).href
           let date: string | undefined
           if (source.dateSelector) {
