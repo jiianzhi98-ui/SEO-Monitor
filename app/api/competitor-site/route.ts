@@ -132,7 +132,44 @@ export async function GET(req: Request) {
       .order('content_date', { ascending: false })
       .limit(1000)
 
-    // 2. Rank data for a look-back window (7 days before dateEnd)
+    const allKws = (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; discovered_at: string; source_url: string | null }[]
+    const kwList = allKws.map(r => r.keyword)
+
+    // 2. Search volume for submitted keywords (from keyword_volume table)
+    const { data: svRows } = await service
+      .from('keyword_volume')
+      .select('keyword, volume')
+      .in('keyword', kwList.slice(0, 500))
+    const searchVolMap = new Map(((svRows || []) as { keyword: string; volume: number }[]).map(r => [r.keyword, r.volume]))
+
+    // 3. Operation type detection (same logic as keywords tab)
+    const { data: profile } = await service
+      .from('competitor_profiles')
+      .select('same_name_diff_date_is_update, same_base_diff_sub_is_update')
+      .eq('domain', domain)
+      .maybeSingle()
+    const sameNameDiffDate: boolean = profile?.same_name_diff_date_is_update ?? false
+    const sameBaseDiffSub: boolean  = profile?.same_base_diff_sub_is_update ?? false
+
+    const historicalKws = new Set<string>()
+    if (sameNameDiffDate && kwList.length > 0) {
+      const { data: histRows } = await service
+        .from('raw_keywords')
+        .select('keyword')
+        .eq('site_id', site.id)
+        .lt('content_date', dateStart)
+        .in('keyword', kwList.slice(0, 500))
+      for (const r of (histRows || []) as { keyword: string }[]) historicalKws.add(r.keyword)
+    }
+    const baseDateCount = new Map<string, number>()
+    if (sameBaseDiffSub) {
+      for (const r of allKws) {
+        const key = `${r.content_date}|${r.keyword.slice(0, 4)}`
+        baseDateCount.set(key, (baseDateCount.get(key) ?? 0) + 1)
+      }
+    }
+
+    // 4. Rank data for a look-back window (7 days before dateEnd)
     const rankLookbackStart = new Date(new Date(dateEnd).getTime() - 7 * 86400000).toISOString().slice(0, 10)
     const { data: rankRows } = await service
       .from('site_keyword_ranks')
@@ -146,20 +183,29 @@ export async function GET(req: Request) {
       .limit(3000)
 
     // Build rank map (most recent rank per keyword)
-    type RankEntry = { volume: number; rank_position: number | null; rank_type: string | null; stat_date: string }
+    type RankEntry = { rank_volume: number; rank_position: number | null; rank_type: string | null; stat_date: string }
     const rankMap = new Map<string, RankEntry>()
     for (const r of (rankRows || []) as { keyword: string; volume: number; rank_position: number | null; type: string; stat_date: string }[]) {
       if (!rankMap.has(r.keyword)) {
-        rankMap.set(r.keyword, { volume: r.volume, rank_position: r.rank_position, rank_type: r.type, stat_date: r.stat_date })
+        rankMap.set(r.keyword, { rank_volume: r.volume, rank_position: r.rank_position, rank_type: r.type, stat_date: r.stat_date })
       }
     }
 
     // Merge keywords with rank data, dedupe by keyword
     const seen = new Set<string>()
     const outcomes = []
-    for (const kw of (kwRows || []) as { keyword: string; content_type: string | null; content_date: string; discovered_at: string; source_url: string | null }[]) {
+    for (const kw of allKws) {
       if (seen.has(kw.keyword)) continue
       seen.add(kw.keyword)
+
+      let operation_type: '新增' | '更新' = '新增'
+      if (sameNameDiffDate && historicalKws.has(kw.keyword)) {
+        operation_type = '更新'
+      } else if (sameBaseDiffSub) {
+        const key = `${kw.content_date}|${kw.keyword.slice(0, 4)}`
+        if ((baseDateCount.get(key) ?? 0) >= 3) operation_type = '更新'
+      }
+
       const rank = rankMap.get(kw.keyword)
       outcomes.push({
         keyword: kw.keyword,
@@ -167,10 +213,12 @@ export async function GET(req: Request) {
         content_date: kw.content_date,
         discovered_at: kw.discovered_at,
         source_url: kw.source_url,
-        volume: rank?.volume ?? 0,
+        search_volume: searchVolMap.get(kw.keyword) ?? 0,
+        rank_volume: rank?.rank_volume ?? 0,
         rank_position: rank?.rank_position ?? null,
         rank_type: rank?.rank_type ?? null,
         rank_date: rank?.stat_date ?? null,
+        operation_type,
       })
     }
 

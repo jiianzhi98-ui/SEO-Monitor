@@ -59,10 +59,12 @@ interface CompetitorOutcomeRow {
   content_date: string
   discovered_at: string
   source_url: string | null
-  volume: number
+  search_volume: number
+  rank_volume: number
   rank_position: number | null
   rank_type: string | null
   rank_date: string | null
+  operation_type: '新增' | '更新'
 }
 interface CompetitorOutcomeSummary { total: number; hasRank: number; rankup: number; rankdown: number; top10: number }
 interface CompetitorData {
@@ -672,11 +674,11 @@ function CompetitorOutcomesPanel({
           <>
             <div className="overflow-x-auto">
               <div className="grid grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px] gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[860px]">
-                <span className="text-[11px] font-medium text-gray-400 text-center">发现日期</span>
                 <span className="text-[11px] font-medium text-gray-400 text-center">发布日期</span>
+                <span className="text-[11px] font-medium text-gray-400 text-center">发现日期</span>
                 <span className="text-[11px] font-medium text-gray-400 text-center">类型</span>
                 <span className="text-[11px] font-medium text-gray-400 text-center">操作</span>
-                <span className="text-[11px] font-medium text-gray-400">关键词 / 内容链接</span>
+                <span className="text-[11px] font-medium text-gray-400">关键词</span>
                 <span className="text-[11px] font-medium text-gray-400 text-center">搜索量</span>
                 <span className="text-[11px] font-medium text-gray-400 text-center">收录</span>
                 <span className="text-[11px] font-medium text-gray-400 text-center">排名</span>
@@ -687,25 +689,22 @@ function CompetitorOutcomesPanel({
               <div className="divide-y divide-gray-50 min-w-[860px]">
                 {paged.map((r, i) => (
                   <div key={i} className="grid grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px] gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center">
+                    {/* 发布日期 = content_date（提交日期） */}
                     <span className="text-sm text-gray-500 text-center">{r.content_date.slice(5).replace('-', '/')}</span>
-                    <span className="text-sm text-gray-300 text-center">—</span>
+                    {/* 发现日期 = rank_date（爱站抓到排名的日期） */}
+                    <span className="text-sm text-gray-500 text-center">{r.rank_date ? r.rank_date.slice(5).replace('-', '/') : '—'}</span>
                     <div className="flex justify-center">
                       {r.content_type
                         ? <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.content_type === 'game' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>{r.content_type === 'game' ? '游戏' : '应用'}</span>
                         : <span className="text-sm text-gray-300">—</span>}
                     </div>
                     <div className="flex justify-center">
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">新增</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${r.operation_type === '更新' ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-600'}`}>{r.operation_type}</span>
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm text-gray-800 truncate" title={r.keyword}>{r.keyword}</div>
-                      {r.source_url
-                        ? <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={r.source_url}>
-                            {r.source_url.replace(/^https?:\/\//, '').slice(0, 28)}{r.source_url.replace(/^https?:\/\//, '').length > 28 ? '…' : ''}
-                          </a>
-                        : <div className="text-xs text-gray-300">—</div>}
                     </div>
-                    <div className="text-sm text-gray-600 tabular-nums text-center">{r.volume ? fmtVol(r.volume) : '—'}</div>
+                    <div className="text-sm text-gray-600 tabular-nums text-center">{r.search_volume ? fmtVol(r.search_volume) : '—'}</div>
                     <div className="text-center">
                       <span className="text-sm text-gray-300">—</span>
                     </div>
@@ -719,7 +718,7 @@ function CompetitorOutcomesPanel({
                     <div className="min-w-0">
                       <div className="text-sm text-gray-700 truncate" title={r.keyword}>{r.keyword}</div>
                     </div>
-                    <div className="text-sm text-gray-300 text-center">—</div>
+                    <div className="text-sm tabular-nums text-center">{r.rank_volume ? fmtVol(r.rank_volume) : <span className="text-gray-300">—</span>}</div>
                     <div className="flex justify-center">
                       {r.rank_type === 'rankup'   && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
                       {r.rank_type === 'rankdown'  && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">跌↓</span>}
