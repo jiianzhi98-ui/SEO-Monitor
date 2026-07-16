@@ -491,6 +491,7 @@ export default function TaskGroupsPage() {
   const [wordLibData, setWordLibData] = useState<WordLibEntry[]>([])
   const [wordLibLoading, setWordLibLoading] = useState(false)
   const [wordLibLoaded, setWordLibLoaded] = useState(false)
+  const [wordLibSearch, setWordLibSearch] = useState('')
   const [sortCol, setSortCol]           = useState('')
   const [sortDir, setSortDir]           = useState<'asc'|'desc'|''>('')
 
@@ -534,6 +535,7 @@ export default function TaskGroupsPage() {
   const isViewingOwn = effectiveViewingId === currentUserId
 
   const claimedSet = useMemo(() => new Set(claimedKeywords.map(k => k.keyword)), [claimedKeywords])
+  const submittedSet = useMemo(() => new Set(claimedKeywords.filter(k => k.status === 'submitted').map(k => k.keyword)), [claimedKeywords])
   // Dedup by keyword — DB race condition can create duplicates; show only one per keyword
   const displayedClaims = useMemo(() => {
     const seen = new Set<string>()
@@ -619,6 +621,14 @@ export default function TaskGroupsPage() {
         return { ...w, sites: filtered, siteCount: filtered.length }
       })
   }, [wordLibData, groupNewDomains])
+
+  // Hot-radar pool: union of all 4 data sources (used to filter recommendations)
+  const recPool = useMemo(() => new Set([
+    ...crossWords.map(w => w.keyword),
+    ...streakWords.map(w => w.keyword),
+    ...rankWordsSorted.map(w => w.keyword),
+    ...allNewWords.map(w => w.keyword),
+  ]), [crossWords, streakWords, rankWordsSorted, allNewWords])
 
   // ── 规则推荐（自有站触发规则） ────────────────────────────────────────────────
 
@@ -1186,9 +1196,9 @@ export default function TaskGroupsPage() {
           </div>
 
           {recSubTab === 'rules' && (() => {
-            const visibleOwn = ownRecData.filter(w => !dismissedRec.has(w.keyword))
-            return ownRecLoading ? <Spinner /> : visibleOwn.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 text-sm">{ownRecData.length === 0 ? '近30天自有站无规则触发记录' : '所有推荐词已移除，刷新页面可重新显示'}</div>
+            const visibleOwn = ownRecData.filter(w => recPool.has(w.keyword) && !dismissedRec.has(w.keyword) && !submittedSet.has(w.keyword))
+            return (ownRecLoading || radarLoading || !radarLoaded) ? <Spinner /> : visibleOwn.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">{recPool.size === 0 ? '暂无热词数据' : ownRecData.length === 0 ? '近30天自有站无规则触发记录' : '所有推荐词已移除，刷新页面可重新显示'}</div>
             ) : (
               <>
                 <table className="w-full table-fixed">
@@ -1236,12 +1246,12 @@ export default function TaskGroupsPage() {
           })()}
 
           {recSubTab === 'competitors' && (
-            compRecLoading ? <Spinner /> : compRecData.length === 0 ? (
+            (compRecLoading || radarLoading || !radarLoaded) ? <Spinner /> : compRecData.length === 0 ? (
               <div className="text-center py-10 text-gray-400 text-sm">近30天竞品无规则触发记录</div>
             ) : (
               <div className="space-y-4">
                 {compRecData.map(({ domain, keywords }) => {
-                  const visibleKws = keywords.filter(kw => !dismissedRec.has(kw.keyword))
+                  const visibleKws = keywords.filter(kw => recPool.has(kw.keyword) && !dismissedRec.has(kw.keyword) && !submittedSet.has(kw.keyword))
                   if (visibleKws.length === 0) return null
                   return (
                     <div key={domain}>
@@ -1355,12 +1365,14 @@ export default function TaskGroupsPage() {
 
     if (rightTab === 'cross') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sorted_cross = sortCol && sortDir ? [...crossWords].sort((a: any, b: any) => {
+      const base_cross = crossWords.filter(w => !submittedSet.has(w.keyword))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted_cross = sortCol && sortDir ? [...base_cross].sort((a: any, b: any) => {
         const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'volume' ? (a.volume??0) : 0
         const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'volume' ? (b.volume??0) : 0
         if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         return sortDir === 'asc' ? va - vb : vb - va
-      }) : crossWords
+      }) : base_cross
       const slice = sorted_cross.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
@@ -1397,13 +1409,14 @@ export default function TaskGroupsPage() {
     }
 
     if (rightTab === 'rank') {
+      const base_rank = rankWordsSorted.filter(w => !submittedSet.has(w.keyword))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sorted_rank = sortCol && sortDir ? [...rankWordsSorted].sort((a: any, b: any) => {
+      const sorted_rank = sortCol && sortDir ? [...base_rank].sort((a: any, b: any) => {
         const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'volume' ? (a.volume??0) : sortCol === 'rankDays' ? (a.rankDays??0) : 0
         const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'volume' ? (b.volume??0) : sortCol === 'rankDays' ? (b.rankDays??0) : 0
         if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         return sortDir === 'asc' ? va - vb : vb - va
-      }) : rankWordsSorted
+      }) : base_rank
       const slice = sorted_rank.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
@@ -1435,13 +1448,14 @@ export default function TaskGroupsPage() {
     }
 
     if (rightTab === 'streak') {
+      const base_streak = streakWords.filter(w => !submittedSet.has(w.keyword))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sorted_streak = sortCol && sortDir ? [...streakWords].sort((a: any, b: any) => {
+      const sorted_streak = sortCol && sortDir ? [...base_streak].sort((a: any, b: any) => {
         const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'volume' ? (a.volume??0) : sortCol === 'streak' ? (a.streak??0) : 0
         const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'volume' ? (b.volume??0) : sortCol === 'streak' ? (b.streak??0) : 0
         if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         return sortDir === 'asc' ? va - vb : vb - va
-      }) : streakWords
+      }) : base_streak
       const slice = sorted_streak.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
@@ -1473,13 +1487,14 @@ export default function TaskGroupsPage() {
     }
 
     if (rightTab === 'newWords') {
+      const base_new = allNewWords.filter(w => !submittedSet.has(w.keyword))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sorted_new = sortCol && sortDir ? [...allNewWords].sort((a: any, b: any) => {
+      const sorted_new = sortCol && sortDir ? [...base_new].sort((a: any, b: any) => {
         const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'count' ? (a.count??0) : sortCol === 'siteCount' ? (a.siteCount??0) : 0
         const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'count' ? (b.count??0) : sortCol === 'siteCount' ? (b.siteCount??0) : 0
         if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         return sortDir === 'asc' ? va - vb : vb - va
-      }) : allNewWords
+      }) : base_new
       const slice = sorted_new.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
@@ -1512,40 +1527,50 @@ export default function TaskGroupsPage() {
 
     if (rightTab === 'wordLib') {
       if (wordLibLoading) return <Spinner />
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sorted_wordLib = sortCol && sortDir ? [...wordLibWords].sort((a: any, b: any) => {
-        const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'longTailCount' ? (a.longTailCount??0) : sortCol === 'siteCount' ? (a.siteCount??0) : 0
-        const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'longTailCount' ? (b.longTailCount??0) : sortCol === 'siteCount' ? (b.siteCount??0) : 0
-        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
-        return sortDir === 'asc' ? va - vb : vb - va
-      }) : wordLibWords
-      const slice = sorted_wordLib.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      const wlQ = wordLibSearch.trim().toLowerCase()
+      const wlResults = wlQ ? wordLibWords.filter(w => w.keyword.toLowerCase().includes(wlQ)) : []
       return (
-        <>
-          <table className="w-full table-fixed">
-            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-              <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
-              <th className="px-2 py-2 text-left font-medium">关键词</th>
-              <th className="px-2 py-2 text-center font-medium w-20"><span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap">长尾词数{sortIcons('longTailCount')}</span></th>
-              <th className="px-2 py-2 text-center font-medium w-16"><span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap">站点数{sortIcons('siteCount')}</span></th>
-              <th className="w-14" />
-            </tr></thead>
-            <tbody>
-              {slice.map((w, i) => (
-                <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
-                  badge={getBadge(w.first_date, w.last_date, yesterday)}
-                  dateCell={<DateCell date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} includeYesterday />}
-                  claimed={claimedSet.has(w.keyword)}
-                  onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
-                  onView={() => openDetail(w.keyword, '更新词库')}>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.longTailCount}词</td>
-                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.siteCount}站</td>
-                </KwRow>
-              ))}
-            </tbody>
-          </table>
-          <Pager page={pg} total={sorted_wordLib.length} onPage={p => setPage('wordLib', p)} />
-        </>
+        <div>
+          <div className="flex gap-2 mb-4">
+            <input
+              value={wordLibSearch}
+              onChange={e => setWordLibSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Escape' && setWordLibSearch('')}
+              placeholder="搜索词库关键词…"
+              className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
+            />
+            {wordLibSearch && (
+              <button onClick={() => setWordLibSearch('')} className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50">清空</button>
+            )}
+          </div>
+          {!wlQ ? (
+            <div className="text-center py-10 text-gray-300 text-sm">输入关键词搜索词库（共 {wordLibWords.length} 个词）</div>
+          ) : wlResults.length === 0 ? (
+            <div className="text-center py-10 text-gray-300 text-sm">未找到「{wordLibSearch}」相关词</div>
+          ) : (
+            <table className="w-full table-fixed">
+              <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+                <th className="px-3 py-2 text-left font-medium">关键词</th>
+                <th className="px-2 py-2 text-center font-medium w-20">长尾词数</th>
+                <th className="px-2 py-2 text-center font-medium w-16">站点数</th>
+                <th className="w-14" />
+              </tr></thead>
+              <tbody>
+                {wlResults.slice(0, 50).map((w, i) => (
+                  <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
+                    badge={getBadge(w.first_date, w.last_date, yesterday)}
+                    dateCell={<td />}
+                    claimed={claimedSet.has(w.keyword)}
+                    onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
+                    onView={() => openDetail(w.keyword, '更新词库')}>
+                    <td className="px-2 py-2 text-center text-xs text-gray-500">{w.longTailCount}词</td>
+                    <td className="px-2 py-2 text-center text-xs text-gray-500">{w.siteCount}站</td>
+                  </KwRow>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )
     }
 
