@@ -463,8 +463,9 @@ export default function TaskGroupsPage() {
   const [rightTab, setRightTab] = useState<RightTab>('recommend')
   const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 })
   const [recSubTab, setRecSubTab] = useState<RecSubTab>('rules')
-  const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; search_volume: number; content_type: string | null }[] }[]>([])
+  const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; rule_name: string; discovery_date: string; effectiveness: string }[] }[]>([])
   const [compRecLoading, setCompRecLoading] = useState(false)
+  const [dismissedRec, setDismissedRec] = useState<Set<string>>(new Set())
 
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
   const [radarLoaded, setRadarLoaded] = useState(false)
@@ -644,6 +645,11 @@ export default function TaskGroupsPage() {
       .slice(0, 120)
   }, [crossWords, streakWords, rankWordsSorted])
 
+  const filteredRecKeywords = useMemo(
+    () => recKeywords.filter(w => !dismissedRec.has(w.keyword)),
+    [recKeywords, dismissedRec]
+  )
+
   async function loadCompRec() {
     if (!activeGroup) return
     setCompRecLoading(true)
@@ -660,24 +666,45 @@ export default function TaskGroupsPage() {
         .select('id, domain').in('domain', compDomains)
       const domainToId = new Map<string, string>((siteData || []).map((s: { id: string; domain: string }) => [s.domain, s.id] as [string, string]))
       const idToDomain = new Map<string, string>((siteData || []).map((s: { id: string; domain: string }) => [s.id, s.domain] as [string, string]))
-      const siteIds = compDomains.map(d => domainToId.get(d)).filter(Boolean)
+      const siteIds = compDomains.map(d => domainToId.get(d)).filter(Boolean) as string[]
       if (siteIds.length === 0) return
 
+      const since = getMYDate(-30)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: kwData } = await (supabase.from('raw_keywords') as any)
-        .select('site_id, keyword, content_type')
+      const { data: recData } = await (supabase.from('competitor_tracking_records') as any)
+        .select('site_id, keyword, discovery_date, rule_id, effectiveness')
         .in('site_id', siteIds)
-        .eq('content_date', yesterday)
-        .not('keyword', 'like', '%电脑版%')
-        .order('keyword', { ascending: true })
-        .limit(1000)
+        .not('rule_id', 'is', null)
+        .gte('discovery_date', since)
+        .order('discovery_date', { ascending: false })
+        .limit(500)
 
-      const grouped = new Map<string, { keyword: string; search_volume: number; content_type: string | null }[]>()
-      for (const kw of (kwData || []) as { site_id: string; keyword: string; content_type: string | null }[]) {
-        const domain = idToDomain.get(kw.site_id) || ''
+      const ruleIds = Array.from(new Set(((recData || []) as { rule_id: string }[]).map(r => r.rule_id).filter(Boolean)))
+      const ruleNameMap = new Map<string, string>()
+      if (ruleIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: rules } = await (supabase.from('rules') as any)
+          .select('id, rule_number, name').in('id', ruleIds)
+        for (const r of (rules || []) as { id: string; rule_number: number; name: string }[]) {
+          ruleNameMap.set(r.id, `#${r.rule_number} ${r.name}`)
+        }
+      }
+
+      const grouped = new Map<string, { keyword: string; rule_name: string; discovery_date: string; effectiveness: string }[]>()
+      const seen = new Set<string>()
+      for (const r of (recData || []) as { site_id: string; keyword: string; discovery_date: string; rule_id: string; effectiveness: string }[]) {
+        const domain = idToDomain.get(r.site_id) || ''
         if (!domain) continue
+        const uniq = `${domain}:${r.keyword}`
+        if (seen.has(uniq)) continue
+        seen.add(uniq)
         if (!grouped.has(domain)) grouped.set(domain, [])
-        grouped.get(domain)!.push({ keyword: kw.keyword, search_volume: 0, content_type: kw.content_type })
+        grouped.get(domain)!.push({
+          keyword: r.keyword,
+          rule_name: ruleNameMap.get(r.rule_id) || '规则',
+          discovery_date: r.discovery_date,
+          effectiveness: r.effectiveness || '追踪中',
+        })
       }
       setCompRecData(compDomains.filter(d => grouped.has(d)).map(d => ({ domain: d, keywords: grouped.get(d)! })))
     } finally { setCompRecLoading(false) }
@@ -760,6 +787,15 @@ export default function TaskGroupsPage() {
     } catch {
       // network error — user can retry
     } finally { claimingRef.current.delete(keyword) }
+  }
+
+  function dismissRec(keyword: string) {
+    if (!currentUserId || !activeGroupId) return
+    const storageKey = `dismissed_rec:${currentUserId}:${activeGroupId}`
+    const current: string[] = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    const updated = Array.from(new Set([...current, keyword]))
+    localStorage.setItem(storageKey, JSON.stringify(updated))
+    setDismissedRec(new Set(updated))
   }
 
   async function dismissClaimed(claimId: string) {
@@ -892,7 +928,7 @@ export default function TaskGroupsPage() {
     }
 
     const since = getMYDate(-30)
-    const needsNew = ['交叉词', '共新增词', '今日推荐', '竞品词'].includes(source)
+    const needsNew = ['交叉词', '共新增词', '今日推荐', '竞品词', '竞品规则推荐'].includes(source)
     const needsRank = ['交叉词', '竞品涨排名', '连续上涨词', '今日推荐'].includes(source)
 
     try {
@@ -948,6 +984,14 @@ export default function TaskGroupsPage() {
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab === 'recommend' && recSubTab === 'competitors') loadCompRec() }, [rightTab, recSubTab, activeGroupId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!currentUserId || !activeGroupId) return
+    const key = `dismissed_rec:${currentUserId}:${activeGroupId}`
+    try {
+      const stored: string[] = JSON.parse(localStorage.getItem(key) || '[]')
+      setDismissedRec(new Set(stored))
+    } catch { setDismissedRec(new Set()) }
+  }, [currentUserId, activeGroupId])
   // Scroll today's task list to bottom when a new claim is added
   useEffect(() => {
     if (claimedListRef.current) claimedListRef.current.scrollTop = claimedListRef.current.scrollHeight
@@ -1110,30 +1154,35 @@ export default function TaskGroupsPage() {
             {(['rules', 'competitors'] as RecSubTab[]).map(st => (
               <button key={st} onClick={() => { setRecSubTab(st); setPage('recommend', 0) }}
                 className={`px-4 py-1.5 text-sm font-medium transition-colors ${recSubTab === st ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                {st === 'rules' ? '规则推荐' : '竞品词'}
+                {st === 'rules' ? '规则推荐' : '竞品规则推荐'}
               </button>
             ))}
           </div>
 
           {recSubTab === 'rules' && (
-            (!radarLoaded || radarLoading) ? <Spinner /> : recKeywords.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 text-sm">暂无推荐词</div>
+            (!radarLoaded || radarLoading) ? <Spinner /> : filteredRecKeywords.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">{recKeywords.length === 0 ? '暂无推荐词' : '所有推荐词已移除，明天将重新加载'}</div>
             ) : (
               <>
                 <table className="w-full table-fixed">
                   <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+                    <th className="w-7" />
                     <th className="px-3 py-2 text-left font-medium">关键词</th>
                     <th className="px-2 py-2 text-center font-medium w-32">来源</th>
                     <th className="px-2 py-2 text-center font-medium w-20">搜索量</th>
                     <th className="w-14" />
                   </tr></thead>
                   <tbody>
-                    {recKeywords.slice(pg_rec * PAGE_SIZE, (pg_rec + 1) * PAGE_SIZE).map((w, i) => {
+                    {filteredRecKeywords.slice(pg_rec * PAGE_SIZE, (pg_rec + 1) * PAGE_SIZE).map((w, i) => {
                       const claimed = claimedSet.has(w.keyword)
                       return (
                         <tr key={`${w.keyword}|${i}`} onDoubleClick={() => claimKeyword(w.keyword, '今日推荐', w.volume)}
                           className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
                           title={claimed ? '已认领' : '双击认领'}>
+                          <td className="pl-2 py-2">
+                            <button onClick={e => { e.stopPropagation(); dismissRec(w.keyword) }}
+                              className="w-5 h-5 rounded flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-base leading-none" title="移除此词">×</button>
+                          </td>
                           <td className="px-3 py-2">
                             <span className="text-sm text-gray-800 select-text cursor-text"
                               onDoubleClick={e => { e.stopPropagation(); claimKeyword(w.keyword, '今日推荐', w.volume) }}>
@@ -1158,46 +1207,60 @@ export default function TaskGroupsPage() {
                     })}
                   </tbody>
                 </table>
-                <Pager page={pg_rec} total={recKeywords.length} onPage={p => setPage('recommend', p)} />
+                <Pager page={pg_rec} total={filteredRecKeywords.length} onPage={p => setPage('recommend', p)} />
               </>
             )
           )}
 
           {recSubTab === 'competitors' && (
             compRecLoading ? <Spinner /> : compRecData.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 text-sm">暂无竞品昨日新增词</div>
+              <div className="text-center py-10 text-gray-400 text-sm">近30天竞品无规则触发记录</div>
             ) : (
               <div className="space-y-4">
-                {compRecData.map(({ domain, keywords }) => (
-                  <div key={domain}>
-                    <div className="text-xs font-medium text-gray-500 mb-1.5 px-1">{domain}</div>
-                    <table className="w-full table-fixed">
-                      <tbody>
-                        {keywords.slice(0, 30).map((kw, i) => {
-                          const claimed = claimedSet.has(kw.keyword)
-                          return (
-                            <tr key={`${kw.keyword}|${i}`} onDoubleClick={() => claimKeyword(kw.keyword, '竞品词', kw.search_volume)}
-                              className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
-                              title={claimed ? '已认领' : '双击认领'}>
-                              <td className="px-3 py-2">
-                                <span className="text-sm text-gray-800 select-text cursor-text"
-                                  onDoubleClick={e => { e.stopPropagation(); claimKeyword(kw.keyword, '竞品词', kw.search_volume) }}>
-                                  {kw.keyword.length > 22 ? kw.keyword.slice(0, 22) + '…' : kw.keyword}
-                                </span>
-                                {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
-                              </td>
-                              <td className="px-2 py-2 text-right text-xs text-gray-500">{kw.search_volume > 0 ? kw.search_volume.toLocaleString() : '—'}</td>
-                              <td className="px-2 py-2 w-14 text-right">
-                                <button onClick={() => openDetail(kw.keyword, '竞品词')}
-                                  className="text-xs border rounded px-1.5 py-0.5 text-gray-400 hover:text-gray-600 border-gray-200 transition-colors">详情</button>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
+                {compRecData.map(({ domain, keywords }) => {
+                  const visibleKws = keywords.filter(kw => !dismissedRec.has(kw.keyword))
+                  if (visibleKws.length === 0) return null
+                  return (
+                    <div key={domain}>
+                      <div className="text-xs font-medium text-gray-500 mb-1.5 px-1">{domain}</div>
+                      <table className="w-full table-fixed">
+                        <tbody>
+                          {visibleKws.slice(0, 30).map((kw, i) => {
+                            const claimed = claimedSet.has(kw.keyword)
+                            const effColor = kw.effectiveness === '有效' ? 'text-green-600 bg-green-50' : kw.effectiveness === '无效' ? 'text-red-400 bg-red-50' : 'text-amber-600 bg-amber-50'
+                            return (
+                              <tr key={`${kw.keyword}|${i}`} onDoubleClick={() => claimKeyword(kw.keyword, '竞品规则推荐', 0)}
+                                className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
+                                title={claimed ? '已认领' : '双击认领'}>
+                                <td className="pl-2 py-2 w-7">
+                                  <button onClick={e => { e.stopPropagation(); dismissRec(kw.keyword) }}
+                                    className="w-5 h-5 rounded flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-base leading-none" title="移除此词">×</button>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className="text-sm text-gray-800 select-text cursor-text"
+                                    onDoubleClick={e => { e.stopPropagation(); claimKeyword(kw.keyword, '竞品规则推荐', 0) }}>
+                                    {kw.keyword.length > 20 ? kw.keyword.slice(0, 20) + '…' : kw.keyword}
+                                  </span>
+                                  {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
+                                </td>
+                                <td className="px-2 py-2 w-28">
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-indigo-50 text-indigo-600 truncate block max-w-full">{kw.rule_name}</span>
+                                </td>
+                                <td className="px-2 py-2 w-16 text-center">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${effColor}`}>{kw.effectiveness}</span>
+                                </td>
+                                <td className="px-2 py-2 w-14 text-right">
+                                  <button onClick={() => openDetail(kw.keyword, '竞品规则推荐')}
+                                    className="text-xs border rounded px-1.5 py-0.5 text-gray-400 hover:text-gray-600 border-gray-200 transition-colors">详情</button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })}
               </div>
             )
           )}
