@@ -121,7 +121,7 @@ export const CRAWL_RULES: RuleSection[] = [
       { label: '竞品信号来源', text: '① 排名信号（by keyword + by URL）：site_keyword_ranks 表中 stat_date=today + platform=mobile 的当日涨跌词；还通过 site_keyword_ranks.url 与 raw_keywords.source_url 交叉匹配（URL 优先级高，能捕获 keyword 名称不一致的案例）；② 收录信号：site_indexed_pages 表中 first_seen_date=today 的新收录 URL，通过 source_url 反查 raw_keywords 得到关键词' },
       { label: '竞品过滤条件', text: '信号词必须同时存在于 raw_keywords（60天内有提交记录）才会被记录；无提交记录的信号词跳过' },
       { label: '竞品成效判断', text: '有效：rank_type=rankup 或 source_url 对应页面今日新收录；追踪中：rankdown 信号；无效：discovery_date < today-60 且 effectiveness 仍为"追踪中"（由本步骤自动更新）' },
-      { label: '竞品规则匹配', text: '规则 900（跌后更新观察）：rankdown 词 + 近 7 天内有提交记录 → 标记 rule_id；规则 901（批量下拉词更新）：同日期相同 4 字前缀 ≥3 个词有信号 → 标记 rule_id' },
+      { label: '竞品规则匹配', text: '规则 #1（跌后更新观察）：rankdown 词 + 近 7 天内有提交记录 → 标记 rule_id；规则 #2（批量下拉词更新）：同日期相同 4 字前缀 ≥3 个词有信号 → 标记 rule_id' },
       { label: '竞品写入表', text: 'competitor_tracking_records（按 site_id+keyword+discovery_date 唯一，upsert；同时将 >60 天的"追踪中"记录更新为"无效"；永久保留）' },
       { label: '自己站点追踪对象', text: '全部分组中 status=submitted + page_url 已填写 + claimed_date >= 90天内 的 member_claimed_keywords 记录' },
       { label: '自己站点信号来源', text: '① 收录信号：site_indexed_pages 表 by URL（page_url）→ is_indexed / index_first_seen / index_disappeared；② 排名信号：site_keyword_ranks 表 by URL（platform=mobile，取最新 stat_date + 最佳 rank_position）→ rank_keyword / rank_position / prev_rank' },
