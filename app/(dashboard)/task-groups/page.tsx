@@ -37,7 +37,6 @@ function getMYDate(offsetDays = 0) {
 }
 function fmtVol(v: number) {
   if (!v || v <= 0) return '—'
-  if (v >= 10000) return (v / 10000).toFixed(1) + 'w'
   return v.toLocaleString()
 }
 function fmtDate(d: string) { return d ? d.slice(5).replace('-', '/') : '—' }
