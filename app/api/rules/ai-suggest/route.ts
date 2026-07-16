@@ -92,8 +92,8 @@ ${contextStr}
 
 请用中文回答，保持专业、简洁。`
 
-  // Try models in order — fallback from 2.0-flash to 1.5-flash if quota exhausted
-  const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash']
+  // Try models in order — use latest stable models
+  const MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
   let geminiRes: Response | null = null
   let lastError = ''
 
