@@ -72,6 +72,14 @@ function Spinner() {
   )
 }
 
+function SparkleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+    </svg>
+  )
+}
+
 export default function RulesPage() {
   const { role } = useUser()
   const canEdit = role === 'super' || role === 'admin'
@@ -96,6 +104,16 @@ export default function RulesPage() {
   const [siteQ, setSiteQ] = useState('')
   const [compQ, setCompQ] = useState('')
 
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'rules' | 'ai'>('rules')
+
+  // AI state
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiOutput, setAiOutput] = useState('')
+  const [proposedRule, setProposedRule] = useState<Partial<RuleForm> | null>(null)
+  const [savingProposal, setSavingProposal] = useState(false)
+
   useEffect(() => {
     setLoading(true)
     fetch('/api/rules')
@@ -103,7 +121,6 @@ export default function RulesPage() {
       .then(d => setRules((d.rules ?? []).map((r: Rule) => ({ ...r, site_ids: r.site_ids ?? [], competitor_domains: r.competitor_domains ?? [] }))))
       .finally(() => setLoading(false))
 
-    // Load sites and competitor domains in parallel
     fetch('/api/sites')
       .then(r => r.json())
       .then(d => setAllSites((d.sites ?? []).map((s: SiteInfo) => ({ id: s.id, domain: s.domain, name: s.name }))))
@@ -229,174 +246,370 @@ export default function RulesPage() {
     ? allCompetitorDomains.filter(d => d.includes(compQ))
     : allCompetitorDomains
 
-  // Build a siteId → domain lookup for displaying badges
   const siteIdToDomain = useMemo(() => {
     const m = new Map<string, string>()
     for (const s of allSites) m.set(s.id, s.domain)
     return m
   }, [allSites])
 
+  async function runAiAnalysis() {
+    if (!aiPrompt.trim() || aiLoading) return
+    setAiLoading(true)
+    setAiOutput('')
+    setProposedRule(null)
+    try {
+      const res = await fetch('/api/rules/ai-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        setAiOutput(`错误：${err.error ?? res.statusText}`)
+        return
+      }
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      let fullText = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const parsed = JSON.parse(line.slice(6))
+            if (parsed.text) { fullText += parsed.text; setAiOutput(fullText) }
+          } catch { /* skip */ }
+        }
+      }
+      const m = fullText.match(/```json\n([\s\S]*?)\n```/)
+      if (m) {
+        try { setProposedRule(JSON.parse(m[1])) } catch { /* invalid JSON */ }
+      }
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  async function saveProposedRule() {
+    if (!proposedRule || savingProposal) return
+    setSavingProposal(true)
+    try {
+      const res = await fetch('/api/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...proposedRule, source: 'ai', priority: 0, success_count: 0, fail_count: 0 }),
+      })
+      if (res.ok) {
+        const { rule } = await res.json()
+        setRules(prev => [...prev, { ...rule, site_ids: rule.site_ids ?? [], competitor_domains: rule.competitor_domains ?? [] }])
+        setProposedRule(null)
+        setAiOutput(prev => prev.replace(/```json\n[\s\S]*?\n```/, '').trimEnd() + '\n\n✓ 规则已保存到全局规则库')
+      }
+    } finally {
+      setSavingProposal(false)
+    }
+  }
+
+  const aiDisplayText = proposedRule
+    ? aiOutput.replace(/```json\n[\s\S]*?\n```/, '').trim()
+    : aiOutput
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-xl font-bold text-gray-900">规则中心</h1>
         <p className="text-sm text-gray-400 mt-0.5">全局实验室 — 创建规则并分配到各站点</p>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap mb-5">
-        <input
-          type="text" value={filterQ} onChange={e => setFilterQ(e.target.value)}
-          placeholder="搜索规则名称或说明…"
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 w-44 text-gray-700"
-        />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
-          <option value="">全部状态</option>
-          <option value="active">启用</option>
-          <option value="inactive">停用</option>
-          <option value="testing">测试中</option>
-        </select>
-        <select value={filterType} onChange={e => setFilterType(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
-          <option value="">全部类型</option>
-          <option value="add">新增</option>
-          <option value="update">更新</option>
-          <option value="mixed">混合</option>
-        </select>
-        <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
-          <option value="">全部来源</option>
-          <option value="manual">手动</option>
-          <option value="experiment">实验</option>
-          <option value="data">数据</option>
-          <option value="ai">AI</option>
-        </select>
-        <select value={filterStage} onChange={e => setFilterStage(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
-          <option value="">全部阶段</option>
-          {STAGE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <span className="text-xs text-gray-400 ml-1">{filtered.length} / {rules.length} 条</span>
-        <div className="flex-1" />
-        {canEdit && (
-          <button onClick={openNew}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-            新建规则
-          </button>
-        )}
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100 mb-6">
+        <button
+          onClick={() => setActiveTab('rules')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'rules' ? 'text-green-600 border-green-500' : 'text-gray-500 border-transparent hover:text-gray-700'}`}
+        >
+          全局规则库
+        </button>
+        <button
+          onClick={() => setActiveTab('ai')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${activeTab === 'ai' ? 'text-violet-600 border-violet-500' : 'text-gray-500 border-transparent hover:text-gray-700'}`}
+        >
+          <SparkleIcon className="w-3.5 h-3.5" />
+          AI 新建规则
+        </button>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-4 gap-3 mb-5">
-        {[
-          { label: '全部规则', value: rules.length, color: 'text-gray-800' },
-          { label: '启用中', value: rules.filter(r => r.status === 'active').length, color: 'text-green-600' },
-          { label: '测试中', value: rules.filter(r => r.status === 'testing').length, color: 'text-yellow-600' },
-          { label: '停用', value: rules.filter(r => r.status === 'inactive').length, color: 'text-gray-400' },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-            <p className="text-xs text-gray-400">{s.label}</p>
-            <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+      {/* ── 全局规则库 tab ── */}
+      {activeTab === 'rules' && (
+        <>
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 flex-wrap mb-5">
+            <input
+              type="text" value={filterQ} onChange={e => setFilterQ(e.target.value)}
+              placeholder="搜索规则名称或说明…"
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 w-44 text-gray-700"
+            />
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+              <option value="">全部状态</option>
+              <option value="active">启用</option>
+              <option value="inactive">停用</option>
+              <option value="testing">测试中</option>
+            </select>
+            <select value={filterType} onChange={e => setFilterType(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+              <option value="">全部类型</option>
+              <option value="add">新增</option>
+              <option value="update">更新</option>
+              <option value="mixed">混合</option>
+            </select>
+            <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+              <option value="">全部来源</option>
+              <option value="manual">手动</option>
+              <option value="experiment">实验</option>
+              <option value="data">数据</option>
+              <option value="ai">AI</option>
+            </select>
+            <select value={filterStage} onChange={e => setFilterStage(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
+              <option value="">全部阶段</option>
+              {STAGE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <span className="text-xs text-gray-400 ml-1">{filtered.length} / {rules.length} 条</span>
+            <div className="flex-1" />
+            {canEdit && (
+              <button onClick={openNew}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                新建规则
+              </button>
+            )}
           </div>
-        ))}
-      </div>
 
-      {/* Rule list */}
-      {loading ? <Spinner /> : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-300">
-          <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          <span className="text-sm">{rules.length === 0 ? '暂无规则，点击「新建规则」开始建立规则库' : '没有符合筛选条件的规则'}</span>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(rule => {
-            const sr = successRate(rule)
-            const total = rule.success_count + rule.fail_count
-            const tl = TYPE_LABELS[rule.type]
-            const sl = SOURCE_LABELS[rule.source]
-            const stl = STATUS_LABELS[rule.status]
-            const appliedSiteDomains = rule.site_ids.map(id => siteIdToDomain.get(id)).filter(Boolean) as string[]
-            return (
-              <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
-                <div className="px-4 py-3 flex items-start gap-3">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                    <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${tl.bg} ${tl.text}`}>{tl.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stl.bg} ${stl.text}`}>{stl.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${sl.bg} ${sl.text}`}>{sl.label}</span>
+          {/* Stats row */}
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            {[
+              { label: '全部规则', value: rules.length, color: 'text-gray-800' },
+              { label: '启用中', value: rules.filter(r => r.status === 'active').length, color: 'text-green-600' },
+              { label: '测试中', value: rules.filter(r => r.status === 'testing').length, color: 'text-yellow-600' },
+              { label: '停用', value: rules.filter(r => r.status === 'inactive').length, color: 'text-gray-400' },
+            ].map(s => (
+              <div key={s.label} className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+                <p className="text-xs text-gray-400">{s.label}</p>
+                <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Rule list */}
+          {loading ? <Spinner /> : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-300">
+              <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <span className="text-sm">{rules.length === 0 ? '暂无规则，点击「新建规则」开始建立规则库' : '没有符合筛选条件的规则'}</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map(rule => {
+                const sr = successRate(rule)
+                const total = rule.success_count + rule.fail_count
+                const tl = TYPE_LABELS[rule.type]
+                const sl = SOURCE_LABELS[rule.source]
+                const stl = STATUS_LABELS[rule.status]
+                const appliedSiteDomains = rule.site_ids.map(id => siteIdToDomain.get(id)).filter(Boolean) as string[]
+                return (
+                  <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
+                    <div className="px-4 py-3 flex items-start gap-3">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                        <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${tl.bg} ${tl.text}`}>{tl.label}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stl.bg} ${stl.text}`}>{stl.label}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${sl.bg} ${sl.text}`}>{sl.label}</span>
+                        </div>
+                        {rule.description && (
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
+                        )}
+                        {rule.stage_applicability.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                            {rule.stage_applicability.map(s => (
+                              <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
+                            ))}
+                          </div>
+                        )}
+                        {(appliedSiteDomains.length > 0 || rule.competitor_domains.length > 0) && (
+                          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                            {appliedSiteDomains.slice(0, 4).map(d => (
+                              <span key={d} className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100">{d}</span>
+                            ))}
+                            {appliedSiteDomains.length > 4 && (
+                              <span className="text-[10px] text-gray-400">+{appliedSiteDomains.length - 4} 站点</span>
+                            )}
+                            {rule.competitor_domains.slice(0, 3).map(d => (
+                              <span key={d} className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded border border-orange-100">{d}</span>
+                            ))}
+                            {rule.competitor_domains.length > 3 && (
+                              <span className="text-[10px] text-gray-400">+{rule.competitor_domains.length - 3} 竞品</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-shrink-0 text-right space-y-1">
+                        {sr !== null ? (
+                          <div>
+                            <span className="text-base font-bold text-green-600">{sr}%</span>
+                            <p className="text-[10px] text-gray-400">{total} 次验证</p>
+                          </div>
+                        ) : rule.confidence > 0 ? (
+                          <div>
+                            <span className="text-base font-bold text-gray-400">{rule.confidence}%</span>
+                            <p className="text-[10px] text-gray-400">信心度</p>
+                          </div>
+                        ) : null}
+                      </div>
+                      {canEdit && (
+                        <div className="flex-shrink-0 flex items-center gap-1 ml-1">
+                          <button onClick={() => openEdit(rule)} title="编辑"
+                            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                          </button>
+                          <button onClick={() => toggleStatus(rule)} title={rule.status === 'active' ? '停用' : '启用'}
+                            className={`p-1.5 rounded-lg transition-colors ${rule.status === 'active' ? 'text-green-500 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728M12 8v4m0 4h.01"/></svg>
+                          </button>
+                          {role === 'super' && (
+                            <button onClick={() => deleteRule(rule)} title="删除"
+                              className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {rule.description && (
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
-                    )}
-                    {rule.stage_applicability.length > 0 && (
-                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                        {rule.stage_applicability.map(s => (
-                          <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
-                        ))}
-                      </div>
-                    )}
-                    {/* Applied sites + competitor badges */}
-                    {(appliedSiteDomains.length > 0 || rule.competitor_domains.length > 0) && (
-                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                        {appliedSiteDomains.slice(0, 4).map(d => (
-                          <span key={d} className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100">{d}</span>
-                        ))}
-                        {appliedSiteDomains.length > 4 && (
-                          <span className="text-[10px] text-gray-400">+{appliedSiteDomains.length - 4} 站点</span>
-                        )}
-                        {rule.competitor_domains.slice(0, 3).map(d => (
-                          <span key={d} className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded border border-orange-100">{d}</span>
-                        ))}
-                        {rule.competitor_domains.length > 3 && (
-                          <span className="text-[10px] text-gray-400">+{rule.competitor_domains.length - 3} 竞品</span>
-                        )}
-                      </div>
-                    )}
                   </div>
-                  <div className="flex-shrink-0 text-right space-y-1">
-                    {sr !== null ? (
-                      <div>
-                        <span className="text-base font-bold text-green-600">{sr}%</span>
-                        <p className="text-[10px] text-gray-400">{total} 次验证</p>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── AI 新建规则 tab ── */}
+      {activeTab === 'ai' && (
+        <div>
+          {/* Rate limit notice */}
+          <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 mb-5 flex items-start gap-2.5">
+            <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+              <p className="text-xs font-medium text-amber-800">Gemini 免费版限制</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                每分钟最多 <span className="font-semibold">15 次</span>请求 · 每天最多 <span className="font-semibold">1,500 次</span>请求（gemini-2.0-flash 免费套餐）
+              </p>
+            </div>
+          </div>
+
+          {/* Prompt input */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <label className="block text-sm font-semibold text-gray-800 mb-2">描述你想建立的规则</label>
+            <textarea
+              value={aiPrompt}
+              onChange={e => setAiPrompt(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAiAnalysis() }}
+              rows={4}
+              disabled={aiLoading}
+              placeholder="例如：针对权重与竞品相对一样或较低的词，通过新增内容来抢排名。请分析我们目前有没有相关数据可以支撑这条规则…"
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-violet-400 text-gray-700 disabled:bg-gray-50 disabled:text-gray-400"
+            />
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-xs text-gray-400">AI 会检查现有数据是否充足，数据不足时会说明需要哪些 cron 任务（可联系开发者添加）</p>
+              <button
+                onClick={runAiAnalysis}
+                disabled={aiLoading || !aiPrompt.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 bg-violet-500 text-white text-sm font-medium rounded-lg hover:bg-violet-600 disabled:opacity-50 transition-colors ml-3 flex-shrink-0"
+              >
+                {aiLoading
+                  ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <SparkleIcon className="w-3.5 h-3.5" />
+                }
+                {aiLoading ? '分析中…' : 'AI 分析'}
+              </button>
+            </div>
+          </div>
+
+          {/* AI Output */}
+          {aiOutput && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <SparkleIcon className="w-4 h-4 text-violet-500" />
+                <p className="text-sm font-semibold text-gray-800">分析结果</p>
+                {aiLoading
+                  ? <div className="w-3 h-3 border border-violet-400 border-t-transparent rounded-full animate-spin ml-1" />
+                  : <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-medium">完成</span>
+                }
+              </div>
+
+              <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {aiDisplayText}
+              </div>
+
+              {/* Rule proposal card */}
+              {proposedRule && !aiLoading && (
+                <div className="mt-5 border-t border-gray-100 pt-4">
+                  <p className="text-xs font-medium text-gray-500 mb-3">AI 建议的规则</p>
+                  <div className="bg-violet-50 border border-violet-100 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800">{proposedRule.name}</p>
+                        {proposedRule.description && (
+                          <p className="text-xs text-gray-600 mt-1 leading-relaxed">{proposedRule.description}</p>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          {proposedRule.type && TYPE_LABELS[proposedRule.type] && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${TYPE_LABELS[proposedRule.type].bg} ${TYPE_LABELS[proposedRule.type].text}`}>
+                              {TYPE_LABELS[proposedRule.type].label}
+                            </span>
+                          )}
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">AI 来源</span>
+                          {proposedRule.status && STATUS_LABELS[proposedRule.status] && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_LABELS[proposedRule.status].bg} ${STATUS_LABELS[proposedRule.status].text}`}>
+                              {STATUS_LABELS[proposedRule.status].label}
+                            </span>
+                          )}
+                          {(proposedRule.stage_applicability ?? []).map(s => (
+                            <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
+                          ))}
+                          {proposedRule.confidence != null && (
+                            <span className="text-[10px] text-gray-500">信心度 {proposedRule.confidence}%</span>
+                          )}
+                        </div>
                       </div>
-                    ) : rule.confidence > 0 ? (
-                      <div>
-                        <span className="text-base font-bold text-gray-400">{rule.confidence}%</span>
-                        <p className="text-[10px] text-gray-400">信心度</p>
-                      </div>
-                    ) : null}
-                  </div>
-                  {canEdit && (
-                    <div className="flex-shrink-0 flex items-center gap-1 ml-1">
-                      <button onClick={() => openEdit(rule)} title="编辑"
-                        className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                      </button>
-                      <button onClick={() => toggleStatus(rule)} title={rule.status === 'active' ? '停用' : '启用'}
-                        className={`p-1.5 rounded-lg transition-colors ${rule.status === 'active' ? 'text-green-500 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}>
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728M12 8v4m0 4h.01"/></svg>
-                      </button>
-                      {role === 'super' && (
-                        <button onClick={() => deleteRule(rule)} title="删除"
-                          className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      {canEdit && (
+                        <button
+                          onClick={saveProposedRule}
+                          disabled={savingProposal}
+                          className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-violet-500 text-white text-xs font-medium rounded-lg hover:bg-violet-600 disabled:opacity-50 transition-colors"
+                        >
+                          {savingProposal ? '保存中…' : '保存为规则'}
                         </button>
                       )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )}
+            </div>
+          )}
         </div>
       )}
 
