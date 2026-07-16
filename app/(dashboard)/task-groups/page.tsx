@@ -1689,13 +1689,9 @@ export default function TaskGroupsPage() {
       // Filter and deduplicate by keyword for the selected date
       const seenRd = new Set<string>()
       const dateRows = siteRankdownData
-        .filter(r => r.stat_date === selectedDate)
+        .filter(r => r.stat_date === selectedDate && r.volume > 0)
         .filter(r => { if (seenRd.has(r.keyword)) return false; seenRd.add(r.keyword); return true })
-        .sort((a, b) => {
-          const da = a.prev_rank != null ? a.rank_position - a.prev_rank : 0
-          const db = b.prev_rank != null ? b.rank_position - b.prev_rank : 0
-          return db - da // biggest drop first
-        })
+        .sort((a, b) => b.volume - a.volume)
       return (
         <div>
           {/* Date picker */}
