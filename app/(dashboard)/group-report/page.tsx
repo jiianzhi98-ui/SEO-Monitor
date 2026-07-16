@@ -750,106 +750,30 @@ function CompetitorOutcomesPanel({
   )
 }
 
-// ── Mock Data (set USE_MOCK_DATA = false to disable) ──────────────────────────
-
-const USE_MOCK_DATA = false
-
-const MOCK_GROUP: Group = {
-  id: 'mock-group-1',
-  name: 'SEO内容组',
-  type: 'content',
-  site_domains: ['myblog.com', 'mysite.com'],
-  competitor_domains: [],
-  members: [
-    { user_id: 'user-1', username: '张三', member_type: 'member' },
-    { user_id: 'user-2', username: '李四', member_type: 'member' },
-  ],
-}
-
-const MOCK_REPORT: ReportData = {
-  period: 'yesterday',
-  startDate: '2026-07-13',
-  endDate: '2026-07-13',
-  groupTotal: {
-    total: { count: 28, volume: 48600 },
-    bySource: [
-      { source: 'aizhan', count: 18, volume: 32400 },
-      { source: 'baidu', count: 10, volume: 16200 },
-    ],
-  },
-  members: [
-    {
-      userId: 'user-1', username: '张三', memberType: 'member',
-      total: { count: 16, volume: 28900 },
-      bySource: [{ source: 'aizhan', count: 10, volume: 18000 }, { source: 'baidu', count: 6, volume: 10900 }],
-      byDate: [{
-        date: '2026-07-13', count: 16, volume: 28900,
-        keywords: [
-          { keyword: 'SEO优化技巧', search_volume: 5400, source: 'aizhan', operation_type: 'add', final_keyword: null, page_url: 'https://myblog.com/seo-tips' },
-          { keyword: '关键词研究方法', search_volume: 2100, source: 'aizhan', operation_type: 'add', final_keyword: null, page_url: null },
-          { keyword: '内容营销策略', search_volume: 3800, source: 'baidu', operation_type: 'add', final_keyword: null, page_url: null },
-          { keyword: '搜索引擎算法', search_volume: 1200, source: 'aizhan', operation_type: 'add', final_keyword: null, page_url: null },
-          { keyword: '长尾关键词挖掘', search_volume: 890, source: 'aizhan', operation_type: 'add', final_keyword: null, page_url: null },
-        ],
-      }],
-    },
-    {
-      userId: 'user-2', username: '李四', memberType: 'member',
-      total: { count: 12, volume: 19700 },
-      bySource: [{ source: 'aizhan', count: 8, volume: 14400 }, { source: 'baidu', count: 4, volume: 5300 }],
-      byDate: [{
-        date: '2026-07-13', count: 12, volume: 19700,
-        keywords: [
-          { keyword: '外链建设技巧', search_volume: 3200, source: 'aizhan', operation_type: 'add', final_keyword: null, page_url: null },
-          { keyword: '网站速度优化', search_volume: 4100, source: 'aizhan', operation_type: 'add', final_keyword: null, page_url: 'https://mysite.com/speed' },
-          { keyword: '移动端SEO', search_volume: 1800, source: 'baidu', operation_type: 'add', final_keyword: null, page_url: null },
-          { keyword: '本地SEO策略', search_volume: 960, source: 'aizhan', operation_type: 'add', final_keyword: null, page_url: null },
-        ],
-      }],
-    },
-  ],
-}
-
-const MOCK_OUTCOMES: OutcomeRow[] = [
-  { id: 'o1', claim_id: 'c1', user_id: 'user-1', username: '张三', keyword: 'SEO优化技巧', final_keyword: null, page_url: 'https://myblog.com/seo-tips', operation_type: '新增', search_volume: 5400, submit_date: '2026-07-11', record_date: '2026-07-14', is_indexed: true, index_first_seen: '2026-07-12', index_disappeared: null, rank_keyword: 'SEO优化技巧', rank_position: 8, prev_rank_position: 25, rank_change: 17, rank_volume: 5200, rank_date: '2026-07-14', effectiveness: '获取排名' },
-  { id: 'o2', claim_id: 'c2', user_id: 'user-1', username: '张三', keyword: '关键词研究方法', final_keyword: null, page_url: 'https://myblog.com/kw-research', operation_type: '新增', search_volume: 2100, submit_date: '2026-07-11', record_date: '2026-07-14', is_indexed: true, index_first_seen: '2026-07-13', index_disappeared: null, rank_keyword: null, rank_position: null, prev_rank_position: null, rank_change: null, rank_volume: 0, rank_date: null, effectiveness: '获取收录' },
-  { id: 'o3', claim_id: 'c3', user_id: 'user-2', username: '李四', keyword: '外链建设技巧', final_keyword: null, page_url: null, operation_type: '新增', search_volume: 3200, submit_date: '2026-07-10', record_date: '2026-07-14', is_indexed: false, index_first_seen: null, index_disappeared: null, rank_keyword: null, rank_position: null, prev_rank_position: null, rank_change: null, rank_volume: 0, rank_date: null, effectiveness: '无效' },
-  { id: 'o4', claim_id: 'c4', user_id: 'user-2', username: '李四', keyword: '网站速度优化', final_keyword: null, page_url: 'https://mysite.com/speed', operation_type: '新增', search_volume: 4100, submit_date: '2026-07-12', record_date: '2026-07-14', is_indexed: true, index_first_seen: '2026-07-13', index_disappeared: null, rank_keyword: '网站速度优化', rank_position: 5, prev_rank_position: 18, rank_change: 13, rank_volume: 4000, rank_date: '2026-07-14', effectiveness: '获取排名' },
-  { id: 'o5', claim_id: 'c5', user_id: 'user-1', username: '张三', keyword: '内容营销策略', final_keyword: null, page_url: null, operation_type: '新增', search_volume: 3800, submit_date: '2026-07-12', record_date: '2026-07-14', is_indexed: false, index_first_seen: null, index_disappeared: null, rank_keyword: null, rank_position: null, prev_rank_position: null, rank_change: null, rank_volume: 0, rank_date: null, effectiveness: '追踪中' },
-]
-
-const MOCK_OUTCOME_SUMMARY: OutcomeSummary = { total: 5, rankedCount: 2, indexedCount: 1, trackingCount: 1, invalidCount: 1 }
-
-const MOCK_RULES: Rule[] = [
-  { id: 'mock-r1', rule_number: 1, name: '主词+地域词组合投稿', type: 'add', status: 'active', source: 'data', stage_applicability: ['新站', '成长期'], description: '优先选择搜索量500-3000的主词，叠加本地化修饰词，提升抓取概率。', confidence: 82, success_count: 15, fail_count: 3, priority: 1, site_ids: [], competitor_domains: [], created_at: '2026-06-01T00:00:00Z' },
-  { id: 'mock-r2', rule_number: 2, name: '近30天涨排名词优先更新', type: 'update', status: 'active', source: 'manual', stage_applicability: ['成长期', '成熟期'], description: '站点上月出现过排名波动（涨）的词，本月再次认领并更新内容，有80%概率巩固排名。', confidence: 88, success_count: 9, fail_count: 1, priority: 2, site_ids: [], competitor_domains: [], created_at: '2026-06-10T00:00:00Z' },
-  { id: 'mock-r3', rule_number: 3, name: '避开竞品高密度词', type: 'mixed', status: 'testing', source: 'ai', stage_applicability: ['新站'], description: '竞品同期大量覆盖的词，新站成功率低于20%，建议优先投入差异化词库。', confidence: 60, success_count: 2, fail_count: 5, priority: 3, site_ids: [], competitor_domains: [], created_at: '2026-07-01T00:00:00Z' },
-]
-
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function GroupReportPage() {
   const { role } = useUser()
   const canSeeAll = role === 'super' || role === 'admin'
 
-  const [groups, setGroups] = useState<Group[]>(USE_MOCK_DATA ? [MOCK_GROUP] : [])
-  const [activeTabId, setActiveTabId] = useState<string>(USE_MOCK_DATA ? 'mock-group-1' : 'competitors') // 'competitors' | groupId
+  const [groups, setGroups] = useState<Group[]>([])
+  const [activeTabId, setActiveTabId] = useState<string>('competitors') // 'competitors' | groupId
   const [competitorGroupId, setCompetitorGroupId] = useState<string>('')
   const [reportTab, setReportTab] = useState<ReportTab>('submissions')
   const [period, setPeriod] = useState<Period>('yesterday')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
-  const [report, setReport] = useState<ReportData | null>(USE_MOCK_DATA ? MOCK_REPORT : null)
+  const [report, setReport] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
   const [entryKwPage, setEntryKwPage] = useState<Record<string, number>>({})
   const [accordionPage, setAccordionPage] = useState(0)
   const [filterUserId, setFilterUserId] = useState('all')
-  const [groupsLoading, setGroupsLoading] = useState(USE_MOCK_DATA ? false : true)
+  const [groupsLoading, setGroupsLoading] = useState(true)
 
   // Outcomes tab state
-  const [outcomes, setOutcomes] = useState<OutcomeRow[]>(USE_MOCK_DATA ? MOCK_OUTCOMES : [])
-  const [outcomeSummary, setOutcomeSummary] = useState<OutcomeSummary | null>(USE_MOCK_DATA ? MOCK_OUTCOME_SUMMARY : null)
+  const [outcomes, setOutcomes] = useState<OutcomeRow[]>([])
+  const [outcomeSummary, setOutcomeSummary] = useState<OutcomeSummary | null>(null)
   const [outcomesLoading, setOutcomesLoading] = useState(false)
   const [oFilterSubmitStart, setOFilterSubmitStart] = useState('')
   const [oFilterSubmitEnd, setOFilterSubmitEnd] = useState('')
@@ -865,7 +789,7 @@ export default function GroupReportPage() {
   const [oPageSize, setOPageSize] = useState(20)
 
   // Rules tab state
-  const [rules, setRules] = useState<Rule[]>(USE_MOCK_DATA ? MOCK_RULES : [])
+  const [rules, setRules] = useState<Rule[]>([])
   const [rulesLoading, setRulesLoading] = useState(false)
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [editingRule, setEditingRule] = useState<Rule | null>(null)
@@ -939,7 +863,6 @@ export default function GroupReportPage() {
 
   // Load groups
   useEffect(() => {
-    if (USE_MOCK_DATA) return
     fetch('/api/task-groups').then(r => r.json()).then(d => {
       const g: Group[] = (d.groups || []).map((grp: Group) => ({ ...grp, site_domains: grp.site_domains || [], competitor_domains: grp.competitor_domains || [] }))
       setGroups(g)
@@ -972,7 +895,7 @@ export default function GroupReportPage() {
 
   // Load member report
   useEffect(() => {
-    if (USE_MOCK_DATA || !activeGroupId) return
+    if (!activeGroupId) return
     if (period === 'custom') {
       if (!customStart || !customEnd || customStart > customEnd) return
     }
@@ -1002,7 +925,7 @@ export default function GroupReportPage() {
 
   // Load outcomes data
   useEffect(() => {
-    if (USE_MOCK_DATA || !activeGroupId || reportTab !== 'outcomes') return
+    if (!activeGroupId || reportTab !== 'outcomes') return
     setOutcomesLoading(true)
     setOutcomes([])
     setOutcomeSummary(null)
@@ -1026,7 +949,6 @@ export default function GroupReportPage() {
 
   // Load rules data for whichever tab (own-site or competitor) is showing the rules panel
   useEffect(() => {
-    if (USE_MOCK_DATA) return
     const needRules = reportTab === 'rules' || (activeTabId === 'competitors' && competitorInnerTab === 'rules')
     if (!rulesGroupId || !needRules) return
     const isCompetitor = activeTabId === 'competitors' && competitorInnerTab === 'rules'

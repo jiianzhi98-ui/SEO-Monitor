@@ -441,38 +441,6 @@ function MemberModal({
   )
 }
 
-// ── Mock data for UI preview ────────────────────────────────────────────────────
-const MOCK_OWN_REC = [
-  { keyword: '自动点击器', rule_name: '#1 移动端排名下跌更新', stat_date: '2026-07-15', volume: 12100 },
-  { keyword: '关键词排名查询', rule_name: '#2 跌出首页后48h更新', stat_date: '2026-07-15', volume: 8900 },
-  { keyword: '百度SEO优化工具', rule_name: '#1 移动端排名下跌更新', stat_date: '2026-07-14', volume: 5400 },
-  { keyword: '网站权重查询', rule_name: '#3 连续下跌超过10名', stat_date: '2026-07-14', volume: 22000 },
-  { keyword: 'seo优化软件', rule_name: '#2 跌出首页后48h更新', stat_date: '2026-07-13', volume: 3300 },
-  { keyword: '站长工具关键词查询', rule_name: '#3 连续下跌超过10名', stat_date: '2026-07-13', volume: 7600 },
-]
-const MOCK_COMP_REC = [
-  {
-    domain: 'competitor-a.com',
-    keywords: [
-      { keyword: '自动点击器', rule_name: '#1 移动端排名下跌更新', discovery_date: '2026-07-15', effectiveness: '有效' },
-      { keyword: '关键词排名查询', rule_name: '#2 跌出首页后48h更新', discovery_date: '2026-07-14', effectiveness: '追踪中' },
-      { keyword: 'seo排名工具', rule_name: '#1 移动端排名下跌更新', discovery_date: '2026-07-13', effectiveness: '无效' },
-    ],
-  },
-  {
-    domain: 'competitor-b.com',
-    keywords: [
-      { keyword: '百度权重查询', rule_name: '#3 连续下跌超过10名', discovery_date: '2026-07-15', effectiveness: '有效' },
-      { keyword: '网站收录查询', rule_name: '#1 移动端排名下跌更新', discovery_date: '2026-07-14', effectiveness: '追踪中' },
-    ],
-  },
-]
-const MOCK_UPDATE_REC = [
-  { keyword: '百度SEO优化工具', stat_date: '2026-07-15', rank_position: null as number | null, prev_rank: 18 as number | null, volume: 5400, url: 'https://mysite.com/seo-tools', title: 'SEO优化工具推荐' },
-  { keyword: '网站权重查询', stat_date: '2026-07-15', rank_position: 32, prev_rank: 21, volume: 22000, url: 'https://mysite.com/weight', title: '网站权重查询工具' },
-  { keyword: '自动点击器', stat_date: '2026-07-14', rank_position: 47, prev_rank: 35, volume: 12100, url: null, title: null },
-]
-
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function TaskGroupsPage() {
@@ -494,7 +462,6 @@ export default function TaskGroupsPage() {
   const [rightTab, setRightTab] = useState<RightTab>('recommend')
   const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0, rankdown: 0 })
   const [recSubTab, setRecSubTab] = useState<RecSubTab>('rules')
-  const [recMockMode, setRecMockMode] = useState(false)
   const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; rule_name: string; discovery_date: string; effectiveness: string }[] }[]>([])
   const [compRecLoading, setCompRecLoading] = useState(false)
   const [ownRecData, setOwnRecData] = useState<{ keyword: string; rule_name: string; stat_date: string; volume: number }[]>([])
@@ -1261,28 +1228,18 @@ export default function TaskGroupsPage() {
       return (
         <div>
           {/* sub-tabs */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex border border-gray-200 rounded-lg overflow-hidden w-fit">
-              {(['rules', 'competitors', 'update'] as RecSubTab[]).map(st => (
-                <button key={st} onClick={() => { setRecSubTab(st); setPage('recommend', 0) }}
-                  className={`px-4 py-1.5 text-sm font-medium transition-colors ${recSubTab === st ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                  {st === 'rules' ? '规则推荐' : st === 'competitors' ? '竞品规则推荐' : '更新推荐'}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setRecMockMode(m => !m)}
-              className={`text-xs px-2 py-1 rounded border transition-colors ${recMockMode ? 'bg-amber-50 border-amber-300 text-amber-600' : 'border-gray-200 text-gray-400 hover:text-gray-600'}`}
-              title="切换示例数据预览">
-              {recMockMode ? '示例中' : '示例'}
-            </button>
+          <div className="flex border border-gray-200 rounded-lg overflow-hidden mb-4 w-fit">
+            {(['rules', 'competitors', 'update'] as RecSubTab[]).map(st => (
+              <button key={st} onClick={() => { setRecSubTab(st); setPage('recommend', 0) }}
+                className={`px-4 py-1.5 text-sm font-medium transition-colors ${recSubTab === st ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                {st === 'rules' ? '规则推荐' : st === 'competitors' ? '竞品规则推荐' : '更新推荐'}
+              </button>
+            ))}
           </div>
-          {recMockMode && <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1.5 mb-3">示例数据 — 仅用于预览界面效果</div>}
 
           {recSubTab === 'rules' && (() => {
-            const visibleOwn = recMockMode
-              ? MOCK_OWN_REC.filter(w => !dismissedRec.has(w.keyword) && !submittedSet.has(w.keyword))
-              : ownRecData.filter(w => recPool.has(w.keyword) && !dismissedRec.has(w.keyword) && !submittedSet.has(w.keyword))
-            return (!recMockMode && (ownRecLoading || radarLoading || !radarLoaded)) ? <Spinner /> : visibleOwn.length === 0 ? (
+            const visibleOwn = ownRecData.filter(w => recPool.has(w.keyword) && !dismissedRec.has(w.keyword) && !submittedSet.has(w.keyword))
+            return (ownRecLoading || radarLoading || !radarLoaded) ? <Spinner /> : visibleOwn.length === 0 ? (
               <div className="text-center py-10 text-gray-400 text-sm">{recPool.size === 0 ? '暂无热词数据' : ownRecData.length === 0 ? '近30天自有站无规则触发记录' : '所有推荐词已移除，刷新页面可重新显示'}</div>
             ) : (
               <>
@@ -1331,14 +1288,12 @@ export default function TaskGroupsPage() {
           })()}
 
           {recSubTab === 'competitors' && (
-            (!recMockMode && (compRecLoading || radarLoading || !radarLoaded)) ? <Spinner /> : (recMockMode ? MOCK_COMP_REC : compRecData).length === 0 ? (
+            (compRecLoading || radarLoading || !radarLoaded) ? <Spinner /> : compRecData.length === 0 ? (
               <div className="text-center py-10 text-gray-400 text-sm">近30天竞品无规则触发记录</div>
             ) : (
               <div className="space-y-4">
-                {(recMockMode ? MOCK_COMP_REC : compRecData).map(({ domain, keywords }) => {
-                  const visibleKws = recMockMode
-                    ? keywords.filter(kw => !dismissedRec.has(kw.keyword) && !submittedSet.has(kw.keyword))
-                    : keywords.filter(kw => recPool.has(kw.keyword) && !dismissedRec.has(kw.keyword) && !submittedSet.has(kw.keyword))
+                {compRecData.map(({ domain, keywords }) => {
+                  const visibleKws = keywords.filter(kw => recPool.has(kw.keyword) && !dismissedRec.has(kw.keyword) && !submittedSet.has(kw.keyword))
                   if (visibleKws.length === 0) return null
                   return (
                     <div key={domain}>
@@ -1386,11 +1341,11 @@ export default function TaskGroupsPage() {
           )}
 
           {recSubTab === 'update' && (() => {
-            if (!recMockMode && siteRankdownLoading) return <Spinner />
+            if (siteRankdownLoading) return <Spinner />
             // Build sets of member's submitted keywords and URLs for matching
             const submittedKwSet = new Set(claimedKeywords.map(k => (k.final_keyword || k.keyword).toLowerCase()))
             const submittedUrlSet = new Set(claimedKeywords.filter(k => k.page_url).map(k => normalizeUrl(k.page_url!).toLowerCase()))
-            const matched = recMockMode ? MOCK_UPDATE_REC.filter(r => !dismissedRec.has(r.keyword)) : siteRankdownData.filter(r =>
+            const matched = siteRankdownData.filter(r =>
               submittedKwSet.has(r.keyword.toLowerCase()) ||
               (r.url && submittedUrlSet.has(normalizeUrl(r.url).toLowerCase()))
             ).filter(r => !dismissedRec.has(r.keyword))
