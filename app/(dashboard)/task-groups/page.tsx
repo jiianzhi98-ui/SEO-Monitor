@@ -1396,9 +1396,11 @@ export default function TaskGroupsPage() {
                               </a>
                             ) : <span className="text-xs text-gray-300">—</span>}
                           </td>
-                          <td className="px-2 py-2 text-center text-xs font-medium text-gray-700">{r.rank_position}</td>
+                          <td className="px-2 py-2 text-center text-xs font-medium text-gray-700">
+                            {r.rank_position ?? <span className="text-gray-400">脱排</span>}
+                          </td>
                           <td className="px-2 py-2 text-center text-xs font-medium text-red-500">
-                            {r.prev_rank != null ? `▼${r.rank_position - r.prev_rank}` : '—'}
+                            {r.rank_position == null ? <span className="text-gray-400">脱排</span> : r.prev_rank != null ? `▼${r.rank_position - r.prev_rank}` : '—'}
                           </td>
                           <td className="px-2 py-2 text-center text-xs text-gray-500">{r.volume > 0 ? fmtVol(r.volume) : '—'}</td>
                           <td className="px-2 py-2 text-right">
@@ -1727,7 +1729,7 @@ export default function TaskGroupsPage() {
                 <tbody>
                   {dateRows.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE).map((r, i) => {
                     const claimed = claimedSet.has(r.keyword)
-                    const drop = r.prev_rank != null ? r.rank_position - r.prev_rank : null
+                    const drop = (r.rank_position != null && r.prev_rank != null) ? r.rank_position - r.prev_rank : null
                     return (
                       <tr key={`rd-${r.keyword}|${i}`} onDoubleClick={() => claimKeyword(r.keyword, '跌词更新', r.volume)}
                         className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
@@ -1749,10 +1751,12 @@ export default function TaskGroupsPage() {
                             </a>
                           ) : <span className="text-xs text-gray-300">—</span>}
                         </td>
-                        <td className="px-2 py-2 text-center text-xs font-medium text-gray-700">{r.rank_position}</td>
+                        <td className="px-2 py-2 text-center text-xs font-medium text-gray-700">
+                          {r.rank_position ?? <span className="text-gray-400">脱排</span>}
+                        </td>
                         <td className="px-2 py-2 text-center text-xs text-gray-400">{r.prev_rank ?? '—'}</td>
                         <td className="px-2 py-2 text-center text-xs font-medium">
-                          {drop != null ? <span className="text-red-500">▼{drop}</span> : <span className="text-gray-300">新</span>}
+                          {r.rank_position == null ? <span className="text-gray-400">脱排</span> : drop != null ? <span className="text-red-500">▼{drop}</span> : <span className="text-gray-300">新</span>}
                         </td>
                         <td className="px-2 py-2 text-center text-xs text-gray-500">{r.volume > 0 ? fmtVol(r.volume) : '—'}</td>
                         <td className="px-2 py-2 text-right">
