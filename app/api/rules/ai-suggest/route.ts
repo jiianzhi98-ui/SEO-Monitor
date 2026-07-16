@@ -92,30 +92,41 @@ ${contextStr}
 
 请用中文回答，保持专业、简洁。`
 
-  // Call Gemini streaming API
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${apiKey}&alt=sse`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
-      }),
-    }
-  )
+  // Try models in order — fallback from 2.0-flash to 1.5-flash if quota exhausted
+  const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash']
+  let geminiRes: Response | null = null
+  let lastError = ''
 
-  if (!geminiRes.ok) {
-    const errText = await geminiRes.text()
-    return NextResponse.json({ error: errText }, { status: geminiRes.status })
+  for (const model of MODELS) {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+        }),
+      }
+    )
+    if (r.ok) { geminiRes = r; break }
+    // 429 quota → try next model; other errors → fail immediately
+    lastError = await r.text()
+    if (r.status !== 429) {
+      return NextResponse.json({ error: lastError }, { status: r.status })
+    }
+  }
+
+  if (!geminiRes) {
+    return NextResponse.json({ error: lastError }, { status: 429 })
   }
 
   // Pipe Gemini SSE → client SSE (extract text chunks only)
   const encoder = new TextEncoder()
   const readable = new ReadableStream({
     async start(controller) {
-      const reader = geminiRes.body!.getReader()
+      const reader = geminiRes!.body!.getReader()
       const decoder = new TextDecoder()
       let buf = ''
       try {
