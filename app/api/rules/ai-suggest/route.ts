@@ -92,8 +92,9 @@ ${contextStr}
 
 请用中文回答，保持专业、简洁。`
 
-  // Try models in order — use latest stable models
-  const MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
+  // gemini-3.1-flash-lite: 15 RPM + 500 RPD free tier (best daily quota)
+  // fallbacks in case of quota exhaustion
+  const MODELS = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']
   let geminiRes: Response | null = null
   let lastError = ''
 

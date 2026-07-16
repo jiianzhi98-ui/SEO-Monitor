@@ -515,7 +515,7 @@ export default function RulesPage() {
             <div>
               <p className="text-xs font-medium text-amber-800">Gemini 免费版限制</p>
               <p className="text-xs text-amber-700 mt-0.5">
-                免费套餐每分钟请求数有限制，如遇错误请稍等片刻再试（gemini-3.5-flash / 2.5-flash）
+                每分钟最多 <span className="font-semibold">15 次</span>请求 · 每天最多 <span className="font-semibold">500 次</span>请求（gemini-3.1-flash-lite 免费套餐）
               </p>
             </div>
           </div>
