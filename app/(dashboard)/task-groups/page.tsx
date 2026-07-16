@@ -23,7 +23,7 @@ interface ClaimedKeyword {
   operation_type: string | null; final_keyword: string | null; page_url: string | null
 }
 
-type RightTab = 'recommend' | 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib'
+type RightTab = 'recommend' | 'search' | 'cross' | 'rank' | 'streak' | 'newWords' | 'wordLib' | 'update'
 type RecSubTab = 'rules' | 'competitors'
 type Badge = 'new' | 'updated' | null
 interface DetailRow { date: string; domain: string }
@@ -461,13 +461,15 @@ export default function TaskGroupsPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const [rightTab, setRightTab] = useState<RightTab>('recommend')
-  const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 })
+  const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0, update: 0 })
   const [recSubTab, setRecSubTab] = useState<RecSubTab>('rules')
   const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; rule_name: string; discovery_date: string; effectiveness: string }[] }[]>([])
   const [compRecLoading, setCompRecLoading] = useState(false)
   const [ownRecData, setOwnRecData] = useState<{ keyword: string; rule_name: string; stat_date: string; volume: number }[]>([])
   const [ownRecLoading, setOwnRecLoading] = useState(false)
   const [dismissedRec, setDismissedRec] = useState<Set<string>>(new Set())
+  const [updateRecData, setUpdateRecData] = useState<{ claim_id: string; keyword: string; final_keyword: string | null; page_url: string | null; rank_position: number; prev_rank_position: number; rank_drop: number; rank_volume: number; record_date: string; effectiveness: string; username: string }[]>([])
+  const [updateRecLoading, setUpdateRecLoading] = useState(false)
 
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
   const [radarLoaded, setRadarLoaded] = useState(false)
@@ -491,7 +493,6 @@ export default function TaskGroupsPage() {
   const [wordLibData, setWordLibData] = useState<WordLibEntry[]>([])
   const [wordLibLoading, setWordLibLoading] = useState(false)
   const [wordLibLoaded, setWordLibLoaded] = useState(false)
-  const [wordLibSearch, setWordLibSearch] = useState('')
   const [sortCol, setSortCol]           = useState('')
   const [sortDir, setSortDir]           = useState<'asc'|'desc'|''>('')
 
@@ -756,6 +757,56 @@ export default function TaskGroupsPage() {
       }
       setCompRecData(compDomains.filter(d => grouped.has(d)).map(d => ({ domain: d, keywords: grouped.get(d)! })))
     } finally { setCompRecLoading(false) }
+  }
+
+  async function loadUpdateRec() {
+    if (!activeGroup || !currentUserId) return
+    setUpdateRecLoading(true)
+    setUpdateRecData([])
+    try {
+      const supabase = getBrowserClient()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabase.from('site_tracking_records') as any)
+        .select('claim_id, user_id, keyword, final_keyword, page_url, rank_position, prev_rank_position, rank_volume, record_date, effectiveness')
+        .eq('group_id', activeGroup.id)
+        .not('rank_position', 'is', null)
+        .not('prev_rank_position', 'is', null)
+        .order('record_date', { ascending: false })
+        .limit(2000)
+      if (!canManage) query = query.eq('user_id', currentUserId)
+      const { data } = await query
+      // Filter: rank dropped (larger number = lower rank)
+      const dropped = ((data || []) as { claim_id: string; user_id: string; keyword: string; final_keyword: string | null; page_url: string | null; rank_position: number; prev_rank_position: number; rank_volume: number; record_date: string; effectiveness: string }[])
+        .filter(r => r.rank_position > r.prev_rank_position)
+      // Deduplicate by claim_id (keep latest, rows already sorted desc)
+      const seen = new Set<string>()
+      const deduped = dropped.filter(r => { if (seen.has(r.claim_id)) return false; seen.add(r.claim_id); return true })
+      deduped.sort((a, b) => (b.rank_position - b.prev_rank_position) - (a.rank_position - a.prev_rank_position))
+      // Fetch member usernames for admin view
+      const usernameMap = new Map<string, string>()
+      if (canManage && deduped.length > 0) {
+        const userIds = Array.from(new Set(deduped.map(r => r.user_id)))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: members } = await (supabase.from('task_group_members') as any)
+          .select('user_id, username').eq('group_id', activeGroup.id).in('user_id', userIds)
+        for (const m of (members || []) as { user_id: string; username: string | null }[]) {
+          usernameMap.set(m.user_id, m.username || m.user_id.slice(0, 8))
+        }
+      }
+      setUpdateRecData(deduped.map(r => ({
+        claim_id: r.claim_id,
+        keyword: r.keyword,
+        final_keyword: r.final_keyword,
+        page_url: r.page_url,
+        rank_position: r.rank_position,
+        prev_rank_position: r.prev_rank_position,
+        rank_drop: r.rank_position - r.prev_rank_position,
+        rank_volume: r.rank_volume ?? 0,
+        record_date: r.record_date,
+        effectiveness: r.effectiveness,
+        username: usernameMap.get(r.user_id) || '',
+      })))
+    } finally { setUpdateRecLoading(false) }
   }
 
   // ── Detail modal data ───────────────────────────────────────────────────────
@@ -1028,6 +1079,7 @@ export default function TaskGroupsPage() {
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab === 'recommend' && recSubTab === 'rules') loadOwnRec() }, [rightTab, recSubTab, activeGroupId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab === 'recommend' && recSubTab === 'competitors') loadCompRec() }, [rightTab, recSubTab, activeGroupId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (rightTab === 'update') loadUpdateRec() }, [rightTab, activeGroupId]) // eslint-disable-line react-hooks/exhaustive-deps
   // Scroll today's task list to bottom when a new claim is added
   useEffect(() => {
     if (claimedListRef.current) claimedListRef.current.scrollTop = claimedListRef.current.scrollHeight
@@ -1527,50 +1579,112 @@ export default function TaskGroupsPage() {
 
     if (rightTab === 'wordLib') {
       if (wordLibLoading) return <Spinner />
-      const wlQ = wordLibSearch.trim().toLowerCase()
-      const wlResults = wlQ ? wordLibWords.filter(w => w.keyword.toLowerCase().includes(wlQ)) : []
+      const sorted_wl = sortCol && sortDir ? [...wordLibWords].sort((a: any, b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        const va: any = sortCol === 'date' ? (a.last_date||'') : sortCol === 'count' ? (a.longTailCount??0) : sortCol === 'siteCount' ? (a.siteCount??0) : 0 // eslint-disable-line @typescript-eslint/no-explicit-any
+        const vb: any = sortCol === 'date' ? (b.last_date||'') : sortCol === 'count' ? (b.longTailCount??0) : sortCol === 'siteCount' ? (b.siteCount??0) : 0 // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        return sortDir === 'asc' ? va - vb : vb - va
+      }) : wordLibWords
+      if (sorted_wl.length === 0) return <div className="text-center py-10 text-gray-400 text-sm">暂无词库数据</div>
+      const slice = sorted_wl.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
-        <div>
-          <div className="flex gap-2 mb-4">
-            <input
-              value={wordLibSearch}
-              onChange={e => setWordLibSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Escape' && setWordLibSearch('')}
-              placeholder="搜索词库关键词…"
-              className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
-            />
-            {wordLibSearch && (
-              <button onClick={() => setWordLibSearch('')} className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50">清空</button>
-            )}
-          </div>
-          {!wlQ ? (
-            <div className="text-center py-10 text-gray-300 text-sm">输入关键词搜索词库（共 {wordLibWords.length} 个词）</div>
-          ) : wlResults.length === 0 ? (
-            <div className="text-center py-10 text-gray-300 text-sm">未找到「{wordLibSearch}」相关词</div>
-          ) : (
-            <table className="w-full table-fixed">
-              <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-                <th className="px-3 py-2 text-left font-medium">关键词</th>
-                <th className="px-2 py-2 text-center font-medium w-20">长尾词数</th>
-                <th className="px-2 py-2 text-center font-medium w-16">站点数</th>
-                <th className="w-14" />
-              </tr></thead>
-              <tbody>
-                {wlResults.slice(0, 50).map((w, i) => (
-                  <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
-                    badge={getBadge(w.first_date, w.last_date, yesterday)}
-                    dateCell={<td />}
-                    claimed={claimedSet.has(w.keyword)}
-                    onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
-                    onView={() => openDetail(w.keyword, '更新词库')}>
-                    <td className="px-2 py-2 text-center text-xs text-gray-500">{w.longTailCount}词</td>
-                    <td className="px-2 py-2 text-center text-xs text-gray-500">{w.siteCount}站</td>
-                  </KwRow>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <>
+          <table className="w-full table-fixed">
+            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+              <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
+              <th className="px-3 py-2 text-left font-medium">关键词</th>
+              <th className="px-2 py-2 text-center font-medium w-20"><span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap">长尾词数{sortIcons('count')}</span></th>
+              <th className="px-2 py-2 text-center font-medium w-16"><span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap">站点数{sortIcons('siteCount')}</span></th>
+              <th className="w-14" />
+            </tr></thead>
+            <tbody>
+              {slice.map((w, i) => (
+                <KwRow key={`${w.keyword}|${i}`} keyword={w.keyword} today={today} yesterday={yesterday}
+                  badge={getBadge(w.first_date, w.last_date, yesterday)}
+                  dateCell={<DateCell date={w.last_date} today={today} yesterday={yesterday} badge={getBadge(w.first_date, w.last_date, yesterday)} includeYesterday />}
+                  claimed={false}
+                  onClaim={() => claimKeyword(w.keyword, '更新词库', 0)}
+                  onView={() => openDetail(w.keyword, '更新词库')}>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.longTailCount}词</td>
+                  <td className="px-2 py-2 text-center text-xs text-gray-500">{w.siteCount}站</td>
+                </KwRow>
+              ))}
+            </tbody>
+          </table>
+          <Pager page={pg} total={sorted_wl.length} onPage={p => setPage('wordLib', p)} />
+        </>
+      )
+    }
+
+    if (rightTab === 'update') {
+      if (updateRecLoading) return <Spinner />
+      if (updateRecData.length === 0) return (
+        <div className="text-center py-10 text-gray-400 text-sm">
+          {canManage ? '暂无页面排名下跌记录' : '你提交的页面暂无排名下跌记录'}
         </div>
+      )
+      const slice = updateRecData.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      return (
+        <>
+          <table className="w-full table-fixed">
+            <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+              {canManage && <th className="px-2 py-2 text-left font-medium w-14">成员</th>}
+              <th className="px-3 py-2 text-left font-medium">关键词</th>
+              <th className="px-2 py-2 text-left font-medium">页面URL</th>
+              <th className="px-2 py-2 text-center font-medium w-16 whitespace-nowrap">现排名</th>
+              <th className="px-2 py-2 text-center font-medium w-14 whitespace-nowrap">跌幅</th>
+              <th className="px-2 py-2 text-center font-medium w-16 whitespace-nowrap">搜索量</th>
+              <th className="w-14" />
+            </tr></thead>
+            <tbody>
+              {slice.map((r, i) => {
+                const claimed = claimedSet.has(r.final_keyword || r.keyword)
+                return (
+                  <tr key={`${r.claim_id}|${i}`} onDoubleClick={() => claimKeyword(r.final_keyword || r.keyword, '更新推荐', r.rank_volume)}
+                    className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
+                    title={claimed ? '已认领' : '双击认领'}>
+                    {canManage && (
+                      <td className="px-2 py-2 text-xs text-gray-400 truncate">{r.username}</td>
+                    )}
+                    <td className="px-3 py-2">
+                      <span className="text-sm text-gray-800 select-text cursor-text"
+                        onDoubleClick={e => { e.stopPropagation(); claimKeyword(r.final_keyword || r.keyword, '更新推荐', r.rank_volume) }}
+                        title={r.keyword}>
+                        {(r.final_keyword || r.keyword).length > 18 ? (r.final_keyword || r.keyword).slice(0, 18) + '…' : (r.final_keyword || r.keyword)}
+                      </span>
+                      {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
+                    </td>
+                    <td className="px-2 py-2">
+                      {r.page_url ? (
+                        <a href={r.page_url.startsWith('http') ? r.page_url : `https://${r.page_url}`}
+                          target="_blank" rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="text-[11px] text-blue-500 hover:underline truncate block max-w-[150px]"
+                          title={r.page_url}>
+                          {r.page_url.replace(/^https?:\/\//, '').slice(0, 28)}{r.page_url.replace(/^https?:\/\//, '').length > 28 ? '…' : ''}
+                        </a>
+                      ) : <span className="text-xs text-gray-300">—</span>}
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <span className="text-xs font-medium text-gray-700">{r.rank_position}</span>
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <span className="text-xs font-medium text-red-500">▼{r.rank_drop}</span>
+                    </td>
+                    <td className="px-2 py-2 text-center text-xs text-gray-500">
+                      {r.rank_volume > 0 ? fmtVol(r.rank_volume) : '—'}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <button onClick={() => openDetail(r.final_keyword || r.keyword, '更新推荐')}
+                        className="text-xs border rounded px-1.5 py-0.5 text-gray-400 hover:text-gray-600 border-gray-200 transition-colors">详情</button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <Pager page={pg} total={updateRecData.length} onPage={p => setPage('update', p)} />
+        </>
       )
     }
 
@@ -1582,12 +1696,12 @@ export default function TaskGroupsPage() {
   if (loading) return <div className="p-6"><Spinner /></div>
 
   const RIGHT_TABS: [RightTab, string][] = [
-    ['recommend', '今日推荐'], ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
+    ['recommend', '今日推荐'], ['update', '更新推荐'], ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
     ['streak', '连续上涨词'], ['newWords', '共新增词'], ['wordLib', '更新词库'],
   ]
 
   function SourceTag({ s }: { s: string }) {
-    const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库', '手动添加': '手动' }
+    const map: Record<string, string> = { '竞品涨排名': '竞品', '连续上涨词': '连涨', '共新增词': '新增', '搜索量查询': '搜索', '交叉词': '交叉', '更新词库': '词库', '手动添加': '手动', '更新推荐': '更新推荐', '规则推荐': '规则推荐', '竞品规则推荐': '竞品规则' }
     return <span className="text-[10px] text-gray-300 flex-shrink-0">{map[s] ?? s}</span>
   }
 
@@ -1689,7 +1803,7 @@ export default function TaskGroupsPage() {
         <div className="card overflow-hidden">
           <div className="flex items-center gap-1.5 px-4 pt-3 pb-0 border-b border-gray-100 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
             {groups.map(g => (
-              <button key={g.id} onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null); setTabPage({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0 }) }}
+              <button key={g.id} onClick={() => { setActiveGroupId(g.id); setViewingMemberId(currentUserId || null); setTabPage({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0, update: 0 }) }}
                 className={`px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap border-b-2 transition-colors ${activeGroupId === g.id ? 'border-green-500 text-green-700 bg-green-50/60' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
                 {g.name}
               </button>
