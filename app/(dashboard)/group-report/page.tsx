@@ -873,6 +873,7 @@ export default function GroupReportPage() {
   const [ruleSaving, setRuleSaving] = useState(false)
   const [ruleFilterStatus, setRuleFilterStatus] = useState('')
   const [ruleFilterType, setRuleFilterType] = useState('')
+  const [rulePage, setRulePage] = useState(0)
   // Target (站点情况) state
   const [showTargetModal, setShowTargetModal] = useState(false)
   const [groupSiteProfiles, setGroupSiteProfiles] = useState<SiteProfile[]>([])
@@ -1256,6 +1257,11 @@ export default function GroupReportPage() {
     (!ruleFilterStatus || r.status === ruleFilterStatus) &&
     (!ruleFilterType   || r.type   === ruleFilterType)
   )
+  const RULE_PAGE_SIZE = 20
+  const ruleTotalPages = Math.max(1, Math.ceil(filteredRules.length / RULE_PAGE_SIZE))
+  const pagedRules = filteredRules.slice(rulePage * RULE_PAGE_SIZE, (rulePage + 1) * RULE_PAGE_SIZE)
+
+  useEffect(() => { setRulePage(0) }, [ruleFilterStatus, ruleFilterType])
 
   const ruleSuccessRate = (r: Rule) => {
     const total = r.success_count + r.fail_count
@@ -1505,79 +1511,91 @@ export default function GroupReportPage() {
                               <span className="text-sm">{rules.length === 0 ? '暂无规则，点击「新建规则」开始建立规则库' : '没有符合筛选条件的规则'}</span>
                             </div>
                           ) : (
-                            <div className="space-y-2">
-                              {filteredRules.map(rule => {
-                                const sr = ruleSuccessRate(rule)
-                                const total = rule.success_count + rule.fail_count
-                                return (
-                                  <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
-                                    <div className="px-4 py-3 flex items-start gap-3">
-                                      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                                        <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
-                                          <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_TYPE_COLORS[rule.type] ?? 'bg-gray-100 text-gray-500'}`}>{RULE_TYPE_LABELS[rule.type]}</span>
-                                          <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_STATUS_COLORS[rule.status] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_STATUS_LABELS[rule.status]}</span>
-                                          <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_SOURCE_COLORS[rule.source] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_SOURCE_LABELS[rule.source]}</span>
+                            <>
+                              <div className="space-y-2">
+                                {pagedRules.map(rule => {
+                                  const sr = ruleSuccessRate(rule)
+                                  const total = rule.success_count + rule.fail_count
+                                  return (
+                                    <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
+                                      <div className="px-4 py-3 flex items-start gap-3">
+                                        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                                          <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
                                         </div>
-                                        {rule.description && (
-                                          <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
-                                        )}
-                                        {rule.stage_applicability.length > 0 && (
-                                          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                                            {rule.stage_applicability.map(s => (
-                                              <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
-                                            ))}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
+                                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_TYPE_COLORS[rule.type] ?? 'bg-gray-100 text-gray-500'}`}>{RULE_TYPE_LABELS[rule.type]}</span>
+                                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_STATUS_COLORS[rule.status] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_STATUS_LABELS[rule.status]}</span>
+                                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_SOURCE_COLORS[rule.source] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_SOURCE_LABELS[rule.source]}</span>
                                           </div>
-                                        )}
-                                      </div>
-                                      <div className="flex-shrink-0 flex items-center gap-4 text-xs text-gray-500">
-                                        <div className="text-center">
-                                          <div className="font-semibold text-gray-700 tabular-nums">{rule.confidence}%</div>
-                                          <div className="text-[10px] text-gray-400">信心度</div>
-                                        </div>
-                                        {total > 0 ? (
-                                          <div className="text-center">
-                                            <div className="font-semibold tabular-nums">
-                                              <span className="text-green-600">{rule.success_count}</span>
-                                              <span className="text-gray-300 mx-0.5">/</span>
-                                              <span className="text-red-400">{rule.fail_count}</span>
+                                          {rule.description && (
+                                            <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
+                                          )}
+                                          {rule.stage_applicability.length > 0 && (
+                                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                                              {rule.stage_applicability.map(s => (
+                                                <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
+                                              ))}
                                             </div>
-                                            <div className="text-[10px] text-gray-400">{sr != null ? `成功率 ${sr}%` : '成/失'}</div>
-                                          </div>
-                                        ) : (
+                                          )}
+                                        </div>
+                                        <div className="flex-shrink-0 flex items-center gap-4 text-xs text-gray-500">
                                           <div className="text-center">
-                                            <div className="text-gray-300 tabular-nums">—</div>
-                                            <div className="text-[10px] text-gray-400">无记录</div>
+                                            <div className="font-semibold text-gray-700 tabular-nums">{rule.confidence}%</div>
+                                            <div className="text-[10px] text-gray-400">信心度</div>
                                           </div>
-                                        )}
-                                        {canSeeAll && (
-                                          <div className="flex items-center gap-1">
-                                            <button onClick={() => openEditRule(rule)}
-                                              className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="编辑">
-                                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                            </button>
-                                            <button onClick={() => toggleRuleStatus(rule)}
-                                              className={`p-1.5 rounded-lg transition-colors ${rule.status === 'active' ? 'text-gray-400 hover:text-amber-500 hover:bg-amber-50' : 'text-gray-400 hover:text-green-500 hover:bg-green-50'}`}
-                                              title={rule.status === 'active' ? '停用' : '启用'}>
-                                              {rule.status === 'active'
-                                                ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                                : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
-                                            </button>
-                                            <button onClick={() => deleteRule(rule)}
-                                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="删除">
-                                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                            </button>
-                                          </div>
-                                        )}
+                                          {total > 0 ? (
+                                            <div className="text-center">
+                                              <div className="font-semibold tabular-nums">
+                                                <span className="text-green-600">{rule.success_count}</span>
+                                                <span className="text-gray-300 mx-0.5">/</span>
+                                                <span className="text-red-400">{rule.fail_count}</span>
+                                              </div>
+                                              <div className="text-[10px] text-gray-400">{sr != null ? `成功率 ${sr}%` : '成/失'}</div>
+                                            </div>
+                                          ) : (
+                                            <div className="text-center">
+                                              <div className="text-gray-300 tabular-nums">—</div>
+                                              <div className="text-[10px] text-gray-400">无记录</div>
+                                            </div>
+                                          )}
+                                          {canSeeAll && (
+                                            <div className="flex items-center gap-1">
+                                              <button onClick={() => openEditRule(rule)}
+                                                className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="编辑">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                              </button>
+                                              <button onClick={() => toggleRuleStatus(rule)}
+                                                className={`p-1.5 rounded-lg transition-colors ${rule.status === 'active' ? 'text-gray-400 hover:text-amber-500 hover:bg-amber-50' : 'text-gray-400 hover:text-green-500 hover:bg-green-50'}`}
+                                                title={rule.status === 'active' ? '停用' : '启用'}>
+                                                {rule.status === 'active'
+                                                  ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                  : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
+                                              </button>
+                                              <button onClick={() => deleteRule(rule)}
+                                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="删除">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
+                                  )
+                                })}
+                              </div>
+                              {ruleTotalPages > 1 && (
+                                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                                  <span className="text-xs text-gray-400">第 {rulePage * RULE_PAGE_SIZE + 1}–{Math.min((rulePage + 1) * RULE_PAGE_SIZE, filteredRules.length)} 条，共 {filteredRules.length} 条</span>
+                                  <div className="flex items-center gap-2">
+                                    <button disabled={rulePage === 0} onClick={() => setRulePage(p => p - 1)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors">上一页</button>
+                                    <span className="text-xs text-gray-400 px-1">{rulePage + 1} / {ruleTotalPages}</span>
+                                    <button disabled={rulePage >= ruleTotalPages - 1} onClick={() => setRulePage(p => p + 1)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors">下一页</button>
                                   </div>
-                                )
-                              })}
-                            </div>
+                                </div>
+                              )}
+                            </>
                           )}
 
                         </div>
@@ -1709,79 +1727,91 @@ export default function GroupReportPage() {
                   <span className="text-sm">{rules.length === 0 ? '暂无规则，点击「新建规则」开始建立规则库' : '没有符合筛选条件的规则'}</span>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {filteredRules.map(rule => {
-                    const sr = ruleSuccessRate(rule)
-                    const total = rule.success_count + rule.fail_count
-                    return (
-                      <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
-                        <div className="px-4 py-3 flex items-start gap-3">
-                          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                            <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
-                              <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_TYPE_COLORS[rule.type] ?? 'bg-gray-100 text-gray-500'}`}>{RULE_TYPE_LABELS[rule.type]}</span>
-                              <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_STATUS_COLORS[rule.status] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_STATUS_LABELS[rule.status]}</span>
-                              <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_SOURCE_COLORS[rule.source] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_SOURCE_LABELS[rule.source]}</span>
+                <>
+                  <div className="space-y-2">
+                    {pagedRules.map(rule => {
+                      const sr = ruleSuccessRate(rule)
+                      const total = rule.success_count + rule.fail_count
+                      return (
+                        <div key={rule.id} className={`bg-white rounded-xl border transition-colors ${rule.status === 'inactive' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
+                          <div className="px-4 py-3 flex items-start gap-3">
+                            <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                              <span className="text-xs font-bold text-gray-500">#{rule.rule_number}</span>
                             </div>
-                            {rule.description && (
-                              <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
-                            )}
-                            {rule.stage_applicability.length > 0 && (
-                              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                                {rule.stage_applicability.map(s => (
-                                  <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
-                                ))}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-800">{rule.name}</span>
+                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_TYPE_COLORS[rule.type] ?? 'bg-gray-100 text-gray-500'}`}>{RULE_TYPE_LABELS[rule.type]}</span>
+                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_STATUS_COLORS[rule.status] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_STATUS_LABELS[rule.status]}</span>
+                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${RULE_SOURCE_COLORS[rule.source] ?? 'bg-gray-100 text-gray-400'}`}>{RULE_SOURCE_LABELS[rule.source]}</span>
                               </div>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 flex items-center gap-4 text-xs text-gray-500">
-                            <div className="text-center">
-                              <div className="font-semibold text-gray-700 tabular-nums">{rule.confidence}%</div>
-                              <div className="text-[10px] text-gray-400">信心度</div>
-                            </div>
-                            {total > 0 ? (
-                              <div className="text-center">
-                                <div className="font-semibold tabular-nums">
-                                  <span className="text-green-600">{rule.success_count}</span>
-                                  <span className="text-gray-300 mx-0.5">/</span>
-                                  <span className="text-red-400">{rule.fail_count}</span>
+                              {rule.description && (
+                                <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
+                              )}
+                              {rule.stage_applicability.length > 0 && (
+                                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                                  {rule.stage_applicability.map(s => (
+                                    <span key={s} className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded">{s}</span>
+                                  ))}
                                 </div>
-                                <div className="text-[10px] text-gray-400">{sr != null ? `成功率 ${sr}%` : '成/失'}</div>
-                              </div>
-                            ) : (
+                              )}
+                            </div>
+                            <div className="flex-shrink-0 flex items-center gap-4 text-xs text-gray-500">
                               <div className="text-center">
-                                <div className="text-gray-300 tabular-nums">—</div>
-                                <div className="text-[10px] text-gray-400">无记录</div>
+                                <div className="font-semibold text-gray-700 tabular-nums">{rule.confidence}%</div>
+                                <div className="text-[10px] text-gray-400">信心度</div>
                               </div>
-                            )}
-                            {canSeeAll && (
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => openEditRule(rule)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="编辑">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                </button>
-                                <button onClick={() => toggleRuleStatus(rule)}
-                                  className={`p-1.5 rounded-lg transition-colors ${rule.status === 'active' ? 'text-gray-400 hover:text-amber-500 hover:bg-amber-50' : 'text-gray-400 hover:text-green-500 hover:bg-green-50'}`}
-                                  title={rule.status === 'active' ? '停用' : '启用'}>
-                                  {rule.status === 'active'
-                                    ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
-                                </button>
-                                <button onClick={() => deleteRule(rule)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="删除">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                </button>
-                              </div>
-                            )}
+                              {total > 0 ? (
+                                <div className="text-center">
+                                  <div className="font-semibold tabular-nums">
+                                    <span className="text-green-600">{rule.success_count}</span>
+                                    <span className="text-gray-300 mx-0.5">/</span>
+                                    <span className="text-red-400">{rule.fail_count}</span>
+                                  </div>
+                                  <div className="text-[10px] text-gray-400">{sr != null ? `成功率 ${sr}%` : '成/失'}</div>
+                                </div>
+                              ) : (
+                                <div className="text-center">
+                                  <div className="text-gray-300 tabular-nums">—</div>
+                                  <div className="text-[10px] text-gray-400">无记录</div>
+                                </div>
+                              )}
+                              {canSeeAll && (
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => openEditRule(rule)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="编辑">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                  </button>
+                                  <button onClick={() => toggleRuleStatus(rule)}
+                                    className={`p-1.5 rounded-lg transition-colors ${rule.status === 'active' ? 'text-gray-400 hover:text-amber-500 hover:bg-amber-50' : 'text-gray-400 hover:text-green-500 hover:bg-green-50'}`}
+                                    title={rule.status === 'active' ? '停用' : '启用'}>
+                                    {rule.status === 'active'
+                                      ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                      : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
+                                  </button>
+                                  <button onClick={() => deleteRule(rule)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="删除">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
+                      )
+                    })}
+                  </div>
+                  {ruleTotalPages > 1 && (
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      <span className="text-xs text-gray-400">第 {rulePage * RULE_PAGE_SIZE + 1}–{Math.min((rulePage + 1) * RULE_PAGE_SIZE, filteredRules.length)} 条，共 {filteredRules.length} 条</span>
+                      <div className="flex items-center gap-2">
+                        <button disabled={rulePage === 0} onClick={() => setRulePage(p => p - 1)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors">上一页</button>
+                        <span className="text-xs text-gray-400 px-1">{rulePage + 1} / {ruleTotalPages}</span>
+                        <button disabled={rulePage >= ruleTotalPages - 1} onClick={() => setRulePage(p => p + 1)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors">下一页</button>
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
 
             </div>
