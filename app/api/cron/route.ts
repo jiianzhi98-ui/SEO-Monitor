@@ -543,16 +543,20 @@ export async function GET(request: Request) {
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: rankRows } = await (supabase.from('site_keyword_ranks') as any)
-            .select('keyword, volume, rank_position, type')
+            .select('keyword, url, volume, rank_position, type')
             .eq('site_id', site.id)
             .eq('stat_date', today)
             .eq('platform', 'mobile')
-          type RankRow = { keyword: string; volume: number; rank_position: number | null; type: string }
+          type RankRow = { keyword: string; url: string | null; volume: number; rank_position: number | null; type: string }
           const rankSignals = (rankRows || []) as RankRow[]
           const rankMap = new Map<string, { volume: number; rank_position: number | null; type: string }>()
+          const urlRankDataMap = new Map<string, { volume: number; rank_position: number | null; type: string }>()
           for (const r of rankSignals) {
             if (!rankMap.has(r.keyword) || rankMap.get(r.keyword)!.type !== 'rankup') {
               rankMap.set(r.keyword, { volume: r.volume, rank_position: r.rank_position, type: r.type })
+            }
+            if (r.url && (!urlRankDataMap.has(r.url) || urlRankDataMap.get(r.url)!.type !== 'rankup')) {
+              urlRankDataMap.set(r.url, { volume: r.volume, rank_position: r.rank_position, type: r.type })
             }
           }
 
@@ -569,6 +573,21 @@ export async function GET(request: Request) {
               .in('source_url', Array.from(newIndexUrls).slice(0, 500))
               .gte('content_date', window60)
             for (const r of (urlKwRows || []) as { keyword: string; source_url: string }[]) newIndexKwSet.add(r.keyword)
+          }
+
+          // 1.5. URL-based rank signals: cross-ref site_keyword_ranks.url with raw_keywords.source_url
+          if (urlRankDataMap.size > 0) {
+            const { data: urlKwMappings } = await supabase.from('raw_keywords')
+              .select('keyword, source_url')
+              .eq('site_id', site.id)
+              .in('source_url', Array.from(urlRankDataMap.keys()).slice(0, 500))
+              .gte('content_date', window60)
+            for (const r of (urlKwMappings || []) as { keyword: string; source_url: string }[]) {
+              const urlRank = urlRankDataMap.get(r.source_url)
+              if (urlRank && (!rankMap.has(r.keyword) || rankMap.get(r.keyword)!.type !== 'rankup')) {
+                rankMap.set(r.keyword, urlRank)
+              }
+            }
           }
 
           const allSignalKws = new Set([...Array.from(rankMap.keys()), ...Array.from(newIndexKwSet)])
@@ -699,11 +718,86 @@ export async function GET(request: Request) {
         }
       }
 
+      // Own-site tracking
+      let ownRows = 0
+      const window90 = getMalaysiaDate(-90)
+      try {
+        const { data: claimRows } = await supabase.from('member_claimed_keywords')
+          .select('id, group_id, user_id, keyword, final_keyword, page_url, operation_type, search_volume, submitted_at, claimed_date')
+          .eq('status', 'submitted').not('page_url', 'is', null).gte('claimed_date', window90)
+        type ClaimRow = { id: string; group_id: string; user_id: string; keyword: string; final_keyword: string | null; page_url: string | null; operation_type: string | null; search_volume: number; submitted_at: string | null; claimed_date: string }
+        const claims = (claimRows || []) as ClaimRow[]
+
+        if (claims.length > 0) {
+          const pageUrls = Array.from(new Set(claims.filter(c => c.page_url).map(c => c.page_url!)))
+
+          const indexMap = new Map<string, { first_seen_date: string; disappeared_date: string | null }>()
+          for (const chunk of chunkArray(pageUrls, 500)) {
+            const { data: idxRows } = await supabase.from('site_indexed_pages')
+              .select('url, first_seen_date, disappeared_date').in('url', chunk)
+            for (const r of (idxRows || []) as { url: string; first_seen_date: string; disappeared_date: string | null }[]) {
+              indexMap.set(r.url, { first_seen_date: r.first_seen_date, disappeared_date: r.disappeared_date })
+            }
+          }
+
+          const rankByUrlMap = new Map<string, { keyword: string; rank_position: number | null; prev_rank: number | null; volume: number; stat_date: string }>()
+          for (const chunk of chunkArray(pageUrls, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: rRows } = await (supabase.from('site_keyword_ranks') as any)
+              .select('url, keyword, rank_position, prev_rank, volume, stat_date')
+              .in('url', chunk).not('url', 'is', null).eq('platform', 'mobile')
+              .order('stat_date', { ascending: false }).order('rank_position', { ascending: true, nullsFirst: false })
+            for (const r of (rRows || []) as { url: string; keyword: string; rank_position: number | null; prev_rank: number | null; volume: number; stat_date: string }[]) {
+              if (!rankByUrlMap.has(r.url)) rankByUrlMap.set(r.url, { keyword: r.keyword, rank_position: r.rank_position, prev_rank: r.prev_rank, volume: r.volume, stat_date: r.stat_date })
+            }
+          }
+
+          const ownUpsertRows: Record<string, unknown>[] = []
+          for (const claim of claims) {
+            const url = claim.page_url
+            const idx = url ? indexMap.get(url) : undefined
+            const rank = url ? rankByUrlMap.get(url) : undefined
+            const is_indexed = !!idx && !idx.disappeared_date
+            const submitDate = claim.submitted_at ? claim.submitted_at.slice(0, 10) : claim.claimed_date
+            const daysSince = Math.max(0, Math.floor((new Date(today).getTime() - new Date(submitDate).getTime()) / 86400000))
+
+            let effectiveness: string
+            if ((rank?.rank_position ?? null) != null) effectiveness = '获取排名'
+            else if (is_indexed) effectiveness = '获取收录'
+            else effectiveness = daysSince >= 90 ? '无效' : '追踪中'
+
+            ownUpsertRows.push({
+              claim_id: claim.id, group_id: claim.group_id, user_id: claim.user_id,
+              keyword: claim.keyword, final_keyword: claim.final_keyword,
+              page_url: url, operation_type: claim.operation_type,
+              search_volume: Number(claim.search_volume) || 0,
+              submit_date: submitDate, record_date: today,
+              is_indexed, index_first_seen: idx?.first_seen_date ?? null, index_disappeared: idx?.disappeared_date ?? null,
+              rank_keyword: rank?.keyword ?? null, rank_position: rank?.rank_position ?? null,
+              prev_rank_position: rank?.prev_rank ?? null, rank_volume: rank?.volume ? Number(rank.volume) : 0,
+              rank_date: rank?.stat_date ?? null, effectiveness,
+              updated_at: new Date().toISOString(),
+            })
+          }
+
+          for (const chunk of chunkArray(ownUpsertRows, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('site_tracking_records') as any).upsert(chunk, {
+              onConflict: 'claim_id,record_date', ignoreDuplicates: false,
+            })
+          }
+          ownRows = ownUpsertRows.length
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '自己站点追踪失败'
+        console.error('own-site tracking error:', msg)
+      }
+
       if (trkAid) await activityEnd(supabase, trkAid, {
         status: trkFail > 0 ? 'warn' : 'done',
-        ok: trkOk, empty: trkEmpty, fail: trkFail, rowsWritten: trkRows,
+        ok: trkOk, empty: trkEmpty, fail: trkFail, rowsWritten: trkRows + ownRows,
         durationMs: Date.now() - trkStart,
-        summary: `竞品追踪 ${trkOk} 站成功，新记录 ${trkRows} 条，${trkEmpty} 站无信号，${trkFail} 站失败`,
+        summary: `竞品追踪 ${trkOk} 站成功，竞品 ${trkRows} 条，自己站点 ${ownRows} 条，${trkFail} 站失败`,
       })
     }
 

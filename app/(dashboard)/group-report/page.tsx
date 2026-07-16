@@ -83,18 +83,18 @@ type ReportTab = 'submissions' | 'outcomes' | 'rules'
 type CompetitorInnerTab = 'keywords' | 'outcomes' | 'rules'
 
 interface OutcomeRow {
-  id: string; user_id: string; username: string
+  id: string; claim_id: string; user_id: string; username: string
   keyword: string; final_keyword: string | null
   page_url: string | null; operation_type: string | null
-  search_volume: number; source: string
-  claimed_date: string; submitted_at: string | null
-  indexed: boolean; first_seen_date: string | null; disappeared_date: string | null
-  rank_keyword: string | null; rank_position: number | null; prev_rank: number | null
-  rank_change: number | null; rank_volume: number | null; rank_date: string | null
-  outcome: 'success' | 'fail' | 'pending'
+  search_volume: number
+  submit_date: string; record_date: string
+  is_indexed: boolean; index_first_seen: string | null; index_disappeared: string | null
+  rank_keyword: string | null; rank_position: number | null; prev_rank_position: number | null
+  rank_change: number | null; rank_volume: number; rank_date: string | null
+  effectiveness: string
 }
-interface OutcomeSummary { total: number; successCount: number; indexedCount: number; pendingCount: number }
-type OutcomeSortBy = 'claimed_date' | 'submitted_at' | 'search_volume' | 'rank_change' | 'rank_volume'
+interface OutcomeSummary { total: number; rankedCount: number; indexedCount: number; trackingCount: number; invalidCount: number }
+type OutcomeSortBy = 'submit_date' | 'record_date' | 'search_volume' | 'rank_change' | 'rank_volume'
 
 interface Rule {
   id: string
@@ -811,14 +811,14 @@ const MOCK_REPORT: ReportData = {
 }
 
 const MOCK_OUTCOMES: OutcomeRow[] = [
-  { id: 'o1', user_id: 'user-1', username: '张三', keyword: 'SEO优化技巧', final_keyword: null, page_url: 'https://myblog.com/seo-tips', operation_type: 'add', search_volume: 5400, source: 'aizhan', claimed_date: '2026-07-10', submitted_at: '2026-07-11T03:00:00Z', indexed: true, first_seen_date: '2026-07-12', disappeared_date: null, rank_keyword: 'SEO优化技巧', rank_position: 8, prev_rank: 25, rank_change: 17, rank_volume: 5200, rank_date: '2026-07-14', outcome: 'success' },
-  { id: 'o2', user_id: 'user-1', username: '张三', keyword: '关键词研究方法', final_keyword: null, page_url: null, operation_type: 'add', search_volume: 2100, source: 'aizhan', claimed_date: '2026-07-10', submitted_at: '2026-07-11T03:30:00Z', indexed: true, first_seen_date: '2026-07-13', disappeared_date: null, rank_keyword: null, rank_position: null, prev_rank: null, rank_change: null, rank_volume: null, rank_date: null, outcome: 'pending' },
-  { id: 'o3', user_id: 'user-2', username: '李四', keyword: '外链建设技巧', final_keyword: null, page_url: null, operation_type: 'add', search_volume: 3200, source: 'aizhan', claimed_date: '2026-07-09', submitted_at: '2026-07-10T05:00:00Z', indexed: false, first_seen_date: null, disappeared_date: null, rank_keyword: null, rank_position: null, prev_rank: null, rank_change: null, rank_volume: null, rank_date: null, outcome: 'fail' },
-  { id: 'o4', user_id: 'user-2', username: '李四', keyword: '网站速度优化', final_keyword: null, page_url: 'https://mysite.com/speed', operation_type: 'add', search_volume: 4100, source: 'aizhan', claimed_date: '2026-07-11', submitted_at: '2026-07-12T02:00:00Z', indexed: true, first_seen_date: '2026-07-13', disappeared_date: null, rank_keyword: '网站速度优化', rank_position: 5, prev_rank: 18, rank_change: 13, rank_volume: 4000, rank_date: '2026-07-14', outcome: 'success' },
-  { id: 'o5', user_id: 'user-1', username: '张三', keyword: '内容营销策略', final_keyword: null, page_url: null, operation_type: 'add', search_volume: 3800, source: 'baidu', claimed_date: '2026-07-12', submitted_at: null, indexed: false, first_seen_date: null, disappeared_date: null, rank_keyword: null, rank_position: null, prev_rank: null, rank_change: null, rank_volume: null, rank_date: null, outcome: 'pending' },
+  { id: 'o1', claim_id: 'c1', user_id: 'user-1', username: '张三', keyword: 'SEO优化技巧', final_keyword: null, page_url: 'https://myblog.com/seo-tips', operation_type: '新增', search_volume: 5400, submit_date: '2026-07-11', record_date: '2026-07-14', is_indexed: true, index_first_seen: '2026-07-12', index_disappeared: null, rank_keyword: 'SEO优化技巧', rank_position: 8, prev_rank_position: 25, rank_change: 17, rank_volume: 5200, rank_date: '2026-07-14', effectiveness: '获取排名' },
+  { id: 'o2', claim_id: 'c2', user_id: 'user-1', username: '张三', keyword: '关键词研究方法', final_keyword: null, page_url: 'https://myblog.com/kw-research', operation_type: '新增', search_volume: 2100, submit_date: '2026-07-11', record_date: '2026-07-14', is_indexed: true, index_first_seen: '2026-07-13', index_disappeared: null, rank_keyword: null, rank_position: null, prev_rank_position: null, rank_change: null, rank_volume: 0, rank_date: null, effectiveness: '获取收录' },
+  { id: 'o3', claim_id: 'c3', user_id: 'user-2', username: '李四', keyword: '外链建设技巧', final_keyword: null, page_url: null, operation_type: '新增', search_volume: 3200, submit_date: '2026-07-10', record_date: '2026-07-14', is_indexed: false, index_first_seen: null, index_disappeared: null, rank_keyword: null, rank_position: null, prev_rank_position: null, rank_change: null, rank_volume: 0, rank_date: null, effectiveness: '无效' },
+  { id: 'o4', claim_id: 'c4', user_id: 'user-2', username: '李四', keyword: '网站速度优化', final_keyword: null, page_url: 'https://mysite.com/speed', operation_type: '新增', search_volume: 4100, submit_date: '2026-07-12', record_date: '2026-07-14', is_indexed: true, index_first_seen: '2026-07-13', index_disappeared: null, rank_keyword: '网站速度优化', rank_position: 5, prev_rank_position: 18, rank_change: 13, rank_volume: 4000, rank_date: '2026-07-14', effectiveness: '获取排名' },
+  { id: 'o5', claim_id: 'c5', user_id: 'user-1', username: '张三', keyword: '内容营销策略', final_keyword: null, page_url: null, operation_type: '新增', search_volume: 3800, submit_date: '2026-07-12', record_date: '2026-07-14', is_indexed: false, index_first_seen: null, index_disappeared: null, rank_keyword: null, rank_position: null, prev_rank_position: null, rank_change: null, rank_volume: 0, rank_date: null, effectiveness: '追踪中' },
 ]
 
-const MOCK_OUTCOME_SUMMARY: OutcomeSummary = { total: 5, successCount: 2, indexedCount: 3, pendingCount: 2 }
+const MOCK_OUTCOME_SUMMARY: OutcomeSummary = { total: 5, rankedCount: 2, indexedCount: 1, trackingCount: 1, invalidCount: 1 }
 
 const MOCK_RULES: Rule[] = [
   { id: 'mock-r1', rule_number: 1, name: '主词+地域词组合投稿', type: 'add', status: 'active', source: 'data', stage_applicability: ['新站', '成长期'], description: '优先选择搜索量500-3000的主词，叠加本地化修饰词，提升抓取概率。', confidence: 82, success_count: 15, fail_count: 3, priority: 1, site_ids: [], competitor_domains: [], created_at: '2026-06-01T00:00:00Z' },
@@ -851,8 +851,6 @@ export default function GroupReportPage() {
   const [outcomes, setOutcomes] = useState<OutcomeRow[]>(USE_MOCK_DATA ? MOCK_OUTCOMES : [])
   const [outcomeSummary, setOutcomeSummary] = useState<OutcomeSummary | null>(USE_MOCK_DATA ? MOCK_OUTCOME_SUMMARY : null)
   const [outcomesLoading, setOutcomesLoading] = useState(false)
-  const [oFilterDiscoverStart, setOFilterDiscoverStart] = useState('')
-  const [oFilterDiscoverEnd, setOFilterDiscoverEnd] = useState('')
   const [oFilterSubmitStart, setOFilterSubmitStart] = useState('')
   const [oFilterSubmitEnd, setOFilterSubmitEnd] = useState('')
   const [oFilterMember, setOFilterMember] = useState('')
@@ -861,7 +859,7 @@ export default function GroupReportPage() {
   const [oFilterIndex, setOFilterIndex] = useState('')
   const [oFilterRankKw, setOFilterRankKw] = useState('')
   const [oFilterOutcome, setOFilterOutcome] = useState('')
-  const [oSortBy, setOSortBy] = useState<OutcomeSortBy>('claimed_date')
+  const [oSortBy, setOSortBy] = useState<OutcomeSortBy>('submit_date')
   const [oSortDir, setOSortDir] = useState<'asc' | 'desc'>('desc')
   const [oPage, setOPage] = useState(0)
   const [oPageSize, setOPageSize] = useState(20)
@@ -1009,8 +1007,6 @@ export default function GroupReportPage() {
     setOutcomeSummary(null)
     setOPage(0)
     const p = new URLSearchParams()
-    if (oFilterDiscoverStart) p.set('discoverStart', oFilterDiscoverStart)
-    if (oFilterDiscoverEnd)   p.set('discoverEnd',   oFilterDiscoverEnd)
     if (oFilterSubmitStart)   p.set('submitStart',   oFilterSubmitStart)
     if (oFilterSubmitEnd)     p.set('submitEnd',     oFilterSubmitEnd)
     if (oFilterMember)        p.set('memberId',      oFilterMember)
@@ -1025,7 +1021,7 @@ export default function GroupReportPage() {
       .then(r => r.json())
       .then(d => { setOutcomes(d.rows || []); setOutcomeSummary(d.summary || null) })
       .finally(() => setOutcomesLoading(false))
-  }, [activeGroupId, reportTab, oFilterDiscoverStart, oFilterDiscoverEnd, oFilterSubmitStart, oFilterSubmitEnd, oFilterMember, oFilterOp, oFilterKw, oFilterIndex, oFilterRankKw, oFilterOutcome, oSortBy, oSortDir])
+  }, [activeGroupId, reportTab, oFilterSubmitStart, oFilterSubmitEnd, oFilterMember, oFilterOp, oFilterKw, oFilterIndex, oFilterRankKw, oFilterOutcome, oSortBy, oSortDir])
 
   // Load rules data for whichever tab (own-site or competitor) is showing the rules panel
   useEffect(() => {
@@ -1805,7 +1801,7 @@ export default function GroupReportPage() {
           {activeTabId !== 'competitors' && reportTab === 'outcomes' && (() => {
             const OCOLS = 'grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px]'
             const oTotal = outcomes.length
-            const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterDiscoverStart || oFilterDiscoverEnd || oFilterSubmitStart || oFilterSubmitEnd)
+            const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterSubmitStart || oFilterSubmitEnd)
             const displayData = outcomes
             const displayTotal = displayData.length
             const oTotalPages = Math.max(1, Math.ceil(displayTotal / oPageSize))
@@ -1828,10 +1824,10 @@ export default function GroupReportPage() {
                 {outcomeSummary && (
                   <div className="grid grid-cols-4 gap-3">
                     {[
-                      { label: '已追踪动作', value: outcomeSummary.total, sub: '全部提交' },
-                      { label: '有效成效', value: outcomeSummary.successCount, sub: outcomeSummary.total ? `成效率 ${Math.round(outcomeSummary.successCount / outcomeSummary.total * 100)}%` : '—', color: 'text-green-600' },
-                      { label: '成功收录', value: outcomeSummary.indexedCount, sub: outcomeSummary.total ? `收录率 ${Math.round(outcomeSummary.indexedCount / outcomeSummary.total * 100)}%` : '—', color: 'text-blue-600' },
-                      { label: '追踪中', value: outcomeSummary.pendingCount, sub: '未满30天' },
+                      { label: '已追踪记录', value: outcomeSummary.total, sub: '全部提交' },
+                      { label: '获取排名', value: outcomeSummary.rankedCount, sub: outcomeSummary.total ? `排名率 ${Math.round(outcomeSummary.rankedCount / outcomeSummary.total * 100)}%` : '—', color: 'text-green-600' },
+                      { label: '获取收录', value: outcomeSummary.indexedCount, sub: outcomeSummary.total ? `收录率 ${Math.round((outcomeSummary.rankedCount + outcomeSummary.indexedCount) / outcomeSummary.total * 100)}%` : '—', color: 'text-blue-600' },
+                      { label: '追踪中', value: outcomeSummary.trackingCount, sub: `无效 ${outcomeSummary.invalidCount}` },
                     ].map(s => (
                       <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
                         <div className={`text-2xl font-bold ${(s as { color?: string }).color ?? 'text-gray-800'}`}>{s.value}</div>
@@ -1845,11 +1841,7 @@ export default function GroupReportPage() {
                 {/* Filters — dates first, then dropdowns */}
                 <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-gray-500">发现日期：</span>
-                    <input type="date" value={oFilterDiscoverStart}
-                      onChange={e => { const v = e.target.value; setOFilterDiscoverStart(v); setOFilterDiscoverEnd(v); setOPage(0) }}
-                      className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
-                    <span className="text-xs font-medium text-gray-500 ml-1">提交日期：</span>
+                    <span className="text-xs font-medium text-gray-500">提交日期：</span>
                     <input type="date" value={oFilterSubmitStart}
                       onChange={e => { const v = e.target.value; setOFilterSubmitStart(v); setOFilterSubmitEnd(v); setOPage(0) }}
                       className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700" />
@@ -1876,9 +1868,10 @@ export default function GroupReportPage() {
                     <select value={oFilterOutcome} onChange={e => { setOFilterOutcome(e.target.value); setOPage(0) }}
                       className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 bg-white">
                       <option value="">全部成效</option>
-                      <option value="success">有效</option>
-                      <option value="fail">无效</option>
-                      <option value="pending">追踪中</option>
+                      <option value="获取排名">获取排名</option>
+                      <option value="获取收录">获取收录</option>
+                      <option value="追踪中">追踪中</option>
+                      <option value="无效">无效</option>
                     </select>
                     <input value={oFilterKw} onChange={e => { setOFilterKw(e.target.value); setOPage(0) }}
                       placeholder="搜索关键词 / 最终词…"
@@ -1887,7 +1880,7 @@ export default function GroupReportPage() {
                       placeholder="搜索排名词…"
                       className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700 w-36" />
                     {anyFilter && (
-                      <button onClick={() => { setOFilterMember(''); setOFilterOp(''); setOFilterIndex(''); setOFilterOutcome(''); setOFilterKw(''); setOFilterRankKw(''); setOFilterDiscoverStart(''); setOFilterDiscoverEnd(''); setOFilterSubmitStart(''); setOFilterSubmitEnd(''); setOPage(0) }}
+                      <button onClick={() => { setOFilterMember(''); setOFilterOp(''); setOFilterIndex(''); setOFilterOutcome(''); setOFilterKw(''); setOFilterRankKw(''); setOFilterSubmitStart(''); setOFilterSubmitEnd(''); setOPage(0) }}
                         className="text-xs text-gray-400 hover:text-red-400 px-2 py-1.5 rounded border border-gray-200 hover:border-red-200 transition-colors">
                         清除筛选
                       </button>
@@ -1912,8 +1905,8 @@ export default function GroupReportPage() {
                     <>
                       <div className="overflow-x-auto">
                         <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[860px]`}>
-                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">发现日期{oSortIcons('claimed_date')}</span>
-                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">提交日期{oSortIcons('submitted_at')}</span>
+                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">提交日期{oSortIcons('submit_date')}</span>
+                          <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">记录日期{oSortIcons('record_date')}</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">成员</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">操作</span>
                           <span className="text-[11px] font-medium text-gray-400">关键词 → 最终词</span>
@@ -1926,12 +1919,11 @@ export default function GroupReportPage() {
                         </div>
                         <div className="divide-y divide-gray-50 min-w-[860px]">
                           {pagedO.map(row => {
-                            const submitStr = row.submitted_at ? row.submitted_at.slice(5, 10).replace('-', '/') : '—'
                             const rc = row.rank_change
                             return (
                               <div key={row.id} className={`grid ${OCOLS} gap-x-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors items-center`}>
-                                <span className="text-sm text-gray-500 text-center">{row.claimed_date.slice(5).replace('-', '/')}</span>
-                                <span className="text-sm text-gray-500 text-center">{submitStr}</span>
+                                <span className="text-sm text-gray-500 text-center">{(row.submit_date ?? '').slice(5).replace('-', '/')}</span>
+                                <span className="text-sm text-gray-500 text-center">{row.record_date.slice(5).replace('-', '/')}</span>
                                 <span className="text-sm text-gray-700 font-medium text-center truncate" title={row.username}>{row.username}</span>
                                 <div className="flex justify-center">
                                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${row.operation_type === '新增' ? 'bg-green-50 text-green-600' : row.operation_type === '更新' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
@@ -1946,8 +1938,8 @@ export default function GroupReportPage() {
                                 </div>
                                 <div className="text-sm text-gray-600 tabular-nums text-center">{fmtVol(row.search_volume)}</div>
                                 <div className="text-center">
-                                  {row.indexed
-                                    ? <span className="text-sm text-blue-600">{row.first_seen_date ? row.first_seen_date.slice(5).replace('-', '/') : '已收录'}</span>
+                                  {row.is_indexed
+                                    ? <span className="text-sm text-blue-600">{row.index_first_seen ? row.index_first_seen.slice(5).replace('-', '/') : '已收录'}</span>
                                     : <span className="text-sm text-red-400">未收录</span>}
                                 </div>
                                 <div className="flex items-center justify-center gap-1.5">
@@ -1967,9 +1959,10 @@ export default function GroupReportPage() {
                                 </div>
                                 <div className="text-sm text-gray-500 tabular-nums text-center">{row.rank_volume ? fmtVol(row.rank_volume) : '—'}</div>
                                 <div className="flex justify-center">
-                                  {row.outcome === 'success' && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">有效</span>}
-                                  {row.outcome === 'fail'    && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">无效</span>}
-                                  {row.outcome === 'pending' && <span className="text-xs bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
+                                  {row.effectiveness === '获取排名' && <span className="text-xs bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full">获取排名</span>}
+                                  {row.effectiveness === '获取收录' && <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded-full">获取收录</span>}
+                                  {row.effectiveness === '追踪中'   && <span className="text-xs bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
+                                  {row.effectiveness === '无效'     && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">无效</span>}
                                 </div>
                               </div>
                             )
