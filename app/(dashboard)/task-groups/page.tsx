@@ -465,6 +465,8 @@ export default function TaskGroupsPage() {
   const [recSubTab, setRecSubTab] = useState<RecSubTab>('rules')
   const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; rule_name: string; discovery_date: string; effectiveness: string }[] }[]>([])
   const [compRecLoading, setCompRecLoading] = useState(false)
+  const [ownRecData, setOwnRecData] = useState<{ keyword: string; rule_name: string; stat_date: string; volume: number }[]>([])
+  const [ownRecLoading, setOwnRecLoading] = useState(false)
   const [dismissedRec, setDismissedRec] = useState<Set<string>>(new Set())
 
   const [radarData, setRadarData] = useState<{ newWords: NewWord[]; rankWords: RankWord[]; streakWords: StreakWord[] } | null>(null)
@@ -618,37 +620,73 @@ export default function TaskGroupsPage() {
       })
   }, [wordLibData, groupNewDomains])
 
-  // ── 今日推荐 ─────────────────────────────────────────────────────────────────
+  // ── 规则推荐（自有站触发规则） ────────────────────────────────────────────────
 
-  const recKeywords = useMemo(() => {
-    const map = new Map<string, { keyword: string; volume: number; sources: string[] }>()
-    for (const w of crossWords) {
-      map.set(w.keyword, { keyword: w.keyword, volume: w.volume, sources: ['交叉词'] })
-    }
-    for (const w of streakWords.slice(0, 150)) {
-      if (map.has(w.keyword)) {
-        map.get(w.keyword)!.sources.push(`连涨${w.streak}天`)
-      } else {
-        map.set(w.keyword, { keyword: w.keyword, volume: w.volume, sources: [`连涨${w.streak}天`] })
-      }
-    }
-    for (const w of rankWordsSorted.slice(0, 150)) {
-      if (map.has(w.keyword)) {
-        if (!map.get(w.keyword)!.sources.includes('涨排名')) map.get(w.keyword)!.sources.push('涨排名')
-      } else {
-        map.set(w.keyword, { keyword: w.keyword, volume: w.volume, sources: ['涨排名'] })
-      }
-    }
-    const priority = (s: string[]) => s.includes('交叉词') ? 0 : s.some(x => x.startsWith('连涨')) ? 1 : 2
-    return Array.from(map.values())
-      .sort((a, b) => priority(a.sources) - priority(b.sources) || (b.volume ?? 0) - (a.volume ?? 0))
-      .slice(0, 120)
-  }, [crossWords, streakWords, rankWordsSorted])
+  async function loadOwnRec() {
+    if (!activeGroup) return
+    setOwnRecLoading(true)
+    setOwnRecData([])
+    try {
+      const ownDomains = activeGroup.associated_domains
+      if (ownDomains.length === 0) return
+      const supabase = getBrowserClient()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: siteData } = await (supabase.from('sites') as any)
+        .select('id, domain').in('domain', ownDomains)
+      const siteIds = ((siteData || []) as { id: string }[]).map(s => s.id)
+      if (siteIds.length === 0) return
 
-  const filteredRecKeywords = useMemo(
-    () => recKeywords.filter(w => !dismissedRec.has(w.keyword)),
-    [recKeywords, dismissedRec]
-  )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: rulesData } = await (supabase.from('rules') as any)
+        .select('id, rule_number, name, trigger_type').eq('status', 'active')
+      const activeRules = (rulesData || []) as { id: string; rule_number: number; name: string; trigger_type: string }[]
+
+      const since = getMYDate(-30)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: rankData } = await (supabase.from('site_keyword_ranks') as any)
+        .select('keyword, stat_date, volume')
+        .in('site_id', siteIds)
+        .eq('type', 'rankdown')
+        .gte('stat_date', since)
+        .eq('platform', 'mobile')
+        .order('stat_date', { ascending: false })
+        .limit(2000)
+
+      const rows = (rankData || []) as { keyword: string; stat_date: string; volume: number }[]
+
+      // Detect batch prefix groups (≥3 keywords sharing first 2 chars → batch rule)
+      const batchPrefixKws = new Set<string>()
+      const batchRule = activeRules.find(r => r.trigger_type === 'batch_prefix_update')
+      if (batchRule) {
+        const kwArr = Array.from(new Set(rows.map(r => r.keyword)))
+        const prefixMap = new Map<string, string[]>()
+        for (const kw of kwArr) {
+          const prefix = kw.slice(0, 2)
+          if (!prefixMap.has(prefix)) prefixMap.set(prefix, [])
+          prefixMap.get(prefix)!.push(kw)
+        }
+        Array.from(prefixMap.values()).forEach(kws => {
+          if (kws.length >= 3) kws.forEach((kw: string) => batchPrefixKws.add(kw))
+        })
+      }
+      const rankdownRule = activeRules.find(r => r.trigger_type === 'rankdown_then_update')
+
+      // Deduplicate by keyword, keep latest date, match to rule
+      const kwMap = new Map<string, { keyword: string; rule_name: string; stat_date: string; volume: number }>()
+      for (const r of rows) {
+        if (kwMap.has(r.keyword)) continue
+        const matchedRule = (batchPrefixKws.has(r.keyword) && batchRule) ? batchRule : rankdownRule
+        if (!matchedRule) continue
+        kwMap.set(r.keyword, {
+          keyword: r.keyword,
+          rule_name: `#${matchedRule.rule_number} ${matchedRule.name}`,
+          stat_date: r.stat_date,
+          volume: r.volume ?? 0,
+        })
+      }
+      setOwnRecData(Array.from(kwMap.values()))
+    } finally { setOwnRecLoading(false) }
+  }
 
   async function loadCompRec() {
     if (!activeGroup) return
@@ -790,12 +828,7 @@ export default function TaskGroupsPage() {
   }
 
   function dismissRec(keyword: string) {
-    if (!currentUserId || !activeGroupId) return
-    const storageKey = `dismissed_rec:${currentUserId}:${activeGroupId}`
-    const current: string[] = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    const updated = Array.from(new Set([...current, keyword]))
-    localStorage.setItem(storageKey, JSON.stringify(updated))
-    setDismissedRec(new Set(updated))
+    setDismissedRec(prev => { const next = new Set(prev); next.add(keyword); return next })
   }
 
   async function dismissClaimed(claimId: string) {
@@ -929,7 +962,7 @@ export default function TaskGroupsPage() {
 
     const since = getMYDate(-30)
     const needsNew = ['交叉词', '共新增词', '今日推荐', '竞品词', '竞品规则推荐'].includes(source)
-    const needsRank = ['交叉词', '竞品涨排名', '连续上涨词', '今日推荐'].includes(source)
+    const needsRank = ['交叉词', '竞品涨排名', '连续上涨词', '今日推荐', '规则推荐'].includes(source)
 
     try {
       const nRows: DetailRow[] = []
@@ -983,15 +1016,8 @@ export default function TaskGroupsPage() {
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (rightTab === 'recommend' && recSubTab === 'rules') loadOwnRec() }, [rightTab, recSubTab, activeGroupId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab === 'recommend' && recSubTab === 'competitors') loadCompRec() }, [rightTab, recSubTab, activeGroupId]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!currentUserId || !activeGroupId) return
-    const key = `dismissed_rec:${currentUserId}:${activeGroupId}`
-    try {
-      const stored: string[] = JSON.parse(localStorage.getItem(key) || '[]')
-      setDismissedRec(new Set(stored))
-    } catch { setDismissedRec(new Set()) }
-  }, [currentUserId, activeGroupId])
   // Scroll today's task list to bottom when a new claim is added
   useEffect(() => {
     if (claimedListRef.current) claimedListRef.current.scrollTop = claimedListRef.current.scrollHeight
@@ -1159,24 +1185,25 @@ export default function TaskGroupsPage() {
             ))}
           </div>
 
-          {recSubTab === 'rules' && (
-            (!radarLoaded || radarLoading) ? <Spinner /> : filteredRecKeywords.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 text-sm">{recKeywords.length === 0 ? '暂无推荐词' : '所有推荐词已移除，明天将重新加载'}</div>
+          {recSubTab === 'rules' && (() => {
+            const visibleOwn = ownRecData.filter(w => !dismissedRec.has(w.keyword))
+            return ownRecLoading ? <Spinner /> : visibleOwn.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">{ownRecData.length === 0 ? '近30天自有站无规则触发记录' : '所有推荐词已移除，刷新页面可重新显示'}</div>
             ) : (
               <>
                 <table className="w-full table-fixed">
                   <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
                     <th className="w-7" />
                     <th className="px-3 py-2 text-left font-medium">关键词</th>
-                    <th className="px-2 py-2 text-center font-medium w-32">来源</th>
+                    <th className="px-2 py-2 text-left font-medium">触发规则</th>
                     <th className="px-2 py-2 text-center font-medium w-20">搜索量</th>
                     <th className="w-14" />
                   </tr></thead>
                   <tbody>
-                    {filteredRecKeywords.slice(pg_rec * PAGE_SIZE, (pg_rec + 1) * PAGE_SIZE).map((w, i) => {
+                    {visibleOwn.slice(pg_rec * PAGE_SIZE, (pg_rec + 1) * PAGE_SIZE).map((w, i) => {
                       const claimed = claimedSet.has(w.keyword)
                       return (
-                        <tr key={`${w.keyword}|${i}`} onDoubleClick={() => claimKeyword(w.keyword, '今日推荐', w.volume)}
+                        <tr key={`${w.keyword}|${i}`} onDoubleClick={() => claimKeyword(w.keyword, '规则推荐', w.volume)}
                           className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
                           title={claimed ? '已认领' : '双击认领'}>
                           <td className="pl-2 py-2">
@@ -1185,21 +1212,17 @@ export default function TaskGroupsPage() {
                           </td>
                           <td className="px-3 py-2">
                             <span className="text-sm text-gray-800 select-text cursor-text"
-                              onDoubleClick={e => { e.stopPropagation(); claimKeyword(w.keyword, '今日推荐', w.volume) }}>
+                              onDoubleClick={e => { e.stopPropagation(); claimKeyword(w.keyword, '规则推荐', w.volume) }}>
                               {w.keyword.length > 22 ? w.keyword.slice(0, 22) + '…' : w.keyword}
                             </span>
                             {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
                           </td>
-                          <td className="px-2 py-2 text-center">
-                            <div className="flex gap-1 justify-center flex-wrap">
-                              {w.sources.map(s => (
-                                <span key={s} className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-50 text-purple-600">{s}</span>
-                              ))}
-                            </div>
+                          <td className="px-2 py-2">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-indigo-50 text-indigo-600">{w.rule_name}</span>
                           </td>
                           <td className="px-2 py-2 text-center text-xs text-gray-500">{w.volume > 0 ? w.volume.toLocaleString() : '—'}</td>
                           <td className="px-2 py-2 text-right">
-                            <button onClick={() => openDetail(w.keyword, '今日推荐')}
+                            <button onClick={() => openDetail(w.keyword, '规则推荐')}
                               className="text-xs border rounded px-1.5 py-0.5 text-gray-400 hover:text-gray-600 border-gray-200 transition-colors">详情</button>
                           </td>
                         </tr>
@@ -1207,10 +1230,10 @@ export default function TaskGroupsPage() {
                     })}
                   </tbody>
                 </table>
-                <Pager page={pg_rec} total={filteredRecKeywords.length} onPage={p => setPage('recommend', p)} />
+                <Pager page={pg_rec} total={visibleOwn.length} onPage={p => setPage('recommend', p)} />
               </>
             )
-          )}
+          })()}
 
           {recSubTab === 'competitors' && (
             compRecLoading ? <Spinner /> : compRecData.length === 0 ? (
