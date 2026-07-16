@@ -8,13 +8,33 @@ export async function GET() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
-  const { data, error } = await service
-    .from('rules')
-    .select('*')
-    .order('rule_number', { ascending: true })
+
+  const [{ data, error }, { data: trackingRows }] = await Promise.all([
+    service.from('rules').select('*').order('rule_number', { ascending: true }),
+    service.from('competitor_tracking_records')
+      .select('rule_id, effectiveness')
+      .not('rule_id', 'is', null),
+  ])
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ rules: data ?? [] })
+
+  // Aggregate tracked stats per rule_id
+  const statsMap = new Map<string, { tracked_success: number; tracked_fail: number; tracked_tracking: number }>()
+  for (const row of (trackingRows ?? []) as { rule_id: string; effectiveness: string }[]) {
+    if (!row.rule_id) continue
+    const s = statsMap.get(row.rule_id) ?? { tracked_success: 0, tracked_fail: 0, tracked_tracking: 0 }
+    if (row.effectiveness === '有效') s.tracked_success++
+    else if (row.effectiveness === '无效') s.tracked_fail++
+    else s.tracked_tracking++
+    statsMap.set(row.rule_id, s)
+  }
+
+  const rules = (data ?? []).map((r: { id: string }) => ({
+    ...r,
+    ...(statsMap.get(r.id) ?? { tracked_success: 0, tracked_fail: 0, tracked_tracking: 0 }),
+  }))
+
+  return NextResponse.json({ rules })
 }
 
 export async function POST(req: Request) {

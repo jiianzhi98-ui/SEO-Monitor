@@ -21,6 +21,9 @@ interface Rule {
   site_ids: string[]
   competitor_domains: string[]
   created_at: string
+  tracked_success: number
+  tracked_fail: number
+  tracked_tracking: number
 }
 
 interface RuleForm {
@@ -471,8 +474,27 @@ export default function RulesPage() {
                             </div>
                           )}
                         </div>
-                        <div className="flex-shrink-0 text-right space-y-1">
-                          {sr !== null ? (
+                        <div className="flex-shrink-0 text-right space-y-1.5">
+                          {(rule.tracked_success + rule.tracked_fail + rule.tracked_tracking) > 0 ? (() => {
+                            const trackedTotal = rule.tracked_success + rule.tracked_fail + rule.tracked_tracking
+                            const resolvedTotal = rule.tracked_success + rule.tracked_fail
+                            const trackedRate = resolvedTotal > 0 ? Math.round(rule.tracked_success / resolvedTotal * 100) : null
+                            return (
+                              <div className="text-right">
+                                {trackedRate !== null && (
+                                  <div className="mb-0.5">
+                                    <span className={`text-base font-bold ${trackedRate >= 70 ? 'text-green-600' : trackedRate >= 40 ? 'text-amber-500' : 'text-red-500'}`}>{trackedRate}%</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1.5 justify-end">
+                                  <span className="text-[10px] text-green-600 font-medium">✓{rule.tracked_success}</span>
+                                  <span className="text-[10px] text-red-400 font-medium">✗{rule.tracked_fail}</span>
+                                  {rule.tracked_tracking > 0 && <span className="text-[10px] text-amber-500 font-medium">…{rule.tracked_tracking}</span>}
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-0.5">{trackedTotal} 条追踪</p>
+                              </div>
+                            )
+                          })() : sr !== null ? (
                             <div>
                               <span className="text-base font-bold text-green-600">{sr}%</span>
                               <p className="text-[10px] text-gray-400">{total} 次验证</p>
