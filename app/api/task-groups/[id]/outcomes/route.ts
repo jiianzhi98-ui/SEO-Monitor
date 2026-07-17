@@ -43,6 +43,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const sortBy              = searchParams.get('sortBy') || 'submit_date'
   const sortDir             = searchParams.get('sortDir') || 'desc'
 
+  // Fetch bad environment dates (crawl anomaly or site-wide index drop > 5%)
+  const since90 = new Date(Date.now() + 8 * 3600000 - 90 * 86400000).toISOString().slice(0, 10)
+  const { data: envDays } = await service
+    .from('environment_daily')
+    .select('date, crawl_anomaly, avg_index_change_pct')
+    .gte('date', since90)
+  const badDates = new Set<string>()
+  for (const e of (envDays ?? []) as { date: string; crawl_anomaly: boolean; avg_index_change_pct: number | null }[]) {
+    if (e.crawl_anomaly || (e.avg_index_change_pct !== null && e.avg_index_change_pct < -5)) {
+      badDates.add(e.date)
+    }
+  }
+
   // Query site_tracking_records (ordered so latest record_date comes first for dedup)
   let trackQuery = service
     .from('site_tracking_records')
@@ -84,6 +97,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     rank_change: (r.rank_position != null && r.prev_rank_position != null)
       ? r.prev_rank_position - r.rank_position
       : null,
+    env_excluded: badDates.has(r.record_date),
   }))
 
   // Post-fetch filters

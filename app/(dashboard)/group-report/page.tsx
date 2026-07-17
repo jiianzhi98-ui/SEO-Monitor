@@ -111,6 +111,7 @@ interface OutcomeRow {
   rank_keyword: string | null; rank_position: number | null; prev_rank_position: number | null
   rank_change: number | null; rank_volume: number; rank_date: string | null
   effectiveness: string
+  env_excluded?: boolean
 }
 interface OutcomeSummary { total: number; rankedCount: number; indexedCount: number; trackingCount: number; invalidCount: number }
 type OutcomeSortBy = 'submit_date' | 'record_date' | 'search_volume' | 'rank_change' | 'rank_volume'
@@ -1929,6 +1930,12 @@ export default function GroupReportPage() {
                                 {(() => {
                                   const score = computeOutcomeScore(row.rank_position, row.is_indexed, row.rank_change)
                                   if (row.effectiveness === '追踪中' && score === 0) return <div className="text-center text-xs text-gray-300">—</div>
+                                  if (row.env_excluded) return (
+                                    <div className="text-center" title="记录日期环境异常（全站大跌或抓取失败），未计入规则平均分">
+                                      <span className="text-sm font-bold tabular-nums text-gray-300">{score}</span>
+                                      <span className="text-[9px] text-gray-300 block leading-none">环境</span>
+                                    </div>
+                                  )
                                   const color = score >= 70 ? 'text-green-600' : score >= 40 ? 'text-amber-500' : 'text-red-400'
                                   return (
                                     <div className="text-center">
