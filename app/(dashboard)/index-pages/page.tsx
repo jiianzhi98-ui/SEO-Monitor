@@ -88,8 +88,7 @@ export default function IndexPagesPage() {
   const [showCrawlModal, setShowCrawlModal] = useState(false)
   const [crawlPeriod, setCrawlPeriod] = useState<CrawlPeriod>('monthly')
   const [crawlCustomUrl, setCrawlCustomUrl] = useState('')
-  const [crawlCookie, setCrawlCookie] = useState('')
-  const [triggering, setTriggering] = useState(false)
+const [triggering, setTriggering] = useState(false)
   const [triggered, setTriggered] = useState(false)
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null)
 
@@ -168,23 +167,6 @@ export default function IndexPagesPage() {
   const trackedSites = sites.filter(s => s.has_index_pages)
   const totalPages = Math.ceil(total / pageSize)
 
-  function parseCookie(raw: string): string {
-    const trimmed = raw.trim()
-    if (trimmed.includes('\t')) {
-      return trimmed.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.includes('\t'))
-        .map(line => {
-          const cols = line.split('\t')
-          const name = cols[0]?.trim() ?? ''
-          const value = cols[1]?.trim() ?? ''
-          return name && value ? `${name}=${value}` : null
-        })
-        .filter(Boolean)
-        .join('; ')
-    }
-    return trimmed
-  }
 
   async function handleTrigger() {
     if (!activeSite || triggering) return
@@ -198,7 +180,6 @@ export default function IndexPagesPage() {
           domain: activeSite.domain,
           period: crawlPeriod,
           customUrl: crawlCustomUrl.trim() || undefined,
-          cookie: crawlCookie.trim() ? parseCookie(crawlCookie) : undefined,
         }),
       })
       const data = await res.json()
@@ -533,25 +514,11 @@ export default function IndexPagesPage() {
                   />
                 </div>
 
-                {/* Cookie */}
-                <details className="group">
-                  <summary className="text-xs font-medium text-gray-500 cursor-pointer select-none list-none flex items-center gap-1 hover:text-gray-700">
-                    <span className="transition-transform group-open:rotate-90">▶</span>
-                    Cookie（可选）
-                    {crawlCookie.trim() && <span className="ml-1 text-amber-500">✓ 已填入</span>}
-                  </summary>
-                  <textarea
-                    value={crawlCookie}
-                    onChange={e => setCrawlCookie(e.target.value)}
-                    placeholder="BAIDUID=xxx; BDUSS=xxx; ..."
-                    rows={3}
-                    className="mt-2 w-full px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono resize-none"
-                    disabled={triggering}
-                  />
-                  <p className="text-xs text-gray-400 mt-1">填入后会保存到服务器设置，下次自动抓取也会使用</p>
-                </details>
+                <p className="text-xs text-gray-400">
+                  Cookie 从<span className="font-medium text-gray-600">抓取日志</span>页面的 Cookie 池统一管理，自动轮换使用。
+                </p>
 
-                {triggerMsg && (
+{triggerMsg && (
                   <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{triggerMsg}</p>
                 )}
 

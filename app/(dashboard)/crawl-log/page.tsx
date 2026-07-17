@@ -275,9 +275,9 @@ export default function CrawlLogPage() {
     indexPages: null,
   })
 
-  // Cookie setting
+  // Cookie pool
   const [cookieUpdatedAt, setCookieUpdatedAt] = useState<string | null>(null)
-  const [cookieSet, setCookieSet] = useState(false)
+  const [cookieCount, setCookieCount] = useState(0)
   const [showCookieModal, setShowCookieModal] = useState(false)
   const [cookieInput, setCookieInput] = useState('')
   const [cookieSaving, setCookieSaving] = useState(false)
@@ -360,12 +360,19 @@ export default function CrawlLogPage() {
       indexPages: latestIndexPages,
     })
 
-    // Cookie status
+    // Cookie pool status
     const cookieRes = await fetch('/api/settings?key=baidu_index_cookie')
     if (cookieRes.ok) {
       const cd = await cookieRes.json()
-      setCookieSet(!!cd.value)
       setCookieUpdatedAt(cd.updated_at ?? null)
+      if (cd.value) {
+        try {
+          const pool = JSON.parse(cd.value)
+          setCookieCount(Array.isArray(pool) ? pool.length : 1)
+        } catch { setCookieCount(1) }
+      } else {
+        setCookieCount(0)
+      }
     }
 
     const { data: logsData } = await supabase
@@ -378,41 +385,51 @@ export default function CrawlLogPage() {
     setLoading(false)
   }, [])
 
-  function parseCookieInput(raw: string): string {
-    const trimmed = raw.trim()
-    // Tab-separated format from DevTools (multiple columns: Name, Value, Domain, Path, ...)
-    // Only take column 0 (Name) and column 1 (Value), ignore the rest
+  function parseCookieLine(line: string): string {
+    const trimmed = line.trim()
     if (trimmed.includes('\t')) {
-      return trimmed.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.includes('\t'))
-        .map(line => {
-          const cols = line.split('\t')
-          const name = cols[0]?.trim() ?? ''
-          const value = cols[1]?.trim() ?? ''
-          return name && value ? `${name}=${value}` : null
-        })
-        .filter(Boolean)
-        .join('; ')
+      // Tab-separated DevTools export row: Name\tValue\tDomain\tPath...
+      const cols = trimmed.split('\t')
+      const name = cols[0]?.trim() ?? ''
+      const value = cols[1]?.trim() ?? ''
+      return name && value ? `${name}=${value}` : ''
     }
-    // Already in Name=Value; ... format
     return trimmed
+  }
+
+  function parseCookiePool(raw: string): string[] {
+    // Each non-empty line is one Cookie string.
+    // DevTools table export (all rows tab-separated) is also handled line-by-line.
+    const lines = raw.split('\n').map(parseCookieLine).filter(Boolean)
+    // Deduplicate by leading BAIDUID= value (or full string fallback)
+    const seen = new Set<string>()
+    return lines.filter(c => {
+      const key = c.split(';')[0].trim()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   }
 
   async function saveCookie() {
     if (!cookieInput.trim()) return
     setCookieSaving(true)
     setCookieSaveMsg('')
-    const value = parseCookieInput(cookieInput)
+    const pool = parseCookiePool(cookieInput)
+    if (pool.length === 0) {
+      setCookieSaveMsg('未识别到有效的 Cookie，请检查格式')
+      setCookieSaving(false)
+      return
+    }
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: 'baidu_index_cookie', value }),
+      body: JSON.stringify({ key: 'baidu_index_cookie', value: JSON.stringify(pool) }),
     })
     if (res.ok) {
-      setCookieSet(true)
+      setCookieCount(pool.length)
       setCookieUpdatedAt(new Date().toISOString())
-      setCookieSaveMsg('已保存，下次 GitHub Actions 定时抓取将使用此 Cookie')
+      setCookieSaveMsg(`已保存 ${pool.length} 个 Cookie，下次定时抓取随机使用`)
       setCookieInput('')
     } else {
       setCookieSaveMsg('保存失败')
@@ -707,15 +724,15 @@ export default function CrawlLogPage() {
                     )}
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-gray-400 whitespace-nowrap">
-                        {cookieSet
-                          ? `已设置${cookieUpdatedAt ? '·' + formatCardDate(cookieUpdatedAt) : ''}`
-                          : 'Cookie 未设置'}
+                        {cookieCount > 0
+                          ? `池中 ${cookieCount} 个 Cookie${cookieUpdatedAt ? ' · ' + formatCardDate(cookieUpdatedAt) : ''}`
+                          : 'Cookie 池未设置'}
                       </span>
                       <button
                         onClick={() => { setShowCookieModal(true); setCookieSaveMsg('') }}
                         className="text-xs text-blue-500 hover:text-blue-700 border border-blue-100 rounded px-2 py-0.5 hover:border-blue-200 whitespace-nowrap"
                       >
-                        更新 Cookie
+                        管理 Cookie 池
                       </button>
                     </div>
                   </div>
@@ -962,8 +979,8 @@ export default function CrawlLogPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-xl w-full" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">更新百度收录 Cookie</h3>
-                <p className="text-xs text-gray-400 mt-0.5">保存后将用于 GitHub Actions 定时抓取</p>
+                <h3 className="font-semibold text-gray-900">管理 Cookie 轮换池</h3>
+                <p className="text-xs text-gray-400 mt-0.5">每次定时抓取随机取一个 Cookie 使用，失效概率低</p>
               </div>
               <button onClick={() => setShowCookieModal(false)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -974,15 +991,19 @@ export default function CrawlLogPage() {
             <div className="px-6 py-5 space-y-4">
               <div>
                 <p className="text-xs text-gray-500 mb-2">
-                  DevTools → Application → Cookies → baidu.com，全选复制 Name=Value 行贴入：
+                  每行粘贴一条 Cookie 字符串（<span className="font-medium">保存后会替换整个池子</span>）：<br />
+                  <span className="text-gray-400">支持 DevTools 复制的多行格式，或直接贴 <code className="bg-gray-100 px-0.5 rounded">Name=Value; ...</code></span>
                 </p>
                 <textarea
                   value={cookieInput}
                   onChange={e => setCookieInput(e.target.value)}
-                  placeholder="BAIDUID=xxx; BDUSS=xxx; COOKIE_SESSION=xxx; ..."
-                  rows={5}
+                  placeholder={"BAIDUID=xxx; BDUSS=yyy; ...\nBAIDUID=aaa; BDUSS=bbb; ...\n（一行一个 Cookie）"}
+                  rows={6}
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono resize-none"
                 />
+                {cookieCount > 0 && !cookieInput.trim() && (
+                  <p className="text-xs text-blue-500 mt-1">当前池中有 {cookieCount} 个 Cookie — 不填内容则保持不变</p>
+                )}
               </div>
               {cookieSaveMsg && (
                 <p className={`text-xs ${cookieSaveMsg.includes('失败') ? 'text-red-500' : 'text-green-600'}`}>
@@ -999,7 +1020,7 @@ export default function CrawlLogPage() {
                   disabled={cookieSaving || !cookieInput.trim()}
                   className="flex-1 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40"
                 >
-                  {cookieSaving ? '保存中…' : '保存 Cookie'}
+                  {cookieSaving ? '保存中…' : '保存到 Cookie 池'}
                 </button>
               </div>
             </div>

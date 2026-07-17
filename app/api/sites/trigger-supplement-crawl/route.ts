@@ -19,18 +19,10 @@ export async function POST(req: Request) {
   const role = profile?.role ?? 'normal'
   if (role === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { domain, period, customUrl, cookie } = await req.json().catch(() => ({}))
+  const { domain, period, customUrl } = await req.json().catch(() => ({}))
   if (!domain) return NextResponse.json({ error: '缺少 domain' }, { status: 400 })
   if (!['monthly', 'weekly', 'daily'].includes(period)) {
     return NextResponse.json({ error: '无效的 period，需为 monthly/weekly/daily' }, { status: 400 })
-  }
-
-  // If cookie provided, save to app_settings so the workflow can read it
-  if (cookie) {
-    await service.from('app_settings').upsert(
-      { key: 'baidu_index_cookie', value: cookie },
-      { onConflict: 'key' }
-    )
   }
 
   const pat = process.env.GITHUB_PAT
