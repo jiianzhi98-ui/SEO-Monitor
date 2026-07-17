@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useUser } from '@/lib/user-context'
-import { CompetitorDailyContent } from '@/components/competitor-daily-content'
 
 interface SiteInfo { id: string; domain: string; name: string }
 
@@ -137,7 +136,7 @@ export default function RulesPage() {
   const [compQ, setCompQ] = useState('')
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'rules' | 'ai' | 'drafts' | 'competitor'>('rules')
+  const [activeTab, setActiveTab] = useState<'rules' | 'ai' | 'drafts'>('rules')
 
   // Drafts state
   const [drafts, setDrafts] = useState<RuleDraft[]>([])
@@ -419,12 +418,6 @@ export default function RulesPage() {
             )}
           </button>
         )}
-        <button
-          onClick={() => setActiveTab('competitor')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'competitor' ? 'text-blue-600 border-blue-500' : 'text-gray-500 border-transparent hover:text-gray-700'}`}
-        >
-          竞品追踪
-        </button>
       </div>
 
       {/* ── 全局规则库 tab ── */}
@@ -852,11 +845,6 @@ export default function RulesPage() {
             )
           })}
         </div>
-      )}
-
-      {/* ── 竞品追踪 tab ── */}
-      {activeTab === 'competitor' && (
-        <CompetitorDailyContent />
       )}
 
       {/* Create/Edit modal */}
