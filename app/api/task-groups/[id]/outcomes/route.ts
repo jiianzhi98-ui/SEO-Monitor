@@ -87,17 +87,33 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   // Deduplicate: keep only the latest record per claim (rows already sorted record_date DESC)
   const seen = new Set<string>()
-  let rows = ((trackRows || []) as TrackRow[]).filter(r => {
+  const dedupedRows = ((trackRows || []) as TrackRow[]).filter(r => {
     if (seen.has(r.claim_id)) return false
     seen.add(r.claim_id)
     return true
-  }).map(r => ({
+  })
+
+  // Fetch experiment_group for deduped claim_ids
+  const claimIds = dedupedRows.map(r => r.claim_id)
+  const expGroupMap = new Map<string, 'control' | 'treatment' | null>()
+  if (claimIds.length > 0) {
+    const { data: claimMeta } = await service
+      .from('member_claimed_keywords')
+      .select('id, experiment_group')
+      .in('id', claimIds)
+    for (const c of (claimMeta ?? []) as { id: string; experiment_group: 'control' | 'treatment' | null }[]) {
+      expGroupMap.set(c.id, c.experiment_group)
+    }
+  }
+
+  let rows = dedupedRows.map(r => ({
     ...r,
     username: memberMap.get(r.user_id) ?? r.user_id.slice(0, 8),
     rank_change: (r.rank_position != null && r.prev_rank_position != null)
       ? r.prev_rank_position - r.rank_position
       : null,
     env_excluded: badDates.has(r.record_date),
+    experiment_group: expGroupMap.get(r.claim_id) ?? null,
   }))
 
   // Post-fetch filters

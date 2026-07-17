@@ -123,12 +123,13 @@ export async function PATCH(
   if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: groupId } = await params
-  const { claimId, status, final_keyword, page_url, operation_type } = await req.json() as {
+  const { claimId, status, final_keyword, page_url, operation_type, experiment_group } = await req.json() as {
     claimId: string
     status?: string
     final_keyword?: string
     page_url?: string
     operation_type?: string
+    experiment_group?: 'control' | 'treatment' | null
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,6 +142,7 @@ export async function PATCH(
   if (final_keyword !== undefined) updateData.final_keyword = final_keyword || null
   if (page_url !== undefined) updateData.page_url = page_url || null
   if (operation_type !== undefined) updateData.operation_type = operation_type || null
+  if (experiment_group !== undefined) updateData.experiment_group = experiment_group ?? null
 
   const { error } = await service
     .from('member_claimed_keywords')

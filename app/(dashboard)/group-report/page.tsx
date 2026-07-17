@@ -112,6 +112,7 @@ interface OutcomeRow {
   rank_change: number | null; rank_volume: number; rank_date: string | null
   effectiveness: string
   env_excluded?: boolean
+  experiment_group?: 'control' | 'treatment' | null
 }
 interface OutcomeSummary { total: number; rankedCount: number; indexedCount: number; trackingCount: number; invalidCount: number }
 type OutcomeSortBy = 'submit_date' | 'record_date' | 'search_volume' | 'rank_change' | 'rank_volume'
@@ -1761,7 +1762,7 @@ export default function GroupReportPage() {
 
           {/* ── 成效追踪 ── */}
           {activeTabId !== 'competitors' && reportTab === 'outcomes' && (() => {
-            const OCOLS = 'grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px_56px]'
+            const OCOLS = 'grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px_56px_42px]'
             const oTotal = outcomes.length
             const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterSubmitStart || oFilterSubmitEnd)
             const displayData = outcomes
@@ -1865,8 +1866,62 @@ export default function GroupReportPage() {
                     </div>
                   ) : (
                     <>
+                      {/* ── Pilot 对比面板 ── */}
+                      {(() => {
+                        const ctrl = outcomes.filter(r => r.experiment_group === 'control')
+                        const trt  = outcomes.filter(r => r.experiment_group === 'treatment')
+                        if (ctrl.length === 0 && trt.length === 0) return null
+                        function pilotAvgScore(rows: typeof outcomes) {
+                          const valid = rows.filter(r => !r.env_excluded)
+                          if (valid.length === 0) return null
+                          const total = valid.reduce((s, r) => s + computeOutcomeScore(r.rank_position, r.is_indexed, r.rank_change), 0)
+                          return Math.round(total / valid.length)
+                        }
+                        const ctrlScore = pilotAvgScore(ctrl)
+                        const trtScore  = pilotAvgScore(trt)
+                        const diff = (ctrlScore != null && trtScore != null) ? trtScore - ctrlScore : null
+                        return (
+                          <div className="mx-4 mb-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
+                            <div className="flex items-center gap-2 mb-2.5">
+                              <span className="text-xs font-bold text-violet-700">Pilot 试点对比</span>
+                              {diff != null && (
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${diff > 0 ? 'bg-green-100 text-green-700' : diff < 0 ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-500'}`}>
+                                  实验组 {diff > 0 ? `+${diff}` : diff} 分
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-white rounded-lg px-3 py-2 border border-blue-100">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+                                  <span className="text-xs font-medium text-blue-700">对照组 Control</span>
+                                  <span className="text-xs text-gray-400 ml-auto">{ctrl.length} 条</span>
+                                </div>
+                                <div className="text-xl font-bold tabular-nums text-blue-600">
+                                  {ctrlScore != null ? ctrlScore : <span className="text-sm text-gray-300">数据不足</span>}
+                                  {ctrlScore != null && <span className="text-xs font-normal text-gray-400 ml-1">分</span>}
+                                </div>
+                                <div className="text-[10px] text-gray-400 mt-0.5">不执行规则，自然追踪</div>
+                              </div>
+                              <div className="bg-white rounded-lg px-3 py-2 border border-amber-100">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                                  <span className="text-xs font-medium text-amber-700">实验组 Treatment</span>
+                                  <span className="text-xs text-gray-400 ml-auto">{trt.length} 条</span>
+                                </div>
+                                <div className="text-xl font-bold tabular-nums text-amber-600">
+                                  {trtScore != null ? trtScore : <span className="text-sm text-gray-300">数据不足</span>}
+                                  {trtScore != null && <span className="text-xs font-normal text-gray-400 ml-1">分</span>}
+                                </div>
+                                <div className="text-[10px] text-gray-400 mt-0.5">执行规则，验证效果</div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })()}
+
                       <div className="overflow-x-auto">
-                        <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[920px]`}>
+                        <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[962px]`}>
                           <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">提交日期{oSortIcons('submit_date')}</span>
                           <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">记录日期{oSortIcons('record_date')}</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">成员</span>
@@ -1879,8 +1934,9 @@ export default function GroupReportPage() {
                           <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">排名量{oSortIcons('rank_volume')}</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">成效</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">得分</span>
+                          <span className="text-[11px] font-medium text-gray-400 text-center">试点</span>
                         </div>
-                        <div className="divide-y divide-gray-50 min-w-[920px]">
+                        <div className="divide-y divide-gray-50 min-w-[962px]">
                           {pagedO.map(row => {
                             const rc = row.rank_change
                             return (
@@ -1940,6 +1996,32 @@ export default function GroupReportPage() {
                                   return (
                                     <div className="text-center">
                                       <span className={`text-sm font-bold tabular-nums ${color}`}>{score}</span>
+                                    </div>
+                                  )
+                                })()}
+                                {/* 试点标记 */}
+                                {(() => {
+                                  const eg = row.experiment_group
+                                  async function setEG(val: 'control' | 'treatment' | null) {
+                                    await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ claimId: row.claim_id, experiment_group: val }),
+                                    })
+                                    setOutcomes(prev => prev.map(r => r.id === row.id ? { ...r, experiment_group: val } : r))
+                                  }
+                                  return (
+                                    <div className="flex gap-0.5 justify-center">
+                                      <button
+                                        onClick={() => setEG(eg === 'control' ? null : 'control')}
+                                        title="对照组（不执行规则）"
+                                        className={`text-[10px] font-bold w-5 h-5 rounded transition-colors ${eg === 'control' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400 hover:bg-blue-100 hover:text-blue-500'}`}
+                                      >C</button>
+                                      <button
+                                        onClick={() => setEG(eg === 'treatment' ? null : 'treatment')}
+                                        title="实验组（执行规则）"
+                                        className={`text-[10px] font-bold w-5 h-5 rounded transition-colors ${eg === 'treatment' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400 hover:bg-amber-100 hover:text-amber-500'}`}
+                                      >T</button>
                                     </div>
                                   )
                                 })()}
