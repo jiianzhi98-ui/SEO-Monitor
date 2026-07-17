@@ -459,7 +459,7 @@ export default function TaskGroupsPage() {
   const [claimedLoading, setClaimedLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const [rightTab, setRightTab] = useState<RightTab>('recommend')
+  const [rightTab, setRightTab] = useState<RightTab>(role === 'super' || role === 'admin' ? 'recommend' : 'cross')
   const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0, rankdown: 0 })
   const [recSubTab, setRecSubTab] = useState<RecSubTab>('rules')
   const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; rule_id: string; rule_name: string; discovery_date: string; effectiveness: string }[] }[]>([])
@@ -1784,7 +1784,8 @@ export default function TaskGroupsPage() {
   if (loading) return <div className="p-6"><Spinner /></div>
 
   const RIGHT_TABS: [RightTab, string][] = [
-    ['recommend', '今日推荐'], ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
+    ...( canManage ? [['recommend', '今日推荐']] as [RightTab, string][] : []),
+    ['search', '搜索量查询'], ['cross', '交叉词'], ['rank', '竞品涨排名'],
     ['streak', '连续上涨词'], ['newWords', '共新增词'], ['wordLib', '更新词库'], ['rankdown', '跌词更新'],
   ]
 
