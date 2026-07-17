@@ -472,8 +472,12 @@ async function runWeight(sites: SiteRecord[], today: string, activityId: string 
 
 async function runIndexPages(sites: SiteRecord[], today: string, activityId: string | null = null, baiduCookie?: string) {
   const stepStart = Date.now()
+  // Monthly (31d) window rotates across sites in 3-day batches to reduce Baidu request load.
+  // Day 0 mod 3 → batch 0 (sites 0,3,6,…), Day 1 mod 3 → batch 1, Day 2 mod 3 → batch 2.
+  const mytDayNumber = Math.floor((Date.now() + 8 * 3600000) / 86400000)
+  const monthlyBatch = mytDayNumber % 3
   console.log(`\n${'═'.repeat(60)}`)
-  console.log(`  INDEX-PAGES   日期=${today}   ${ts()}${baiduCookie ? '   Cookie=✓' : ''}`)
+  console.log(`  INDEX-PAGES   日期=${today}   ${ts()}${baiduCookie ? '   Cookie=✓' : ''}   月度批次=${monthlyBatch + 1}/3`)
   console.log(`${'═'.repeat(60)}`)
 
   let ok = 0, failed = 0, empty = 0, totalNew = 0
@@ -508,14 +512,15 @@ async function runIndexPages(sites: SiteRecord[], today: string, activityId: str
         pages = result.pages
         failReason = result.failReason
       } else {
-        // Main daily crawl: fetch all three gpc windows and union the results.
-        // Each window returns pages Baidu re-indexed within that timeframe; combining them
-        // maximises coverage since Baidu may surface different pages in each window.
-        const PERIODS = [
-          { label: '月(31天)', days: 31 },
+        // Main daily crawl: fetch gpc windows and union the results.
+        // Monthly (31d) window only runs for sites in today's batch (idx % 3 === monthlyBatch).
+        const includeMonthly = idx % 3 === monthlyBatch
+        type Period = { label: string; days: number }
+        const PERIODS: Period[] = [
+          ...(includeMonthly ? [{ label: '月(31天)', days: 31 }] : []),
           { label: '周(7天)',  days: 7  },
           { label: '日(1天)',  days: 1  },
-        ] as const
+        ]
         const pageMap = new Map<string, BaiduIndexedPage>()
         const periodLogs: string[] = []
         let lastFailReason: BaiduIndexFailReason = null
