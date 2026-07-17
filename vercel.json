@@ -2,6 +2,15 @@
   "functions": {
     "app/api/cron/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/rules/ai-discover/route.ts": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/rules/ai-discover",
+      "schedule": "0 2 * * 1"
+    }
+  ]
 }

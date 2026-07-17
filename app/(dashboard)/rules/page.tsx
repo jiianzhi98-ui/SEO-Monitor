@@ -5,6 +5,31 @@ import { useUser } from '@/lib/user-context'
 
 interface SiteInfo { id: string; domain: string; name: string }
 
+interface RuleDraft {
+  id: string
+  draft_category: 'new_rule' | 'rule_review'
+  pattern_description: string
+  case_count: number
+  draft_name: string
+  draft_type: 'add' | 'update' | 'mixed'
+  draft_rule_status: 'active' | 'inactive' | 'testing'
+  draft_description: string | null
+  draft_confidence: number
+  draft_stage_applicability: string[]
+  supporting_cases: string[]
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
+interface DraftEditForm {
+  draft_name: string
+  draft_type: 'add' | 'update' | 'mixed'
+  draft_rule_status: 'active' | 'inactive' | 'testing'
+  draft_description: string
+  draft_confidence: number
+  draft_stage_applicability: string[]
+}
+
 interface Rule {
   id: string
   rule_number: number
@@ -111,7 +136,13 @@ export default function RulesPage() {
   const [compQ, setCompQ] = useState('')
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'rules' | 'ai'>('rules')
+  const [activeTab, setActiveTab] = useState<'rules' | 'ai' | 'drafts'>('rules')
+
+  // Drafts state
+  const [drafts, setDrafts] = useState<RuleDraft[]>([])
+  const [draftsLoading, setDraftsLoading] = useState(false)
+  const [draftForms, setDraftForms] = useState<Record<string, DraftEditForm>>({})
+  const [draftActing, setDraftActing] = useState<Record<string, boolean>>({})
 
   // AI state
   const [aiPrompt, setAiPrompt] = useState('')
@@ -126,6 +157,29 @@ export default function RulesPage() {
       .then(r => r.json())
       .then(d => setRules((d.rules ?? []).map((r: Rule) => ({ ...r, site_ids: r.site_ids ?? [], competitor_domains: r.competitor_domains ?? [] }))))
       .finally(() => setLoading(false))
+
+    if (canEdit) {
+      setDraftsLoading(true)
+      fetch('/api/rules/drafts')
+        .then(r => r.json())
+        .then(d => {
+          const ds: RuleDraft[] = d.drafts ?? []
+          setDrafts(ds)
+          const forms: Record<string, DraftEditForm> = {}
+          for (const dr of ds) {
+            forms[dr.id] = {
+              draft_name: dr.draft_name,
+              draft_type: dr.draft_type,
+              draft_rule_status: dr.draft_rule_status,
+              draft_description: dr.draft_description ?? '',
+              draft_confidence: dr.draft_confidence,
+              draft_stage_applicability: dr.draft_stage_applicability ?? [],
+            }
+          }
+          setDraftForms(forms)
+        })
+        .finally(() => setDraftsLoading(false))
+    }
 
     fetch('/api/sites')
       .then(r => r.json())
@@ -353,6 +407,17 @@ export default function RulesPage() {
           <SparkleIcon className="w-3.5 h-3.5" />
           AI 新建规则
         </button>
+        {canEdit && (
+          <button
+            onClick={() => setActiveTab('drafts')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${activeTab === 'drafts' ? 'text-amber-600 border-amber-500' : 'text-gray-500 border-transparent hover:text-gray-700'}`}
+          >
+            AI 草稿
+            {drafts.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700 rounded-full">{drafts.length}</span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── 全局规则库 tab ── */}
@@ -659,6 +724,125 @@ export default function RulesPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── AI 草稿审核 tab ── */}
+      {activeTab === 'drafts' && canEdit && (
+        <div className="space-y-4">
+          {draftsLoading ? <Spinner /> : drafts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-300 gap-3">
+              <SparkleIcon className="w-10 h-10" />
+              <span className="text-sm text-gray-400">暂无待审核草稿</span>
+              <p className="text-xs text-gray-400">每周一 AI 自动分析竞品数据生成规则建议，满足10条新案例后触发</p>
+            </div>
+          ) : drafts.map(dr => {
+            const f = draftForms[dr.id] ?? { draft_name: dr.draft_name, draft_type: dr.draft_type, draft_rule_status: dr.draft_rule_status, draft_description: dr.draft_description ?? '', draft_confidence: dr.draft_confidence, draft_stage_applicability: dr.draft_stage_applicability ?? [] }
+            const isNew = dr.draft_category === 'new_rule'
+            const acting = draftActing[dr.id]
+
+            function updateF(patch: Partial<DraftEditForm>) {
+              setDraftForms(prev => ({ ...prev, [dr.id]: { ...f, ...patch } }))
+            }
+
+            async function actDraft(action: 'approve' | 'reject') {
+              setDraftActing(prev => ({ ...prev, [dr.id]: true }))
+              try {
+                const body = action === 'approve' ? { action, ...f } : { action }
+                const res = await fetch(`/api/rules/drafts/${dr.id}`, {
+                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body),
+                })
+                if (res.ok) {
+                  setDrafts(prev => prev.filter(d => d.id !== dr.id))
+                  if (action === 'approve' && isNew) {
+                    const d = await res.json()
+                    if (d.rule) setRules(prev => [...prev, { ...d.rule, site_ids: [], competitor_domains: [], tracked_success: 0, tracked_fail: 0, tracked_tracking: 0, avg_score: null, avg_score_count: 0 }])
+                  }
+                }
+              } finally { setDraftActing(prev => ({ ...prev, [dr.id]: false })) }
+            }
+
+            return (
+              <div key={dr.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {/* Header */}
+                <div className={`px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-3 ${isNew ? 'bg-violet-50/50' : 'bg-amber-50/50'}`}>
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isNew ? 'bg-violet-100 text-violet-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {isNew ? '新规则发现' : '规则预警'}
+                    </span>
+                    <span className="text-xs text-gray-500">{dr.case_count} 条案例</span>
+                    <span className="text-xs text-gray-400">{dr.created_at.slice(0, 10)}</span>
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button onClick={() => actDraft('reject')} disabled={acting}
+                      className="px-3 py-1.5 text-xs text-red-400 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors">
+                      驳回
+                    </button>
+                    <button onClick={() => actDraft('approve')} disabled={acting}
+                      className={`px-3 py-1.5 text-xs font-medium text-white rounded-lg disabled:opacity-50 transition-colors ${isNew ? 'bg-violet-500 hover:bg-violet-600' : 'bg-amber-500 hover:bg-amber-600'}`}>
+                      {acting ? '处理中…' : isNew ? '批准并创建规则' : '已确认'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* AI pattern description */}
+                <div className="px-4 pt-3 pb-2">
+                  <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <span className="font-medium text-gray-600">AI 发现：</span>{dr.pattern_description}
+                  </p>
+                </div>
+
+                {/* Editable form */}
+                <div className="px-4 pb-4 grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">规则名称</label>
+                    <input value={f.draft_name} onChange={e => updateF({ draft_name: e.target.value })}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400 text-gray-800" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">类型</label>
+                    <select value={f.draft_type} onChange={e => updateF({ draft_type: e.target.value as DraftEditForm['draft_type'] })}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400 text-gray-700 bg-white">
+                      <option value="add">新增</option>
+                      <option value="update">更新</option>
+                      <option value="mixed">混合</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">初始状态</label>
+                    <select value={f.draft_rule_status} onChange={e => updateF({ draft_rule_status: e.target.value as DraftEditForm['draft_rule_status'] })}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400 text-gray-700 bg-white">
+                      <option value="testing">测试中</option>
+                      <option value="active">启用</option>
+                      <option value="inactive">停用</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">规则说明</label>
+                    <textarea value={f.draft_description} onChange={e => updateF({ draft_description: e.target.value })} rows={3}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400 text-gray-800 resize-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">信心度 {f.draft_confidence}%</label>
+                    <input type="range" min={0} max={100} value={f.draft_confidence} onChange={e => updateF({ draft_confidence: Number(e.target.value) })}
+                      className="w-full accent-violet-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">适用阶段</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STAGE_TYPES.map(s => (
+                        <button key={s} onClick={() => updateF({ draft_stage_applicability: f.draft_stage_applicability.includes(s) ? f.draft_stage_applicability.filter(x => x !== s) : [...f.draft_stage_applicability, s] })}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${f.draft_stage_applicability.includes(s) ? 'bg-violet-500 text-white border-violet-500' : 'border-gray-200 text-gray-500 hover:border-violet-300'}`}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
