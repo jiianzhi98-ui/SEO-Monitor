@@ -5,6 +5,9 @@
     },
     "app/api/rules/ai-discover/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/environment/daily-snapshot/route.ts": {
+      "maxDuration": 30
     }
   },
   "crons": [

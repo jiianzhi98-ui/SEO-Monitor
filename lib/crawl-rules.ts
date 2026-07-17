@@ -143,6 +143,19 @@ export const CRAWL_RULES: RuleSection[] = [
     ],
   },
   {
+    key: 'environment-snapshot',
+    title: '环境快照',
+    badge: 'environment-snapshot.yml · GitHub Actions · 每日 07:30 MYT（cron 23:30 UTC）',
+    items: [
+      { label: '触发方式', text: 'GitHub Actions environment-snapshot.yml（cron 30 23 * * * UTC = 07:30 MYT），在所有日常抓取和重试完成后运行；也可 workflow_dispatch 手动指定日期；调用 GET /api/environment/daily-snapshot（含 Bearer CRON_SECRET）' },
+      { label: '计算来源', text: '① rank_changes：统计目标日期全站涨/跌排名词总数及有数据站点数；② index_snapshots：对比目标日期与前一日各站收录数，计算平均变化百分比；③ 日期本身：计算星期几、是否中国大陆法定节假日、是否学生放假期间（暑假7-8月、寒假1月20日-2月底）' },
+      { label: '写入表', text: 'environment_daily（按 date 唯一 upsert；字段：date, weekday, is_holiday, is_school_holiday, total_rankup, total_rankdown, sites_with_rank_data, avg_index_change_pct, sites_with_index_data, crawl_anomaly；永久保留）' },
+      { label: 'crawl_anomaly 判定', text: '当日 total_rankup + total_rankdown = 0 时标记为 true，表示排名数据疑似未抓取到；用于在评分时排除异常日期的数据' },
+      { label: '用途', text: '未来评分修正：若某日 avg_index_change_pct < -5% 或 crawl_anomaly=true，该日相关词的排名跌幅不计入规则失败评分（env_excluded）；积累半年后可分析规则在不同环境（节假日 / 暑假 / 算法波动日）下的差异表现' },
+      { label: '节假日维护', text: '中国大陆法定节假日硬编码在 /api/environment/daily-snapshot/route.ts 的 PUBLIC_HOLIDAYS Set 中，每年国务院通知发布后手动追加 2026-2027 年份' },
+    ],
+  },
+  {
     key: 'search',
     title: '站点情报查询',
     badge: '类型：search · 触发方式：页面搜索',

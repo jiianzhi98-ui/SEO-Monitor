@@ -1,0 +1,41 @@
+name: Environment Daily Snapshot
+
+on:
+  schedule:
+    - cron: '30 23 * * *'  # 07:30 MYT（所有抓取和重试完成后）
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '目标日期 YYYY-MM-DD（留空=昨天）'
+        required: false
+        default: ''
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call daily-snapshot API
+        run: |
+          DATE_PARAM=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            DATE_PARAM="?date=${{ github.event.inputs.date }}"
+          fi
+          RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.NEXT_PUBLIC_VERCEL_URL }}/api/environment/daily-snapshot${DATE_PARAM}")
+          echo "$RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+if d.get('success'):
+    print(f\"✅ {d['date']} | weekday={d['weekday']} holiday={d['is_holiday']} school={d['is_school_holiday']}\")
+    print(f\"   rank↑{d['total_rankup']} ↓{d['total_rankdown']} sites={d['sites_with_rank_data']} anomaly={d['crawl_anomaly']}\")
+    pct = d.get('avg_index_change_pct')
+    print(f\"   index_change={pct}% sites={d['sites_with_index_data']}\")
+else:
+    print('❌ Error:', d)
+    sys.exit(1)
+"
+        env:
+          NEXT_PUBLIC_VERCEL_URL: ${{ secrets.NEXT_PUBLIC_VERCEL_URL }}
