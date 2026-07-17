@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/user-context'
 import { CompetitorAnalysis } from '@/components/competitor-analysis'
 
@@ -134,7 +135,12 @@ function SparkleIcon({ className }: { className?: string }) {
 
 export default function RulesPage() {
   const { role } = useUser()
+  const router = useRouter()
   const canEdit = role === 'super' || role === 'admin'
+
+  useEffect(() => {
+    if (role === 'normal') router.replace('/task-groups')
+  }, [role, router])
 
   const [rules, setRules] = useState<Rule[]>([])
   const [loading, setLoading] = useState(true)
