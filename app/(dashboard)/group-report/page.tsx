@@ -796,6 +796,7 @@ export default function GroupReportPage() {
   const [outcomes, setOutcomes] = useState<OutcomeRow[]>([])
   const [outcomeSummary, setOutcomeSummary] = useState<OutcomeSummary | null>(null)
   const [outcomesLoading, setOutcomesLoading] = useState(false)
+  const [outcomesTruncated, setOutcomesTruncated] = useState(false)
   const [oFilterSubmitStart, setOFilterSubmitStart] = useState('')
   const [oFilterSubmitEnd, setOFilterSubmitEnd] = useState('')
   const [oFilterMember, setOFilterMember] = useState('')
@@ -977,7 +978,7 @@ export default function GroupReportPage() {
     p.set('sortDir', oSortDir)
     fetch(`/api/task-groups/${activeGroupId}/outcomes?${p}`)
       .then(r => r.json())
-      .then(d => { setOutcomes(d.rows || []); setOutcomeSummary(d.summary || null) })
+      .then(d => { setOutcomes(d.rows || []); setOutcomeSummary(d.summary || null); setOutcomesTruncated(!!d.truncated) })
       .finally(() => setOutcomesLoading(false))
   }, [activeGroupId, reportTab, oFilterSubmitStart, oFilterSubmitEnd, oFilterMember, oFilterOp, oFilterKw, oFilterIndex, oFilterRankKw, oFilterOutcome, oSortBy, oSortDir])
 
@@ -1797,6 +1798,13 @@ export default function GroupReportPage() {
             }
             return (
               <div className="space-y-4">
+                {/* Truncation warning */}
+                {outcomesTruncated && (
+                  <div className="mx-4 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 flex items-center gap-2">
+                    <span className="font-bold">⚠</span>
+                    数据已截断至前 2000 条记录。请使用筛选器缩小范围以查看完整数据。
+                  </div>
+                )}
                 {/* Summary cards */}
                 {outcomeSummary && (
                   <div className="grid grid-cols-4 gap-3">

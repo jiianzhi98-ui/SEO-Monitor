@@ -38,6 +38,15 @@ export async function PATCH(
   }
 
   if (body.action === 'approve') {
+    const VALID_TYPES = ['add', 'update', 'delete', 'redirect', 'other']
+    const VALID_STATUSES = ['active', 'testing', 'archived']
+    if (body.draft_type && !VALID_TYPES.includes(body.draft_type)) {
+      return NextResponse.json({ error: 'Invalid draft_type' }, { status: 400 })
+    }
+    if (body.draft_rule_status && !VALID_STATUSES.includes(body.draft_rule_status)) {
+      return NextResponse.json({ error: 'Invalid draft_rule_status' }, { status: 400 })
+    }
+
     // Fetch the draft to get latest values
     const { data: draft } = await service.from('rule_drafts').select('*').eq('id', id).single()
     if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })

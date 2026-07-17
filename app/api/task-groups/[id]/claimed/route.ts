@@ -133,6 +133,11 @@ export async function PATCH(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const VALID_STATUSES = ['pending', 'submitted', 'dismissed']
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+  }
+
   const service = createServiceClient() as any
   const updateData: Record<string, unknown> = {}
   if (status !== undefined) {

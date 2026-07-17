@@ -146,5 +146,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     invalidCount:  rows.filter(r => r.effectiveness === '无效').length,
   }
 
-  return NextResponse.json({ rows, summary })
+  return NextResponse.json({ rows, summary, truncated: (trackRows?.length ?? 0) >= 2000 })
 }

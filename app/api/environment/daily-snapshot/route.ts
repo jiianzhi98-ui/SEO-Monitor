@@ -33,7 +33,7 @@ const PUBLIC_HOLIDAYS = new Set([
 
 // 学生放假期间（近似，按国内学制）
 function isSchoolHoliday(dateStr: string): boolean {
-  const d = new Date(dateStr + 'T00:00:00')
+  const d = new Date(dateStr + 'T00:00:00Z')
   const m = d.getMonth() + 1
   const day = d.getDate()
   if (m === 7 || m === 8) return true          // 暑假
