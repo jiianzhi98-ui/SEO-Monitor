@@ -32,7 +32,8 @@ export async function GET() {
     service.from('rules').select('*').order('rule_number', { ascending: true }),
     service.from('competitor_tracking_records')
       .select('rule_id, effectiveness')
-      .not('rule_id', 'is', null),
+      .not('rule_id', 'is', null)
+      .limit(5000),
     service.from('member_claimed_keywords')
       .select('id, source_rule_id')
       .not('source_rule_id', 'is', null)

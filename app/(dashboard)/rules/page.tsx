@@ -742,13 +742,14 @@ export default function RulesPage() {
             const acting = draftActing[dr.id]
 
             function updateF(patch: Partial<DraftEditForm>) {
-              setDraftForms(prev => ({ ...prev, [dr.id]: { ...f, ...patch } }))
+              setDraftForms(prev => ({ ...prev, [dr.id]: { ...(prev[dr.id] ?? f), ...patch } }))
             }
 
             async function actDraft(action: 'approve' | 'reject') {
               setDraftActing(prev => ({ ...prev, [dr.id]: true }))
               try {
-                const body = action === 'approve' ? { action, ...f } : { action }
+                const latestF = draftForms[dr.id] ?? f
+                const body = action === 'approve' ? { action, ...latestF } : { action }
                 const res = await fetch(`/api/rules/drafts/${dr.id}`, {
                   method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(body),

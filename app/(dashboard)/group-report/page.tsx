@@ -944,6 +944,19 @@ export default function GroupReportPage() {
       .finally(() => setLoading(false))
   }, [activeGroupId, period, customStart, customEnd])
 
+  // Reset outcome filters when switching groups
+  useEffect(() => {
+    setOFilterSubmitStart('')
+    setOFilterSubmitEnd('')
+    setOFilterMember('')
+    setOFilterOp('')
+    setOFilterKw('')
+    setOFilterIndex('')
+    setOFilterRankKw('')
+    setOFilterOutcome('')
+    setOPage(0)
+  }, [activeGroupId])
+
   // Load outcomes data
   useEffect(() => {
     if (!activeGroupId || reportTab !== 'outcomes') return
@@ -1002,8 +1015,8 @@ export default function GroupReportPage() {
         // Load latest weight & index from monitored tables
         const db = getBrowserClient()
         const [{ data: wRows }, { data: iRows }] = await Promise.all([
-          db.from('weight_history').select('site_id, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max').in('site_id', siteIds).order('record_date', { ascending: false }),
-          db.from('index_snapshots').select('site_id, index_count').in('site_id', siteIds).order('snapshot_date', { ascending: false }),
+          db.from('weight_history').select('site_id, pc_weight, mobile_weight, pc_ip, pc_ip_max, mobile_ip, mobile_ip_max').in('site_id', siteIds).order('record_date', { ascending: false }).limit(siteIds.length * 5),
+          db.from('index_snapshots').select('site_id, index_count').in('site_id', siteIds).order('snapshot_date', { ascending: false }).limit(siteIds.length * 5),
         ])
         const wMap: Record<string, WeightSnapshot> = {}
         for (const r of ((wRows ?? []) as (WeightSnapshot & { site_id: string })[])) {
