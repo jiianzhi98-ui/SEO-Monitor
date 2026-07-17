@@ -869,7 +869,7 @@ export async function fetchBaiduIndexPages(
       }
 
       // Human-like pacing to avoid Baidu rate limiting on deep pagination
-      await randomDelay(initialCookie ? 1500 : 4000, initialCookie ? 3000 : 7000)
+      await randomDelay(5000, 8000)
     } catch {
       failReason = 'http_error'
       break

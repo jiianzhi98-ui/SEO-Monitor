@@ -1044,7 +1044,18 @@ async function main() {
   if (step === 'index-pages') {
     const aid = await activityStart(supabase, { ...logBase, step: 'index-pages' })
     const { data: cookieSetting } = await supabase.from('app_settings').select('value').eq('key', 'baidu_index_cookie').maybeSingle()
-    const baiduCookie = (cookieSetting as { value: string } | null)?.value ?? undefined
+    const rawCookie = (cookieSetting as { value: string } | null)?.value ?? ''
+    let baiduCookie: string | undefined
+    if (rawCookie) {
+      try {
+        const pool = JSON.parse(rawCookie)
+        baiduCookie = Array.isArray(pool) && pool.length > 0
+          ? pool[Math.floor(Math.random() * pool.length)]
+          : rawCookie
+      } catch {
+        baiduCookie = rawCookie  // 兼容旧格式：单个 cookie 字符串
+      }
+    }
     const supplementDomain = process.env.SUPPLEMENT_DOMAIN
     const indexSites = sites.filter(s => s.has_index_pages && (!supplementDomain || s.domain === supplementDomain))
     await runIndexPages(indexSites, today, aid, baiduCookie)
