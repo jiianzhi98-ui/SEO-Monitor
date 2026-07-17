@@ -87,7 +87,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const memberMap = new Map<string, {
     userId: string; username: string; memberType: string
     sourceMap: Map<string, { count: number; volume: number }>
-    dateMap: Map<string, { count: number; volume: number; keywords: { keyword: string; search_volume: number; source: string; operation_type: string | null; final_keyword: string | null; page_url: string | null }[] }>
+    dateMap: Map<string, { count: number; volume: number }>
     total: { count: number; volume: number }
   }>()
 
@@ -111,9 +111,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     entry.sourceMap.set(row.source, src)
 
     // Date
-    const day = entry.dateMap.get(row.claimed_date) ?? { count: 0, volume: 0, keywords: [] }
+    const day = entry.dateMap.get(row.claimed_date) ?? { count: 0, volume: 0 }
     day.count += 1; day.volume += vol
-    day.keywords.push({ keyword: row.keyword, search_volume: vol, source: row.source, operation_type: row.operation_type || null, final_keyword: row.final_keyword || null, page_url: row.page_url || null })
     entry.dateMap.set(row.claimed_date, day)
 
     // Total
@@ -137,7 +136,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     bySource: sortSources(m.sourceMap),
     byDate: Array.from(m.dateMap.entries())
       .sort(([a], [b]) => b.localeCompare(a))
-      .map(([date, d]) => ({ date, count: d.count, volume: d.volume, keywords: d.keywords })),
+      .map(([date, d]) => ({ date, count: d.count, volume: d.volume })),
   }))
 
   // Group total (admin only)
