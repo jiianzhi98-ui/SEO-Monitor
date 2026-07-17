@@ -7,6 +7,25 @@ import { getBrowserClient } from '@/lib/supabase'
 const ACCORDION_PAGE_SIZE = 20
 const KW_PAGE_SIZE = 50
 
+function computeOutcomeScore(rankPos: number | null, isIndexed: boolean, rankChange: number | null): number {
+  let rankScore = 0
+  if (rankPos != null) {
+    if (rankPos <= 3) rankScore = 60
+    else if (rankPos <= 10) rankScore = 50
+    else if (rankPos <= 20) rankScore = 40
+    else if (rankPos <= 30) rankScore = 30
+    else rankScore = 20
+  }
+  const indexScore = isIndexed ? 20 : 0
+  let changeScore = 0
+  if (rankChange != null && rankChange > 0) {
+    if (rankChange > 20) changeScore = 20
+    else if (rankChange >= 10) changeScore = 15
+    else changeScore = 10
+  }
+  return rankScore + indexScore + changeScore
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface Group {
@@ -1741,7 +1760,7 @@ export default function GroupReportPage() {
 
           {/* ── 成效追踪 ── */}
           {activeTabId !== 'competitors' && reportTab === 'outcomes' && (() => {
-            const OCOLS = 'grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px]'
+            const OCOLS = 'grid-cols-[70px_70px_70px_48px_2fr_60px_70px_88px_1.5fr_60px_58px_56px]'
             const oTotal = outcomes.length
             const anyFilter = !!(oFilterMember || oFilterOp || oFilterIndex || oFilterOutcome || oFilterKw || oFilterRankKw || oFilterSubmitStart || oFilterSubmitEnd)
             const displayData = outcomes
@@ -1846,7 +1865,7 @@ export default function GroupReportPage() {
                   ) : (
                     <>
                       <div className="overflow-x-auto">
-                        <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[860px]`}>
+                        <div className={`grid ${OCOLS} gap-x-2 px-4 py-2 bg-gray-50/40 border-b border-gray-100 min-w-[920px]`}>
                           <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">提交日期{oSortIcons('submit_date')}</span>
                           <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">记录日期{oSortIcons('record_date')}</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">成员</span>
@@ -1858,8 +1877,9 @@ export default function GroupReportPage() {
                           <span className="text-[11px] font-medium text-gray-400">排名词</span>
                           <span className="text-[11px] font-medium text-gray-400 inline-flex items-center justify-center">排名量{oSortIcons('rank_volume')}</span>
                           <span className="text-[11px] font-medium text-gray-400 text-center">成效</span>
+                          <span className="text-[11px] font-medium text-gray-400 text-center">得分</span>
                         </div>
-                        <div className="divide-y divide-gray-50 min-w-[860px]">
+                        <div className="divide-y divide-gray-50 min-w-[920px]">
                           {pagedO.map(row => {
                             const rc = row.rank_change
                             return (
@@ -1906,6 +1926,16 @@ export default function GroupReportPage() {
                                   {row.effectiveness === '追踪中'   && <span className="text-xs bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded-full">追踪中</span>}
                                   {row.effectiveness === '无效'     && <span className="text-xs bg-red-50 text-red-400 border border-red-200 px-1.5 py-0.5 rounded-full">无效</span>}
                                 </div>
+                                {(() => {
+                                  const score = computeOutcomeScore(row.rank_position, row.is_indexed, row.rank_change)
+                                  if (row.effectiveness === '追踪中' && score === 0) return <div className="text-center text-xs text-gray-300">—</div>
+                                  const color = score >= 70 ? 'text-green-600' : score >= 40 ? 'text-amber-500' : 'text-red-400'
+                                  return (
+                                    <div className="text-center">
+                                      <span className={`text-sm font-bold tabular-nums ${color}`}>{score}</span>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             )
                           })}

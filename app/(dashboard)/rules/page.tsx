@@ -24,6 +24,8 @@ interface Rule {
   tracked_success: number
   tracked_fail: number
   tracked_tracking: number
+  avg_score: number | null
+  avg_score_count: number
 }
 
 interface RuleForm {
@@ -492,6 +494,13 @@ export default function RulesPage() {
                                   {rule.tracked_tracking > 0 && <span className="text-[10px] text-amber-500 font-medium">…{rule.tracked_tracking}</span>}
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-0.5">{trackedTotal} 条追踪</p>
+                                {rule.avg_score !== null && rule.avg_score_count > 0 && (
+                                  <div className="mt-1 pt-1 border-t border-gray-100 text-right">
+                                    <span className={`text-xs font-bold ${rule.avg_score >= 70 ? 'text-green-600' : rule.avg_score >= 40 ? 'text-amber-500' : 'text-red-400'}`}>{rule.avg_score}pt</span>
+                                    <span className="text-[10px] text-gray-400 ml-1">均分</span>
+                                    <p className="text-[10px] text-gray-400">{rule.avg_score_count} 条认领</p>
+                                  </div>
+                                )}
                               </div>
                             )
                           })() : sr !== null ? (

@@ -688,7 +688,7 @@ export default function TaskGroupsPage() {
       const rankdownRule = activeRules.find(r => r.trigger_type === 'rankdown_then_update')
 
       // Deduplicate by keyword, keep latest date, match to rule
-      const kwMap = new Map<string, { keyword: string; rule_name: string; stat_date: string; volume: number }>()
+      const kwMap = new Map<string, { keyword: string; rule_id: string; rule_name: string; stat_date: string; volume: number }>()
       for (const r of rows) {
         if (kwMap.has(r.keyword)) continue
         const matchedRule = (batchPrefixKws.has(r.keyword) && batchRule) ? batchRule : rankdownRule
@@ -743,7 +743,7 @@ export default function TaskGroupsPage() {
         .order('discovery_date', { ascending: false })
         .limit(500)
 
-      const grouped = new Map<string, { keyword: string; rule_name: string; discovery_date: string; effectiveness: string }[]>()
+      const grouped = new Map<string, { keyword: string; rule_id: string; rule_name: string; discovery_date: string; effectiveness: string }[]>()
       const seen = new Set<string>()
       for (const r of (recData || []) as { site_id: string; keyword: string; discovery_date: string; rule_id: string; effectiveness: string }[]) {
         // Only include if rule_id belongs to this group's competitor rules
