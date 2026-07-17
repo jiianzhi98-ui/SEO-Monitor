@@ -78,7 +78,7 @@ export const CRAWL_RULES: RuleSection[] = [
       { label: '抓取对象', text: '仅 has_index_pages=true 的站点（在收录页面追踪页面逐站开关，默认 false）；setup 阶段已精确过滤，不会为其他类型站点创建多余 job' },
       { label: '抓取方式', text: '百度 site:domain 搜索，时间窗口分批策略：周(7天)+日(1天) 每天为全部站点运行；月(31天) 窗口按 3 天轮转批次（MYT 天数 mod 3 = 批次号，每站按其在站点数组的下标 idx%3 决定当天是否跑月度窗口），每天约 1/3 站点跑月度，3 天内覆盖所有站点；gpc=stf={now-Nd},{now}|stftype=1 + tfflag=1 + ct=2097152/si=domain/fenlei=256；pn=0/10/20... 翻页，无页数上限；停止条件：空页、被拦截（captcha 则中止当站）、或整页URL相同；翻页间隔 5-8 秒随机；SUPPLEMENT_PERIOD 环境变量可覆盖为单一周期（manual/supplement 专用）；Cookie 以 JSON 数组格式存储在 app_settings.baidu_index_cookie（在抓取日志页面"管理 Cookie 池"统一维护），每次抓取随机取其中一个使用，手动重抓不再接受临时 Cookie 覆盖' },
       { label: '去重', text: '按 (site_id, url) 唯一索引 upsert；新页面写入 first_seen_date=today（DB trigger 保护，UPDATE 时不覆盖）；已知页面更新 last_seen_date=today 并重置 missed_count=0、verify_needed=false、disappeared_date=null；抓完后对 30天窗口内未出现的页面执行宽限计数：连续 2 次未出现（missed_count≥2）才标记 verify_needed=true 进入验证队列，不直接写 disappeared_date（30天可观测窗口外的历史页面不参与判定）' },
-      { label: '脱收验证', text: '脱收不在本步骤确认——verify_needed=true 的页面由每周三 verify-deindex.yml 逐 URL 搜索百度（site:domain/path）确认；搜得到则清除标记（误报），搜不到才写 disappeared_date=today；百度拦截（captcha）时跳过本 URL，下周再试' },
+      { label: '脱收验证', text: '脱收不在本步骤确认——verify_needed=true 的页面由每周六 verify-deindex.yml 逐 URL 搜索百度（site:domain/path）确认；搜得到则清除标记（误报），搜不到才写 disappeared_date=today；百度拦截（captcha）时跳过本 URL，下周再试' },
       { label: '写入表', text: 'site_indexed_pages（url, title, snippet, baidu_date_str, first_seen_date, last_seen_date, disappeared_date, missed_count, verify_needed）；500条/批写入' },
       { label: '风险', text: '百度对 GitHub Actions IP 有反爬限制，若返回 "百度安全验证" 页则自动停止该站抓取；empty 状态表示疑似被拦截' },
     ],
@@ -102,9 +102,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'verify-deindex',
     title: '脱收验证',
-    badge: 'verify-deindex.yml · GitHub Actions · 每周六 06:30 MYT（cron 22:30 UTC 周五）',
+    badge: 'verify-deindex.yml · GitHub Actions · 每周六 07:30 MYT（cron 23:30 UTC 周五）',
     items: [
-      { label: '触发方式', text: '每周六 06:30 MYT（cron 30 22 * * 5 UTC）自动运行；也可 workflow_dispatch 手动触发；脚本：scripts/verify-deindex.ts' },
+      { label: '触发方式', text: '每周六 07:30 MYT（cron 30 23 * * 5 UTC）自动运行；也可 workflow_dispatch 手动触发；脚本：scripts/verify-deindex.ts' },
       { label: '处理对象', text: 'site_indexed_pages 中 verify_needed=true AND disappeared_date IS NULL 的所有 URL（由日常 index-pages 抓取在连续 2 次未见后标记）' },
       { label: '验证方式', text: '对每条 URL 执行 site:<url> 百度搜索；搜得到 → 清除 verify_needed（误报，仍在收录）；搜不到 → 写入 disappeared_date=today（确认脱收）；百度拦截/网络错误 → 跳过本 URL，下周再试' },
       { label: '限流保护', text: 'URL 之间固定间隔 4 秒；百度返回 captcha/no_content/http_error 时标记为跳过，不误判为脱收' },
@@ -132,9 +132,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'ai-discover',
     title: 'AI 规则发现',
-    badge: 'Vercel Cron · 每周一 02:00 UTC（约 10:00 MYT）',
+    badge: 'Vercel Cron · 每周日 07:30 MYT（cron 23:30 UTC 周六）',
     items: [
-      { label: '触发方式', text: 'Vercel Cron（vercel.json："0 2 * * 1"），每周一 02:00 UTC 自动 GET /api/rules/ai-discover（含 Bearer CRON_SECRET 鉴权）；也可由 admin/super 手动 POST 同一端点触发' },
+      { label: '触发方式', text: 'Vercel Cron（vercel.json："30 23 * * 6"），每周日 07:30 MYT（UTC 周六 23:30）自动 GET /api/rules/ai-discover（含 Bearer CRON_SECRET 鉴权）；也可由 admin/super 手动 POST 同一端点触发' },
       { label: 'Layer 1 SQL', text: '① 查询近90天 competitor_tracking_records 中 effectiveness=有效 且 rule_id IS NULL 的案例（最多300条）；② 查询近90天所有有 rule_id 的记录，计算各规则近30天 vs 历史成功率，找出下降超过20百分点且数据量充足的规则' },
       { label: 'Layer 2 AI', text: 'Gemini（gemini-2.5-flash-lite，fallback to gemini-2.5-flash / gemini-2.0-flash）；仅将 Layer 1 的压缩摘要（按站点+月份分组，最多300条→50行摘要）传给 AI，而非原始数据库；responseMimeType=application/json 返回结构化 JSON' },
       { label: '最低触发阈值', text: '新案例不足10条 且 无下降规则 → 跳过（返回 skipped:true），避免无数据时浪费 API 调用' },
@@ -145,9 +145,9 @@ export const CRAWL_RULES: RuleSection[] = [
   {
     key: 'environment-snapshot',
     title: '环境快照',
-    badge: 'environment-snapshot.yml · GitHub Actions · 每日 07:30 MYT（cron 23:30 UTC）',
+    badge: 'environment-snapshot.yml · GitHub Actions · 每日 06:45 MYT（cron 22:45 UTC）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions environment-snapshot.yml（cron 30 23 * * * UTC = 07:30 MYT），在所有日常抓取和重试完成后运行；也可 workflow_dispatch 手动指定日期；调用 GET /api/environment/daily-snapshot（含 Bearer CRON_SECRET）' },
+      { label: '触发方式', text: 'GitHub Actions environment-snapshot.yml（cron 45 22 * * * UTC = 06:45 MYT），在所有日常抓取和重试完成后运行；也可 workflow_dispatch 手动指定日期；调用 GET /api/environment/daily-snapshot（含 Bearer CRON_SECRET）' },
       { label: '计算来源', text: '① rank_changes：统计目标日期全站涨/跌排名词总数及有数据站点数；② index_snapshots：对比目标日期与前一日各站收录数，计算平均变化百分比；③ 日期本身：计算星期几、是否中国大陆法定节假日、是否学生放假期间（暑假7-8月、寒假1月20日-2月底）' },
       { label: '写入表', text: 'environment_daily（按 date 唯一 upsert；字段：date, weekday, is_holiday, is_school_holiday, total_rankup, total_rankdown, sites_with_rank_data, avg_index_change_pct, sites_with_index_data, crawl_anomaly；永久保留）' },
       { label: 'crawl_anomaly 判定', text: '当日 total_rankup + total_rankdown = 0 时标记为 true，表示排名数据疑似未抓取到；用于在评分时排除异常日期的数据' },

@@ -2,7 +2,7 @@ name: Environment Daily Snapshot
 
 on:
   schedule:
-    - cron: '30 23 * * *'  # 07:30 MYT（所有抓取和重试完成后）
+    - cron: '45 22 * * *'  # 06:45 MYT（所有抓取和重试完成后）
   workflow_dispatch:
     inputs:
       date:
