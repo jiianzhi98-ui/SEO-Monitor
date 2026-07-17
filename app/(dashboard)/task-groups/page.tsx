@@ -462,9 +462,9 @@ export default function TaskGroupsPage() {
   const [rightTab, setRightTab] = useState<RightTab>('recommend')
   const [tabPage, setTabPage] = useState<Record<RightTab, number>>({ recommend: 0, search: 0, cross: 0, rank: 0, streak: 0, newWords: 0, wordLib: 0, rankdown: 0 })
   const [recSubTab, setRecSubTab] = useState<RecSubTab>('rules')
-  const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; rule_name: string; discovery_date: string; effectiveness: string }[] }[]>([])
+  const [compRecData, setCompRecData] = useState<{ domain: string; keywords: { keyword: string; rule_id: string; rule_name: string; discovery_date: string; effectiveness: string }[] }[]>([])
   const [compRecLoading, setCompRecLoading] = useState(false)
-  const [ownRecData, setOwnRecData] = useState<{ keyword: string; rule_name: string; stat_date: string; volume: number }[]>([])
+  const [ownRecData, setOwnRecData] = useState<{ keyword: string; rule_id: string; rule_name: string; stat_date: string; volume: number }[]>([])
   const [ownRecLoading, setOwnRecLoading] = useState(false)
   const [dismissedRec, setDismissedRec] = useState<Set<string>>(new Set())
   const [siteRankdownData, setSiteRankdownData] = useState<{ keyword: string; stat_date: string; rank_position: number; prev_rank: number | null; volume: number; url: string | null; title: string | null }[]>([])
@@ -695,6 +695,7 @@ export default function TaskGroupsPage() {
         if (!matchedRule) continue
         kwMap.set(r.keyword, {
           keyword: r.keyword,
+          rule_id: matchedRule.id,
           rule_name: `#${matchedRule.rule_number} ${matchedRule.name}`,
           stat_date: r.stat_date,
           volume: r.volume ?? 0,
@@ -755,6 +756,7 @@ export default function TaskGroupsPage() {
         if (!grouped.has(domain)) grouped.set(domain, [])
         grouped.get(domain)!.push({
           keyword: r.keyword,
+          rule_id: r.rule_id,
           rule_name: ruleNameMap.get(r.rule_id) || '规则',
           discovery_date: r.discovery_date,
           effectiveness: r.effectiveness || '追踪中',
@@ -853,7 +855,7 @@ export default function TaskGroupsPage() {
     } finally { setRadarLoading(false) }
   }
 
-  async function claimKeyword(keyword: string, source: string, search_volume = 0) {
+  async function claimKeyword(keyword: string, source: string, search_volume = 0, source_rule_id?: string) {
     // claimedSet covers "already in state"; claimingRef covers "in-flight request"
     if (!activeGroupId || claimedSet.has(keyword) || claimingRef.current.has(keyword)) return
     claimingRef.current.add(keyword)
@@ -861,7 +863,7 @@ export default function TaskGroupsPage() {
       const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword, source, search_volume, operation_type: '新增' }),
+        body: JSON.stringify({ keyword, source, search_volume, operation_type: '新增', source_rule_id: source_rule_id ?? null }),
       })
       if (res.status === 409) {
         // Another session already claimed it — refresh to show updated state
@@ -1255,7 +1257,7 @@ export default function TaskGroupsPage() {
                     {visibleOwn.slice(pg_rec * PAGE_SIZE, (pg_rec + 1) * PAGE_SIZE).map((w, i) => {
                       const claimed = claimedSet.has(w.keyword)
                       return (
-                        <tr key={`${w.keyword}|${i}`} onDoubleClick={() => claimKeyword(w.keyword, '规则推荐', w.volume)}
+                        <tr key={`${w.keyword}|${i}`} onDoubleClick={() => claimKeyword(w.keyword, '规则推荐', w.volume, w.rule_id)}
                           className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
                           title={claimed ? '已认领' : '双击认领'}>
                           <td className="pl-2 py-2">
@@ -1264,7 +1266,7 @@ export default function TaskGroupsPage() {
                           </td>
                           <td className="px-3 py-2">
                             <span className="text-sm text-gray-800 select-text cursor-text"
-                              onDoubleClick={e => { e.stopPropagation(); claimKeyword(w.keyword, '规则推荐', w.volume) }}>
+                              onDoubleClick={e => { e.stopPropagation(); claimKeyword(w.keyword, '规则推荐', w.volume, w.rule_id) }}>
                               {w.keyword.length > 22 ? w.keyword.slice(0, 22) + '…' : w.keyword}
                             </span>
                             {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
@@ -1304,7 +1306,7 @@ export default function TaskGroupsPage() {
                             const claimed = claimedSet.has(kw.keyword)
                             const effColor = kw.effectiveness === '有效' ? 'text-green-600 bg-green-50' : kw.effectiveness === '无效' ? 'text-red-400 bg-red-50' : 'text-amber-600 bg-amber-50'
                             return (
-                              <tr key={`${kw.keyword}|${i}`} onDoubleClick={() => claimKeyword(kw.keyword, '竞品规则推荐', 0)}
+                              <tr key={`${kw.keyword}|${i}`} onDoubleClick={() => claimKeyword(kw.keyword, '竞品规则推荐', 0, kw.rule_id)}
                                 className={`border-b border-gray-50 last:border-0 cursor-pointer select-none transition-colors ${claimed ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
                                 title={claimed ? '已认领' : '双击认领'}>
                                 <td className="pl-2 py-2 w-7">
@@ -1313,7 +1315,7 @@ export default function TaskGroupsPage() {
                                 </td>
                                 <td className="px-3 py-2">
                                   <span className="text-sm text-gray-800 select-text cursor-text"
-                                    onDoubleClick={e => { e.stopPropagation(); claimKeyword(kw.keyword, '竞品规则推荐', 0) }}>
+                                    onDoubleClick={e => { e.stopPropagation(); claimKeyword(kw.keyword, '竞品规则推荐', 0, kw.rule_id) }}>
                                     {kw.keyword.length > 20 ? kw.keyword.slice(0, 20) + '…' : kw.keyword}
                                   </span>
                                   {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}

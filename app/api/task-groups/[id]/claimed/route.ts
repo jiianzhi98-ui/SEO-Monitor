@@ -61,13 +61,14 @@ export async function POST(
   if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: groupId } = await params
-  const { keyword, source, search_volume, operation_type, final_keyword, page_url } = await req.json() as {
+  const { keyword, source, search_volume, operation_type, final_keyword, page_url, source_rule_id } = await req.json() as {
     keyword: string
     source: string
     search_volume?: number
     operation_type?: string
     final_keyword?: string
     page_url?: string
+    source_rule_id?: string | null
   }
 
   if (!keyword) {
@@ -105,6 +106,7 @@ export async function POST(
       operation_type: operation_type || null,
       final_keyword: final_keyword || null,
       page_url: page_url || null,
+      source_rule_id: source_rule_id || null,
     })
     .select('id, keyword, keyword_type, source, search_volume, status, operation_type, final_keyword, page_url, created_at')
     .single()
