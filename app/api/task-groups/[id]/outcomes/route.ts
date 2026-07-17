@@ -93,14 +93,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return true
   })
 
-  // Fetch experiment_group for deduped claim_ids
+  // Fetch experiment_group for deduped claim_ids (batched to avoid URL length limits)
   const claimIds = dedupedRows.map(r => r.claim_id)
   const expGroupMap = new Map<string, 'control' | 'treatment' | null>()
-  if (claimIds.length > 0) {
+  const BATCH = 200
+  for (let i = 0; i < claimIds.length; i += BATCH) {
     const { data: claimMeta } = await service
       .from('member_claimed_keywords')
       .select('id, experiment_group')
-      .in('id', claimIds)
+      .in('id', claimIds.slice(i, i + BATCH))
     for (const c of (claimMeta ?? []) as { id: string; experiment_group: 'control' | 'treatment' | null }[]) {
       expGroupMap.set(c.id, c.experiment_group)
     }

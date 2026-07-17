@@ -1102,11 +1102,12 @@ export default function GroupReportPage() {
   }
 
   async function saveCompetitorDomains(domains: string[]) {
-    await fetch(`/api/task-groups/${competitorGroupId}/competitor-domains`, {
+    const res = await fetch(`/api/task-groups/${competitorGroupId}/competitor-domains`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ competitor_domains: domains }),
     })
+    if (!res.ok) return
     setGroups(prev => prev.map(g => g.id === competitorGroupId ? { ...g, competitor_domains: domains } : g))
     if (domains.length > 0) {
       if (!domains.includes(activeCompetitorDomain)) setActiveCompetitorDomain(domains[0])
@@ -2003,11 +2004,12 @@ export default function GroupReportPage() {
                                 {(() => {
                                   const eg = row.experiment_group
                                   async function setEG(val: 'control' | 'treatment' | null) {
-                                    await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
+                                    const res = await fetch(`/api/task-groups/${activeGroupId}/claimed`, {
                                       method: 'PATCH',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ claimId: row.claim_id, experiment_group: val }),
                                     })
+                                    if (!res.ok) return
                                     setOutcomes(prev => prev.map(r => r.id === row.id ? { ...r, experiment_group: val } : r))
                                   }
                                   return (

@@ -29,8 +29,12 @@ jobs:
     steps:
       - name: Compute job matrix
         id: gen
+        env:
+          SITE_INPUT: ${{ github.event.inputs.site }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          SITE="${{ github.event.inputs.site }}"
+          SITE="$SITE_INPUT"
           if [ -n "$SITE" ]; then
             # 单站运行：1 个 job 即可
             echo 'matrix={"group":[0]}' >> $GITHUB_OUTPUT
@@ -67,21 +71,21 @@ jobs:
             # rank-title / index-pages / tracking 单独查询各自的开关字段；其余查询有任意抓取开关的站点
             if [ "$STEP" = "rank-title" ] || [ "$STEP" = "tracking" ]; then
               COUNT=$(curl -sf \
-                -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-                -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-                "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&has_rank_title=eq.true" | \
+                -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/sites?select=id&has_rank_title=eq.true" | \
                 python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
             elif [ "$STEP" = "index-pages" ]; then
               COUNT=$(curl -sf \
-                -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-                -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-                "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&has_index_pages=eq.true" | \
+                -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/sites?select=id&has_index_pages=eq.true" | \
                 python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
             else
               COUNT=$(curl -sf \
-                -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-                -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-                "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
+                -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/sites?select=id&or=(is_enabled.eq.true,has_rank_data.eq.true,has_index_pages.eq.true)" | \
                 python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
             fi
             TOTAL=$(python3 -c "import math; print(max(1, math.ceil(${COUNT}/${SPG})))")
@@ -90,9 +94,6 @@ jobs:
             echo "total=${TOTAL}" >> $GITHUB_OUTPUT
             echo "Step=${STEP} SPG=${SPG} Sites=${COUNT} → Groups=${TOTAL}"
           fi
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
   crawl:
     needs: setup
@@ -137,16 +138,17 @@ jobs:
           echo "Running step: $STEP (group ${{ matrix.group }}/${{ needs.setup.outputs.total }})"
 
       - name: Run crawl
+        env:
+          SITE_INPUT: ${{ github.event.inputs.site }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           SITE_ARG=""
-          if [ -n "${{ github.event.inputs.site }}" ]; then
-            SITE_ARG="--site=${{ github.event.inputs.site }}"
+          if [ -n "$SITE_INPUT" ]; then
+            SITE_ARG="--site=$SITE_INPUT"
           fi
           if [ "${{ steps.vars.outputs.step }}" = "rank-title" ]; then
             npx tsx scripts/crawl-rank.ts --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }}
           else
             npx tsx scripts/crawl.ts --step=${{ steps.vars.outputs.step }} --group=${{ matrix.group }} --total-groups=${{ needs.setup.outputs.total }} $SITE_ARG
           fi
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

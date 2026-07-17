@@ -20,7 +20,7 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '关键词抓取',
     badge: 'step=keywords · GitHub Actions · 目标 00:00 MYT（cron 23:00 MYT + 排队约 1h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 15 * * * UTC = 23:00 MYT 前一天)，动态 matrix job 并行（每2个站点1个job，由 setup job 查询当前站点总数自动计算），每组抓约2个站点；实际执行脚本：scripts/crawl.ts（非 /api/cron，两条路径）；GitHub runner 排队约1小时，实际执行约 00:00 MYT。失败/空站由 retry-crawl.yml (cron 45 21 UTC = 05:45 MYT) 自动补抓' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 15 * * * UTC = 23:00 MYT 前一天)，动态 matrix job 并行（每5个站点1个job，由 setup job 查询当前站点总数自动计算），每组抓约5个站点；实际执行脚本：scripts/crawl.ts（非 /api/cron，两条路径）；GitHub runner 排队约1小时，实际执行约 00:00 MYT。失败/空站由 retry-crawl.yml (cron 45 21 UTC = 05:45 MYT) 自动补抓' },
       { label: '抓取对象', text: '仅 is_enabled=true 且 list_url 已填写的站点；is_enabled 由用户在网站管理"关键词数据"开关控制，关闭后跳过关键词抓取但权重/排名照常运行' },
       { label: '文章链接抓取', text: '各来源可在"文章链接CSS选择器"（url_selectors 字段，||| 分隔多来源）填写指定 CSS 选择器；填写后爬虫用该选择器在每条记录的容器内查找 <a> 元素并写入 raw_keywords.source_url；留空则 source_url 为 null；支持完整URL和相对路径（相对路径自动补全域名）' },
       { label: '频率规则', text: '所有站点均为 daily（每天）' },
@@ -36,7 +36,7 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '权重+收录',
     badge: 'step=weight · GitHub Actions · 目标 01:00 MYT（cron 00:00 MYT + 排队约 1h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 16 * * * UTC = 00:00 MYT 当天)，动态 matrix job 并行（每2个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 01:00 MYT。失败站由 retry-crawl.yml (cron 0 22 UTC = 06:00 MYT) 自动补抓' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 16 * * * UTC = 00:00 MYT 当天)，动态 matrix job 并行（每4个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 01:00 MYT。失败站由 retry-crawl.yml (cron 0 22 UTC = 06:00 MYT) 自动补抓' },
       { label: '数据来源', text: '爱站 aizhan.com，抓取 PC/移动权重、收录数、来路IP区间' },
       { label: '限流保护', text: '失败后等30秒重试，最多3次（共3次尝试，每次换新UA）；站点间隔3秒' },
       { label: '写入表', text: 'weight_history（pc/mobile权重+IP区间，按 site_id+record_date upsert）/ index_snapshots（收录数，按 site_id+snapshot_date upsert）' },
@@ -48,7 +48,7 @@ export const CRAWL_RULES: RuleSection[] = [
     title: '排名变动',
     badge: 'step=rank · GitHub Actions · 目标 02:00 MYT（cron 01:00 MYT + 排队约 1h）',
     items: [
-      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 17 * * * UTC = 01:00 MYT 当天)，动态 matrix job 并行（每2个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 02:00 MYT。失败/空站由 retry-crawl.yml (cron 15 22 UTC = 06:15 MYT) 自动补抓' },
+      { label: '触发方式', text: 'GitHub Actions daily-crawl.yml (cron 0 17 * * * UTC = 01:00 MYT 当天)，动态 matrix job 并行（每4个站点1个job）；实际执行脚本：scripts/crawl.ts；实际执行约 02:00 MYT。失败/空站由 retry-crawl.yml (cron 15 22 UTC = 06:15 MYT) 自动补抓' },
       { label: '抓取对象', text: '仅 is_enabled=true 且 has_rank_data=true 的站点；has_rank_data 由用户在网站管理手动开关，cron 不会自动修改该字段' },
       { label: '数据来源', text: '爱站移动端 baidurank.aizhan.com/mobile/…，抓涨入词与跌出词及搜索量' },
       { label: '并行策略', text: '排名段1-5同时并行，段内按页顺序，每页间隔300ms' },

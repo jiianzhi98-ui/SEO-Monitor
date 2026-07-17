@@ -61,18 +61,29 @@ export async function GET() {
   const scoreMap = new Map<string, { total: number; count: number }>()
   if (claimToRule.size > 0) {
     const since90 = new Date(Date.now() + 8 * 3600000 - 90 * 86400000).toISOString().slice(0, 10)
-    const [{ data: siteTrack }, { data: envDays }] = await Promise.all([
-      service
-        .from('site_tracking_records')
-        .select('claim_id, rank_position, prev_rank_position, is_indexed, record_date')
-        .in('claim_id', Array.from(claimToRule.keys()))
-        .order('record_date', { ascending: false })
-        .limit(5000),
+    const allClaimIds = Array.from(claimToRule.keys())
+    const BATCH = 200
+    const siteTrackRows: { claim_id: string; rank_position: number | null; prev_rank_position: number | null; is_indexed: boolean; record_date: string }[] = []
+    const [, { data: envDays }] = await Promise.all([
+      (async () => {
+        for (let i = 0; i < allClaimIds.length; i += BATCH) {
+          const { data } = await service
+            .from('site_tracking_records')
+            .select('claim_id, rank_position, prev_rank_position, is_indexed, record_date')
+            .in('claim_id', allClaimIds.slice(i, i + BATCH))
+            .order('record_date', { ascending: false })
+            .limit(1000)
+          if (data) siteTrackRows.push(...data)
+        }
+      })(),
       service
         .from('environment_daily')
         .select('date, crawl_anomaly, avg_index_change_pct')
         .gte('date', since90),
     ])
+    // Re-sort across batches so seenClaims dedup picks the latest record_date first
+    siteTrackRows.sort((a, b) => b.record_date.localeCompare(a.record_date))
+    const siteTrack = siteTrackRows
 
     // Bad environment days: crawl anomaly OR site-wide index drop > 5%
     const badDates = new Set<string>()
@@ -85,8 +96,8 @@ export async function GET() {
     const seenClaims = new Set<string>()
     for (const t of (siteTrack ?? []) as { claim_id: string; rank_position: number | null; prev_rank_position: number | null; is_indexed: boolean; record_date: string }[]) {
       if (seenClaims.has(t.claim_id)) continue
+      if (badDates.has(t.record_date)) continue  // env_excluded: try next record_date for this claim
       seenClaims.add(t.claim_id)
-      if (badDates.has(t.record_date)) continue  // env_excluded: skip from rule avg
       const ruleId = claimToRule.get(t.claim_id)
       if (!ruleId) continue
       const rankChange = (t.rank_position != null && t.prev_rank_position != null)

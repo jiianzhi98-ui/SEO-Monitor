@@ -16,14 +16,18 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Call daily-snapshot API
+        env:
+          DATE_INPUT: ${{ github.event.inputs.date }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          VERCEL_URL: ${{ secrets.NEXT_PUBLIC_VERCEL_URL }}
         run: |
           DATE_PARAM=""
-          if [ -n "${{ github.event.inputs.date }}" ]; then
-            DATE_PARAM="?date=${{ github.event.inputs.date }}"
+          if [ -n "$DATE_INPUT" ]; then
+            DATE_PARAM="?date=$DATE_INPUT"
           fi
           RESPONSE=$(curl -sf \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.NEXT_PUBLIC_VERCEL_URL }}/api/environment/daily-snapshot${DATE_PARAM}")
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$VERCEL_URL/api/environment/daily-snapshot${DATE_PARAM}")
           echo "$RESPONSE"
           SUCCESS=$(echo "$RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('success',''))")
           if [ "$SUCCESS" = "True" ]; then
