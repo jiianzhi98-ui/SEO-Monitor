@@ -52,6 +52,16 @@ interface Rule {
   tracked_tracking: number
   avg_score: number | null
   avg_score_count: number
+  source_key: string | null
+}
+
+interface SourceStat {
+  source: string
+  total: number
+  ranked: number
+  effective: number
+  avg_score: number | null
+  scored_count: number
 }
 
 interface RuleForm {
@@ -67,13 +77,14 @@ interface RuleForm {
   priority: number
   site_ids: string[]
   competitor_domains: string[]
+  source_key: string
 }
 
 const EMPTY_FORM: RuleForm = {
   name: '', type: 'add', status: 'active', source: 'manual',
   stage_applicability: [],
   description: '', confidence: 0, success_count: 0, fail_count: 0, priority: 0,
-  site_ids: [], competitor_domains: [],
+  site_ids: [], competitor_domains: [], source_key: '',
 }
 
 const STAGE_TYPES = ['起站期', '成长期', '成熟期', '通用']
@@ -93,6 +104,16 @@ const STATUS_LABELS: Record<string, { label: string; bg: string; text: string }>
   active:   { label: '启用',  bg: 'bg-green-50',  text: 'text-green-700' },
   inactive: { label: '停用',  bg: 'bg-gray-100',  text: 'text-gray-500' },
   testing:  { label: '测试中', bg: 'bg-yellow-50', text: 'text-yellow-700' },
+}
+
+const SOURCE_KEY_OPTIONS = ['竞品涨排名', '共新增词', '交叉词', '连续上涨词', '更新词库', '搜索量查询']
+const SOURCE_KEY_LABELS: Record<string, { bg: string; text: string }> = {
+  '竞品涨排名': { bg: 'bg-orange-50', text: 'text-orange-600' },
+  '共新增词':   { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  '交叉词':     { bg: 'bg-blue-50', text: 'text-blue-600' },
+  '连续上涨词': { bg: 'bg-purple-50', text: 'text-purple-600' },
+  '更新词库':   { bg: 'bg-rose-50', text: 'text-rose-600' },
+  '搜索量查询': { bg: 'bg-teal-50', text: 'text-teal-600' },
 }
 
 function Spinner() {
@@ -144,6 +165,9 @@ export default function RulesPage() {
   const [draftsLoading, setDraftsLoading] = useState(false)
   const [draftForms, setDraftForms] = useState<Record<string, DraftEditForm>>({})
   const [draftActing, setDraftActing] = useState<Record<string, boolean>>({})
+
+  // Source stats
+  const [sourceStats, setSourceStats] = useState<SourceStat[]>([])
 
   // AI state
   const [aiPrompt, setAiPrompt] = useState('')
@@ -197,6 +221,10 @@ export default function RulesPage() {
         }
         setAllCompetitorDomains(domains.sort())
       })
+
+    fetch('/api/rules/source-stats')
+      .then(r => r.json())
+      .then(d => setSourceStats(d.stats ?? []))
   }, [])
 
   const filtered = useMemo(() => rules.filter(r => {
@@ -228,6 +256,7 @@ export default function RulesPage() {
       fail_count: rule.fail_count, priority: rule.priority,
       site_ids: rule.site_ids ?? [],
       competitor_domains: rule.competitor_domains ?? [],
+      source_key: rule.source_key ?? '',
     })
     setSiteQ(''); setCompQ(''); setShowModal(true)
   }
@@ -490,6 +519,34 @@ export default function RulesPage() {
             ))}
           </div>
 
+          {/* Source stats — real feedback loop from member submissions */}
+          {sourceStats.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-medium text-gray-400 mb-2">今日推荐来源成效（组员认领记录）</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {sourceStats.map(s => {
+                  const skl = SOURCE_KEY_LABELS[s.source]
+                  const effectiveRate = s.total > 0 ? Math.round(s.effective / s.total * 100) : null
+                  return (
+                    <div key={s.source} className={`flex-shrink-0 rounded-xl border px-4 py-3 min-w-[130px] ${skl ? `border-transparent ${skl.bg}` : 'bg-white border-gray-100'}`}>
+                      <p className={`text-xs font-semibold truncate ${skl ? skl.text : 'text-gray-700'}`}>{s.source}</p>
+                      <p className="text-xl font-bold text-gray-800 mt-1">{s.total.toLocaleString()}</p>
+                      <div className="mt-1 space-y-0.5">
+                        {effectiveRate !== null && (
+                          <p className="text-[10px] text-gray-500">有效率 <span className={`font-semibold ${effectiveRate >= 30 ? 'text-green-600' : 'text-amber-500'}`}>{effectiveRate}%</span></p>
+                        )}
+                        {s.avg_score !== null && (
+                          <p className="text-[10px] text-gray-500">均分 <span className={`font-semibold ${s.avg_score >= 60 ? 'text-green-600' : s.avg_score >= 35 ? 'text-amber-500' : 'text-red-400'}`}>{s.avg_score}pt</span></p>
+                        )}
+                        <p className="text-[10px] text-gray-400">{s.ranked} 已排名</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Rule list */}
           {loading ? <Spinner /> : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-gray-300">
@@ -520,6 +577,11 @@ export default function RulesPage() {
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${tl.bg} ${tl.text}`}>{tl.label}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stl.bg} ${stl.text}`}>{stl.label}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${sl.bg} ${sl.text}`}>{sl.label}</span>
+                            {rule.source_key && SOURCE_KEY_LABELS[rule.source_key] && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${SOURCE_KEY_LABELS[rule.source_key].bg} ${SOURCE_KEY_LABELS[rule.source_key].text}`}>
+                                {rule.source_key}
+                              </span>
+                            )}
                           </div>
                           {rule.description && (
                             <p className="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">{rule.description}</p>
@@ -549,43 +611,72 @@ export default function RulesPage() {
                           )}
                         </div>
                         <div className="flex-shrink-0 text-right space-y-1.5">
-                          {(rule.tracked_success + rule.tracked_fail + rule.tracked_tracking) > 0 ? (() => {
-                            const trackedTotal = rule.tracked_success + rule.tracked_fail + rule.tracked_tracking
-                            const resolvedTotal = rule.tracked_success + rule.tracked_fail
-                            const trackedRate = resolvedTotal > 0 ? Math.round(rule.tracked_success / resolvedTotal * 100) : null
-                            return (
-                              <div className="text-right">
-                                {trackedRate !== null && (
-                                  <div className="mb-0.5">
-                                    <span className={`text-base font-bold ${trackedRate >= 70 ? 'text-green-600' : trackedRate >= 40 ? 'text-amber-500' : 'text-red-500'}`}>{trackedRate}%</span>
-                                  </div>
-                                )}
-                                <div className="flex items-center gap-1.5 justify-end">
-                                  <span className="text-[10px] text-green-600 font-medium">✓{rule.tracked_success}</span>
-                                  <span className="text-[10px] text-red-400 font-medium">✗{rule.tracked_fail}</span>
-                                  {rule.tracked_tracking > 0 && <span className="text-[10px] text-amber-500 font-medium">…{rule.tracked_tracking}</span>}
+                          {(() => {
+                            // Source-key real stats from member submissions
+                            const srcStat = rule.source_key ? sourceStats.find(s => s.source === rule.source_key) : null
+                            if (srcStat) {
+                              const effectiveRate = srcStat.total > 0 ? Math.round(srcStat.effective / srcStat.total * 100) : null
+                              return (
+                                <div className="text-right">
+                                  {effectiveRate !== null && (
+                                    <div className="mb-0.5">
+                                      <span className={`text-base font-bold ${effectiveRate >= 30 ? 'text-green-600' : 'text-amber-500'}`}>{effectiveRate}%</span>
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] text-gray-400">{srcStat.total.toLocaleString()} 条认领</p>
+                                  {srcStat.avg_score !== null && (
+                                    <p className="text-[10px] text-gray-500 mt-0.5">均分 <span className={`font-semibold ${srcStat.avg_score >= 60 ? 'text-green-600' : srcStat.avg_score >= 35 ? 'text-amber-500' : 'text-red-400'}`}>{srcStat.avg_score}pt</span></p>
+                                  )}
+                                  <p className="text-[10px] text-gray-400">{srcStat.ranked} 已排名</p>
                                 </div>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{trackedTotal} 条追踪</p>
-                                {rule.avg_score !== null && rule.avg_score_count > 0 && (
-                                  <div className="mt-1 pt-1 border-t border-gray-100 text-right">
-                                    <span className={`text-xs font-bold ${rule.avg_score >= 70 ? 'text-green-600' : rule.avg_score >= 40 ? 'text-amber-500' : 'text-red-400'}`}>{rule.avg_score}pt</span>
-                                    <span className="text-[10px] text-gray-400 ml-1">均分</span>
-                                    <p className="text-[10px] text-gray-400">{rule.avg_score_count} 条认领</p>
+                              )
+                            }
+                            // Competitor tracking stats
+                            if ((rule.tracked_success + rule.tracked_fail + rule.tracked_tracking) > 0) {
+                              const trackedTotal = rule.tracked_success + rule.tracked_fail + rule.tracked_tracking
+                              const resolvedTotal = rule.tracked_success + rule.tracked_fail
+                              const trackedRate = resolvedTotal > 0 ? Math.round(rule.tracked_success / resolvedTotal * 100) : null
+                              return (
+                                <div className="text-right">
+                                  {trackedRate !== null && (
+                                    <div className="mb-0.5">
+                                      <span className={`text-base font-bold ${trackedRate >= 70 ? 'text-green-600' : trackedRate >= 40 ? 'text-amber-500' : 'text-red-500'}`}>{trackedRate}%</span>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-1.5 justify-end">
+                                    <span className="text-[10px] text-green-600 font-medium">✓{rule.tracked_success}</span>
+                                    <span className="text-[10px] text-red-400 font-medium">✗{rule.tracked_fail}</span>
+                                    {rule.tracked_tracking > 0 && <span className="text-[10px] text-amber-500 font-medium">…{rule.tracked_tracking}</span>}
                                   </div>
-                                )}
-                              </div>
-                            )
-                          })() : sr !== null ? (
-                            <div>
-                              <span className="text-base font-bold text-green-600">{sr}%</span>
-                              <p className="text-[10px] text-gray-400">{total} 次验证</p>
-                            </div>
-                          ) : rule.confidence > 0 ? (
-                            <div>
-                              <span className="text-base font-bold text-gray-400">{rule.confidence}%</span>
-                              <p className="text-[10px] text-gray-400">信心度</p>
-                            </div>
-                          ) : null}
+                                  <p className="text-[10px] text-gray-400 mt-0.5">{trackedTotal} 条追踪</p>
+                                  {rule.avg_score !== null && rule.avg_score_count > 0 && (
+                                    <div className="mt-1 pt-1 border-t border-gray-100 text-right">
+                                      <span className={`text-xs font-bold ${rule.avg_score >= 70 ? 'text-green-600' : rule.avg_score >= 40 ? 'text-amber-500' : 'text-red-400'}`}>{rule.avg_score}pt</span>
+                                      <span className="text-[10px] text-gray-400 ml-1">均分</span>
+                                      <p className="text-[10px] text-gray-400">{rule.avg_score_count} 条认领</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            }
+                            if (sr !== null) {
+                              return (
+                                <div>
+                                  <span className="text-base font-bold text-green-600">{sr}%</span>
+                                  <p className="text-[10px] text-gray-400">{total} 次验证</p>
+                                </div>
+                              )
+                            }
+                            if (rule.confidence > 0) {
+                              return (
+                                <div>
+                                  <span className="text-base font-bold text-gray-400">{rule.confidence}%</span>
+                                  <p className="text-[10px] text-gray-400">信心度</p>
+                                </div>
+                              )
+                            }
+                            return null
+                          })()}
                         </div>
                         {canEdit && (
                           <div className="flex-shrink-0 flex items-center gap-1 ml-1">
@@ -902,6 +993,16 @@ export default function RulesPage() {
                     <option value="ai">AI</option>
                   </select>
                 </div>
+              </div>
+              {/* Source key — links rule to today's recommendation source type */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">关联今日推荐来源</label>
+                <select value={form.source_key} onChange={e => setForm(p => ({ ...p, source_key: e.target.value }))}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-gray-700">
+                  <option value="">不关联（仅显示竞品追踪数据）</option>
+                  {SOURCE_KEY_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">关联后，规则卡片右侧显示该来源的真实认领成效数据</p>
               </div>
               {/* Stage */}
               <div>

@@ -153,6 +153,7 @@ export async function POST(req: Request) {
       priority:            body.priority ?? 0,
       site_ids:            body.site_ids ?? [],
       competitor_domains:  body.competitor_domains ?? [],
+      source_key:          body.source_key ?? null,
       created_by:          user.id,
     })
     .select()
