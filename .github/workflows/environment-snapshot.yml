@@ -25,17 +25,10 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "${{ secrets.NEXT_PUBLIC_VERCEL_URL }}/api/environment/daily-snapshot${DATE_PARAM}")
           echo "$RESPONSE"
-          echo "$RESPONSE" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-if d.get('success'):
-    print(f\"✅ {d['date']} | weekday={d['weekday']} holiday={d['is_holiday']} school={d['is_school_holiday']}\")
-    print(f\"   rank↑{d['total_rankup']} ↓{d['total_rankdown']} sites={d['sites_with_rank_data']} anomaly={d['crawl_anomaly']}\")
-    pct = d.get('avg_index_change_pct')
-    print(f\"   index_change={pct}% sites={d['sites_with_index_data']}\")
-else:
-    print('❌ Error:', d)
-    sys.exit(1)
-"
-        env:
-          NEXT_PUBLIC_VERCEL_URL: ${{ secrets.NEXT_PUBLIC_VERCEL_URL }}
+          SUCCESS=$(echo "$RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('success',''))")
+          if [ "$SUCCESS" = "True" ]; then
+            echo "Snapshot saved successfully"
+          else
+            echo "ERROR: API returned failure"
+            exit 1
+          fi
