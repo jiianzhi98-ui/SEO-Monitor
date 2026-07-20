@@ -9,11 +9,11 @@ on:
         options: [keywords, weight, rank, rank-title, index-pages]
         default: keywords
   schedule:
-    - cron: '0 20 * * *'    # 04:00 MYT — keywords 重试
-    - cron: '30 20 * * *'   # 04:30 MYT — weight 重试
-    - cron: '0 21 * * *'    # 05:00 MYT — rank 重试
-    - cron: '30 21 * * *'   # 05:30 MYT — rank-title 重试
-    - cron: '0 22 * * *'    # 06:00 MYT — index-pages 重试
+    - cron: '30 20 * * *'   # 04:30 MYT — keywords 重试
+    - cron: '0 21 * * *'    # 05:00 MYT — weight 重试
+    - cron: '30 21 * * *'   # 05:30 MYT — rank 重试
+    - cron: '0 22 * * *'    # 06:00 MYT — rank-title 重试
+    - cron: '30 22 * * *'   # 06:30 MYT — index-pages 重试
 
 jobs:
   setup:
@@ -27,15 +27,15 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STEP="${{ github.event.inputs.step }}"
-          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
-            STEP="keywords"
           elif [ "${{ github.event.schedule }}" = "30 20 * * *" ]; then
-            STEP="weight"
+            STEP="keywords"
           elif [ "${{ github.event.schedule }}" = "0 21 * * *" ]; then
-            STEP="rank"
+            STEP="weight"
           elif [ "${{ github.event.schedule }}" = "30 21 * * *" ]; then
-            STEP="rank-title"
+            STEP="rank"
           elif [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then
+            STEP="rank-title"
+          elif [ "${{ github.event.schedule }}" = "30 22 * * *" ]; then
             STEP="index-pages"
           else
             STEP="keywords"
@@ -119,15 +119,15 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STEP="${{ github.event.inputs.step }}"
-          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
-            STEP="keywords"
           elif [ "${{ github.event.schedule }}" = "30 20 * * *" ]; then
-            STEP="weight"
+            STEP="keywords"
           elif [ "${{ github.event.schedule }}" = "0 21 * * *" ]; then
-            STEP="rank"
+            STEP="weight"
           elif [ "${{ github.event.schedule }}" = "30 21 * * *" ]; then
-            STEP="rank-title"
+            STEP="rank"
           elif [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then
+            STEP="rank-title"
+          elif [ "${{ github.event.schedule }}" = "30 22 * * *" ]; then
             STEP="index-pages"
           else
             STEP="keywords"
