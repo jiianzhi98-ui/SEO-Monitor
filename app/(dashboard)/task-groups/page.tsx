@@ -496,6 +496,7 @@ export default function TaskGroupsPage() {
   const [wordLibData, setWordLibData] = useState<WordLibEntry[]>([])
   const [wordLibLoading, setWordLibLoading] = useState(false)
   const [wordLibLoaded, setWordLibLoaded] = useState(false)
+  const [wordLibSearch, setWordLibSearch] = useState('')
   const [sortCol, setSortCol]           = useState('')
   const [sortDir, setSortDir]           = useState<'asc'|'desc'|''>('')
 
@@ -1681,14 +1682,30 @@ export default function TaskGroupsPage() {
         if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         return sortDir === 'asc' ? va - vb : vb - va
       }) : wordLibWords
+      const filtered_wl = wordLibSearch ? sorted_wl.filter(w => w.keyword.includes(wordLibSearch)) : sorted_wl
       if (sorted_wl.length === 0) return <div className="text-center py-10 text-gray-400 text-sm">暂无词库数据</div>
-      const slice = sorted_wl.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      const slice = filtered_wl.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
       return (
         <>
           <table className="w-full table-fixed">
             <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="px-3 py-2 text-left font-medium w-24"><span className="inline-flex items-center gap-0.5">日期{sortIcons('date')}</span></th>
-              <th className="px-3 py-2 text-left font-medium">关键词</th>
+              <th className="px-3 py-2 text-left font-medium">
+                <div className="flex items-center gap-1.5">
+                  <span>关键词</span>
+                  <input
+                    type="text"
+                    value={wordLibSearch}
+                    onChange={e => { setWordLibSearch(e.target.value); setTabPage(prev => ({ ...prev, wordLib: 0 })) }}
+                    placeholder="搜索关键词"
+                    className="h-6 w-28 text-xs font-normal text-gray-700 placeholder-gray-300 border border-gray-200 rounded px-1.5 focus:outline-none focus:ring-1 focus:ring-green-400"
+                  />
+                  {wordLibSearch && (
+                    <button onClick={() => { setWordLibSearch(''); setTabPage(prev => ({ ...prev, wordLib: 0 })) }}
+                      className="text-gray-300 hover:text-gray-500 leading-none">✕</button>
+                  )}
+                </div>
+              </th>
               <th className="px-2 py-2 text-center font-medium w-20"><span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap">长尾词数{sortIcons('count')}</span></th>
               <th className="px-2 py-2 text-center font-medium w-16"><span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap">站点数{sortIcons('siteCount')}</span></th>
               <th className="w-14" />
@@ -1707,7 +1724,7 @@ export default function TaskGroupsPage() {
               ))}
             </tbody>
           </table>
-          <Pager page={pg} total={sorted_wl.length} onPage={p => setPage('wordLib', p)} />
+          <Pager page={pg} total={filtered_wl.length} onPage={p => setPage('wordLib', p)} />
         </>
       )
     }
