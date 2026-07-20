@@ -237,6 +237,84 @@ export async function fetchHtmlListPages(
   })
 }
 
+// Fetch a JSON API that returns HTML fragments in a `html` field.
+// URL template must contain {page} placeholder (e.g. https://api.example.com/more?page={page}&cid=1).
+// Pagination stops when `data.more === 0`, `more === 0`, or the html field is empty.
+export async function fetchJsonHtmlPages(
+  urlTemplate: string,
+  titleSelector: string,
+  dateSelector: string,
+  urlSelector: string | undefined,
+  cutoffDateStr: string,
+  maxPages = 30,
+): Promise<PageEntry[]> {
+  const all: PageEntry[] = []
+  const origin = new URL(urlTemplate.replace('{page}', '1')).origin
+
+  for (let page = 1; page <= maxPages; page++) {
+    const url = urlTemplate.replace('{page}', String(page))
+    try {
+      const headers: Record<string, string> = {
+        'User-Agent': randomUA(),
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Referer': origin + '/',
+        'X-Requested-With': 'XMLHttpRequest',
+      }
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) })
+      if (!res.ok) break
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const json: any = await res.json()
+      const html: string = json?.data?.html ?? json?.html ?? ''
+      const more: number = json?.data?.more ?? json?.more ?? 0
+
+      if (!html.trim()) break
+
+      const $ = cheerio.load(html)
+      const pageEntries: PageEntry[] = []
+
+      $(titleSelector).each((_, el) => {
+        const title = $(el).text().trim()
+        let href = $(el).attr('href') || ''
+        if (urlSelector) {
+          let container = $(el).closest('li, article, .item, tr')
+          if (!container.length) container = $(el).closest('div').parent()
+          href = container.find(urlSelector).first().attr('href') || href
+        }
+        const fullUrl = href.startsWith('http') ? href : (href ? new URL(href, origin).href : '')
+
+        let date: string | undefined
+        if (dateSelector) {
+          let container = $(el).closest('li, article, .item, tr')
+          if (!container.length) container = $(el).closest('div').parent()
+          const dateEl = container.find(dateSelector).first()
+          if (dateEl.length) date = dateEl.text().trim()
+        }
+
+        if (title) pageEntries.push({ title, date, url: fullUrl })
+      })
+
+      all.push(...pageEntries)
+
+      if (more === 0) break
+
+      // Stop early if all dated entries on this page are older than the cutoff
+      const datedOnPage = pageEntries.map((e) => parseEntryDateStr(e.date)).filter(Boolean) as string[]
+      if (datedOnPage.length > 0 && datedOnPage.every((d) => d < cutoffDateStr)) break
+
+      await randomDelay(2000, 4000)
+    } catch {
+      break
+    }
+  }
+
+  return all.filter((e) => {
+    const d = parseEntryDateStr(e.date)
+    return !d || d >= cutoffDateStr
+  })
+}
+
 // Clean title by removing version numbers and optional suffixes
 export function cleanTitle(
   title: string,

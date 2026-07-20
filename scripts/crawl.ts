@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import {
   fetchHtmlListPages,
+  fetchJsonHtmlPages,
   cleanTitle,
   fetchAizhanData,
   fetchRankChanges,
@@ -160,13 +161,16 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
             ? urlBlocks[i].split('\n').map((u) => u.trim()).filter(Boolean)
             : [urlBlocks[i]]
           for (const u of srcUrls) {
-            const src: HtmlSource = {
-              url: u,
-              titleSelector: titleSels[i] || titleSels[0] || '',
-              dateSelector: dateSels[i] || dateSels[0] || '',
-              urlSelector: srcUrlSel || undefined,
+            const titleSel = titleSels[i] || titleSels[0] || ''
+            const dateSel = dateSels[i] || dateSels[0] || ''
+            let entries
+            if (u.includes('{page}')) {
+              // JSON API mode: URL template with {page} placeholder
+              entries = await fetchJsonHtmlPages(u, titleSel, dateSel, srcUrlSel || undefined, htmlCutoff)
+            } else {
+              const src: HtmlSource = { url: u, titleSelector: titleSel, dateSelector: dateSel, urlSelector: srcUrlSel || undefined }
+              entries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
             }
-            const entries = await fetchHtmlListPages([src], htmlCutoff, maxPg)
             for (const e of entries) {
               rawEntries.push({ title: e.title, content_date: parseContentDate(e.date), content_type: srcType, source_url: srcUrlSel ? (e.url || null) : null })
             }
