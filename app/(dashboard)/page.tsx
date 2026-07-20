@@ -1811,7 +1811,7 @@ function CompareChart({
     }
   }
   const maxVal = niceMax(rawMax)
-  const yTicks = Array.from({ length: 9 }, (_, i) => Math.round(maxVal * i / 8))
+  const yTicks = Array.from({ length: 5 }, (_, i) => Math.round(maxVal * i / 4))
 
   return (
     <ResponsiveContainer width="100%" height={280}>
