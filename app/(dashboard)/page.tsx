@@ -122,6 +122,7 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Record<Category, string[]>>({
     large: [], medium: [], small: [],
   })
+  const [sortOrder, setSortOrder] = useState<'a-m' | 'm-z' | '0-9' | null>(null)
   const [weightModalSite, setWeightModalSite] = useState<WeightChangeItem | null>(null)
   const [weightModalTab, setWeightModalTab] = useState<'weight' | 'ip' | 'index' | 'keywords' | 'rank' | 'unstable'>('weight')
   const [weightModalExtra, setWeightModalExtra] = useState<WeightModalExtra | null>(null)
@@ -251,6 +252,28 @@ export default function DashboardPage() {
   }, [sites])
 
   const siteMap = useMemo(() => new Map(sites.map(s => [s.id, s])), [sites])
+
+  // Latest pc/mobile weight per site (weightRecs sorted asc, so last write wins)
+  const latestWeightMap = useMemo(() => {
+    const map = new Map<string, { pc: number; mobile: number }>()
+    for (const r of weightRecs) map.set(r.site_id, { pc: r.pc_weight, mobile: r.mobile_weight })
+    return map
+  }, [weightRecs])
+
+  // Sorted site list for current category
+  const sortedCatSites = useMemo(() => {
+    const list = catSites[activeCategory]
+    if (!sortOrder) return list
+    return [...list].sort((a, b) => {
+      if (sortOrder === 'a-m') return a.domain.localeCompare(b.domain)
+      if (sortOrder === 'm-z') return b.domain.localeCompare(a.domain)
+      // 0-9: numeric-prefix domains first, then alpha
+      const aNum = /^\d/.test(a.domain)
+      const bNum = /^\d/.test(b.domain)
+      if (aNum !== bNum) return aNum ? -1 : 1
+      return a.domain.localeCompare(b.domain)
+    })
+  }, [catSites, activeCategory, sortOrder])
 
   // Color index by site within category
   function siteColor(cat: Category, siteId: string): string {
@@ -545,6 +568,23 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-400">该分类暂无站点，请在网站管理中设置分类</p>
             ) : (
               <>
+                {/* Sort buttons */}
+                <div className="flex items-center gap-1 mr-1">
+                  {(['a-m', 'm-z', '0-9'] as const).map(order => (
+                    <button
+                      key={order}
+                      onClick={() => setSortOrder(prev => prev === order ? null : order)}
+                      className={`text-[11px] px-1.5 py-0.5 rounded border transition-colors font-mono ${
+                        sortOrder === order
+                          ? 'border-gray-400 text-gray-700 bg-gray-100'
+                          : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      {order}
+                    </button>
+                  ))}
+                </div>
+                <div className="w-px h-5 bg-gray-200 self-center" />
                 {activeSelected.length > 0 && (
                   <button
                     onClick={() => setSelected(prev => ({ ...prev, [activeCategory]: [] }))}
@@ -553,9 +593,10 @@ export default function DashboardPage() {
                     全部
                   </button>
                 )}
-                {catSites[activeCategory].map(s => {
+                {sortedCatSites.map(s => {
                   const color = siteColor(activeCategory, s.id)
                   const isActive = activeSelected.length === 0 || activeSelected.includes(s.id)
+                  const w = latestWeightMap.get(s.id)
                   return (
                     <button
                       key={s.id}
@@ -573,7 +614,14 @@ export default function DashboardPage() {
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: isActive ? color : '#d1d5db' }}
                       />
-                      {s.domain}
+                      <span className="flex flex-col items-start leading-tight">
+                        <span>{s.domain}</span>
+                        {w && (
+                          <span className={`text-[10px] ${activeSelected.includes(s.id) ? 'text-white/70' : 'text-gray-400'}`}>
+                            PC{w.pc} · M{w.mobile}
+                          </span>
+                        )}
+                      </span>
                     </button>
                   )
                 })}
