@@ -1038,7 +1038,7 @@ function KeywordSearchCard() {
 
   return (
     <>
-      <div className="rounded-xl border border-green-300 bg-white p-4 flex flex-col">
+      <div className="rounded-xl border border-green-300 bg-white p-4 flex flex-col h-[272px]">
         <div className="flex items-center justify-between mb-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400" />
@@ -1650,8 +1650,8 @@ function AlertCard({
   const hasAlerts = count > 0
 
   return (
-    <div className={`rounded-xl border ${c.border} bg-white p-4`}>
-      <div className="flex items-center justify-between mb-3">
+    <div className={`rounded-xl border ${c.border} bg-white p-4 flex flex-col h-[272px]`}>
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.pulse}`} />
           <span className="text-sm font-medium text-gray-600">{title}</span>
@@ -1662,11 +1662,11 @@ function AlertCard({
           </span>
         )}
       </div>
-      <div>
+      <div className="flex-1 min-h-0">
         {isPlaceholder || !hasAlerts ? (
           <p className="text-xs text-gray-400">{empty}</p>
         ) : (
-          <div className="max-h-44 overflow-y-auto space-y-0.5 pr-1">
+          <div className="h-full overflow-y-auto space-y-0.5 pr-1">
             {children}
           </div>
         )}
