@@ -317,9 +317,9 @@ export async function GET(request: Request) {
           const kwMap = new Map<string, { volume: number; latest_trend: string }>()
           for (const e of rankdownEntries) kwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankdown' })
           for (const e of rankupEntries) kwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankup' })
-          const kwWithVol = [...kwMap.entries()].filter(([, v]) => v.volume > 0)
+          const kwWithVol = Array.from(kwMap.entries()).filter(([, v]) => v.volume > 0)
             .map(([keyword, v]) => ({ keyword, volume: v.volume, latest_trend: v.latest_trend, stat_date: rankDate }))
-          const kwNoVol = [...kwMap.entries()].filter(([, v]) => v.volume <= 0)
+          const kwNoVol = Array.from(kwMap.entries()).filter(([, v]) => v.volume <= 0)
             .map(([keyword, v]) => ({ keyword, volume: 0, latest_trend: v.latest_trend, stat_date: rankDate }))
           for (const chunk of chunkArray(kwWithVol, 500)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -519,9 +519,9 @@ export async function GET(request: Request) {
           const rtKwMap = new Map<string, { volume: number; latest_trend: string }>()
           for (const e of downEntries) rtKwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankdown' })
           for (const e of upEntries) rtKwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankup' })
-          const rtKwWithVol = [...rtKwMap.entries()].filter(([, v]) => v.volume > 0)
+          const rtKwWithVol = Array.from(rtKwMap.entries()).filter(([, v]) => v.volume > 0)
             .map(([keyword, v]) => ({ keyword, volume: v.volume, latest_trend: v.latest_trend, stat_date: today }))
-          const rtKwNoVol = [...rtKwMap.entries()].filter(([, v]) => v.volume <= 0)
+          const rtKwNoVol = Array.from(rtKwMap.entries()).filter(([, v]) => v.volume <= 0)
             .map(([keyword, v]) => ({ keyword, volume: 0, latest_trend: v.latest_trend, stat_date: today }))
           for (const chunk of chunkArray(rtKwWithVol, 500)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
