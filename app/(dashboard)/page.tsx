@@ -580,12 +580,12 @@ export default function DashboardPage() {
             ) : (
               <>
                 {/* Sort buttons */}
-                <div className="flex items-center gap-1 mr-1">
+                <div className="flex items-center gap-1.5 mr-1">
                   {(['a-m', 'm-z', '0-9'] as const).map(order => (
                     <button
                       key={order}
                       onClick={() => setSortOrder(order)}
-                      className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors font-mono"
+                      className="text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors font-mono"
                     >
                       {order}
                     </button>
