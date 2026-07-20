@@ -1807,7 +1807,11 @@ function CompareChart({
           ticks={yTicks}
           tickFormatter={(v: number) => yFormatter(v)}
         />
-        <Tooltip content={(props) => <SortedTooltip {...props} siteMap={siteMap} siteIds={siteIds} colorMap={colorMap} hoveredId={hoveredId} />} />
+        <Tooltip
+          content={(props) => <SortedTooltip {...props} siteMap={siteMap} siteIds={siteIds} colorMap={colorMap} hoveredId={hoveredId} />}
+          position={{ x: 5, y: 8 }}
+          wrapperStyle={{ pointerEvents: 'none' }}
+        />
         {siteIds.map(id => {
           const dimmed = focusedIds.size > 0 && !focusedIds.has(id)
           return (
@@ -1820,11 +1824,7 @@ function CompareChart({
               strokeWidth={2}
               strokeOpacity={dimmed ? 0.15 : 1}
               connectNulls
-              dot={(props: { cx?: number; cy?: number; value?: number; index?: number }) => {
-                const { cx, cy, value, index } = props
-                if (!value || cx == null || cy == null) return <g key={index ?? 0} />
-                return <circle key={index ?? 0} cx={cx} cy={cy} r={3} fill="white" stroke={colorMap[id]} strokeWidth={1.5} strokeOpacity={dimmed ? 0.15 : 1} />
-              }}
+              dot={false}
               activeDot={(props: { cx?: number; cy?: number }) => {
                 const { cx, cy } = props
                 if (cx == null || cy == null) return <g />
