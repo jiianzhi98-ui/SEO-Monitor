@@ -402,7 +402,7 @@ export default function DashboardPage() {
           {weightChanges.map((w, i) => {
             const isRecent = w.date === getMY()
             return (
-              <button key={i} onClick={() => { setWeightModalSite(w); setWeightModalTab('weight'); setWeightModalKwTab('app'); setWeightModalRankTab('up'); fetchWeightModalExtra(w.site_id) }} className="w-full flex items-center justify-between gap-2 h-7 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
+              <button key={i} onClick={() => { setWeightModalSite(w); setWeightModalTab('weight'); setWeightModalKwTab('app'); setWeightModalRankTab('up'); fetchWeightModalExtra(w.site_id) }} className="w-full flex items-center justify-between gap-2 py-0.5 hover:bg-red-50 rounded px-1 -mx-1 transition-colors text-left">
                 <p className="text-xs truncate">
                   <span className={isRecent ? 'text-red-500 font-medium' : 'text-gray-400'}>{w.date.slice(5)}</span>
                   <span className="text-gray-400"> · </span>
@@ -441,7 +441,7 @@ export default function DashboardPage() {
           {indexAlerts.map((a, i) => {
             const isRecent = a.date === getMY()
             return (
-            <button key={i} onClick={() => setIndexModalSite(a)} className={`w-full flex items-center justify-between gap-2 h-7 rounded px-1 -mx-1 transition-colors text-left ${
+            <button key={i} onClick={() => setIndexModalSite(a)} className={`w-full flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 transition-colors text-left ${
               a.status === 'danger' ? 'hover:bg-red-50' :
               a.status === 'warning' ? 'hover:bg-yellow-50' :
               'hover:bg-blue-50'
@@ -472,7 +472,7 @@ export default function DashboardPage() {
           {kwAlerts.map((a, i) => {
             const isRecent = a.date === getMY(-1)
             return (
-              <button key={i} onClick={() => setKwModalSite(a)} className="w-full flex items-center justify-between gap-2 h-7 rounded px-1 -mx-1 hover:bg-yellow-50 transition-colors text-left">
+              <button key={i} onClick={() => setKwModalSite(a)} className="w-full flex items-center justify-between gap-2 py-0.5 rounded px-1 -mx-1 hover:bg-yellow-50 transition-colors text-left">
                 <p className="text-xs truncate">
                   <span className={isRecent ? 'text-yellow-500 font-medium' : 'text-gray-400'}>{a.date.slice(5)}</span>
                   <span className="text-gray-400"> · </span>
