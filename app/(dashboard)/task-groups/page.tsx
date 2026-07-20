@@ -3,13 +3,14 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useUser } from '@/lib/user-context'
 import { getBrowserClient } from '@/lib/supabase-browser'
+import { buildGroupColorMap } from '@/lib/company-groups'
 
 // ── Interfaces ─────────────────────────────────────────────────────────────────
 
 interface TaskMember { user_id: string; username: string; member_type?: 'app' | 'game' | 'both' }
 interface TaskGroup { id: string; name: string; type: string; created_at: string; members: TaskMember[]; rank_domains: string[]; new_domains: string[]; associated_domains: string[]; site_domains: string[] }
 interface UserOption { id: string; email: string; username: string | null; role: string }
-interface SiteInfo { id: string; domain: string; name: string; category: 'large' | 'medium' | 'small'; is_enabled: boolean; has_rank_data: boolean }
+interface SiteInfo { id: string; domain: string; name: string; category: 'large' | 'medium' | 'small'; is_enabled: boolean; has_rank_data: boolean; friend_links?: string[] | null }
 
 interface NewWord { keyword: string; count: number; siteCount: number; sites: string[]; last_date: string; first_date: string }
 interface WordLibEntry extends NewWord { longTailCount: number }
@@ -512,6 +513,8 @@ export default function TaskGroupsPage() {
   const [editSelectedUsers, setEditSelectedUsers] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [allSites, setAllSites] = useState<SiteInfo[]>([])
+  const [domainWeightMap, setDomainWeightMap] = useState<Map<string, { pc: number; mobile: number }>>(new Map())
+  const [domainColorMap, setDomainColorMap] = useState<Map<string, string>>(new Map())
   const [selectedRankDomains, setSelectedRankDomains] = useState<Set<string>>(new Set())
   const [selectedNewDomains, setSelectedNewDomains] = useState<Set<string>>(new Set())
   const [editSelectedRankDomains, setEditSelectedRankDomains] = useState<Set<string>>(new Set())
@@ -1065,7 +1068,7 @@ export default function TaskGroupsPage() {
 
   // ── Effects ─────────────────────────────────────────────────────────────────
 
-  useEffect(() => { loadGroups() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadGroups(); loadDomainInfo() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeGroupId && effectiveViewingId) loadClaimed(activeGroupId, effectiveViewingId, selectedDate) }, [activeGroupId, effectiveViewingId, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (currentUserId && !viewingMemberId) setViewingMemberId(currentUserId) }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (rightTab !== 'search') loadRadar() }, [rightTab]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1133,9 +1136,28 @@ export default function TaskGroupsPage() {
     if (allSites.length > 0) return
     const supabase = getBrowserClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.from('sites') as any).select('id, domain, name, category, is_enabled, has_rank_data')
+    const { data } = await (supabase.from('sites') as any).select('id, domain, name, category, is_enabled, has_rank_data, friend_links')
     const CAT_ORDER: Record<string, number> = { large: 0, medium: 1, small: 2 }
     setAllSites(((data || []) as SiteInfo[]).sort((a, b) => (CAT_ORDER[a.category] ?? 9) - (CAT_ORDER[b.category] ?? 9) || a.domain.localeCompare(b.domain)))
+  }
+
+  async function loadDomainInfo() {
+    const supabase = getBrowserClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [sitesRes, weightRes] = await Promise.all([
+      (supabase.from('sites') as any).select('id, domain, friend_links'),
+      (supabase.from('weight_history') as any).select('site_id, pc_weight, mobile_weight').order('record_date'),
+    ])
+    const sites: { id: string; domain: string; friend_links?: string[] | null }[] = sitesRes.data || []
+    const idToDomain = new Map<string, string>(sites.map((s: { id: string; domain: string }) => [s.id, s.domain]))
+    // weight: iterate asc so last write = latest
+    const wMap = new Map<string, { pc: number; mobile: number }>()
+    for (const r of (weightRes.data || []) as { site_id: string; pc_weight: number; mobile_weight: number }[]) {
+      const domain = idToDomain.get(r.site_id)
+      if (domain) wMap.set(domain, { pc: r.pc_weight, mobile: r.mobile_weight })
+    }
+    setDomainWeightMap(wMap)
+    setDomainColorMap(buildGroupColorMap(sites))
   }
 
   async function openCreateModal() {
@@ -1832,7 +1854,19 @@ export default function TaskGroupsPage() {
                 <div key={date} className="flex items-start gap-2 mb-2">
                   <span className="text-xs text-gray-400 w-10 flex-shrink-0 pt-1">{date.slice(5)}</span>
                   <div className="flex flex-wrap gap-1">
-                    {domains.map(d => <span key={d} className="text-xs bg-gray-100 rounded px-1.5 py-1 text-gray-700">{d}</span>)}
+                    {domains.map(d => {
+                      const color = domainColorMap.get(d)
+                      const w = domainWeightMap.get(d)
+                      return (
+                        <span key={d} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-1.5 py-0.5 text-gray-700">
+                          {color && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />}
+                          <span className="flex flex-col leading-tight">
+                            <span>{d}</span>
+                            {w && <span className="text-[10px] text-gray-400">PC{w.pc} · M{w.mobile}</span>}
+                          </span>
+                        </span>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
@@ -1845,7 +1879,19 @@ export default function TaskGroupsPage() {
                 <div key={date} className="flex items-start gap-2 mb-2">
                   <span className="text-xs text-gray-400 w-10 flex-shrink-0 pt-1">{date.slice(5)}</span>
                   <div className="flex flex-wrap gap-1">
-                    {domains.map(d => <span key={d} className="text-xs bg-gray-100 rounded px-1.5 py-1 text-gray-700">{d}</span>)}
+                    {domains.map(d => {
+                      const color = domainColorMap.get(d)
+                      const w = domainWeightMap.get(d)
+                      return (
+                        <span key={d} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-1.5 py-0.5 text-gray-700">
+                          {color && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />}
+                          <span className="flex flex-col leading-tight">
+                            <span>{d}</span>
+                            {w && <span className="text-[10px] text-gray-400">PC{w.pc} · M{w.mobile}</span>}
+                          </span>
+                        </span>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
@@ -1861,7 +1907,19 @@ export default function TaskGroupsPage() {
           <div key={date} className="flex items-start gap-2">
             <span className="text-xs text-gray-400 w-10 flex-shrink-0 pt-1">{date.slice(5)}</span>
             <div className="flex flex-wrap gap-1">
-              {domains.map(d => <span key={d} className="text-xs bg-gray-100 rounded px-1.5 py-1 text-gray-700">{d}</span>)}
+              {domains.map(d => {
+                      const color = domainColorMap.get(d)
+                      const w = domainWeightMap.get(d)
+                      return (
+                        <span key={d} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-1.5 py-0.5 text-gray-700">
+                          {color && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />}
+                          <span className="flex flex-col leading-tight">
+                            <span>{d}</span>
+                            {w && <span className="text-[10px] text-gray-400">PC{w.pc} · M{w.mobile}</span>}
+                          </span>
+                        </span>
+                      )
+                    })}
             </div>
           </div>
         ))}
