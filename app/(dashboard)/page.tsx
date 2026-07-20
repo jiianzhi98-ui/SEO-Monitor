@@ -122,7 +122,6 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Record<Category, string[]>>({
     large: [], medium: [], small: [],
   })
-  const [sortOrder, setSortOrder] = useState<'a-m' | 'm-z' | '0-9'>('a-m')
   const [weightModalSite, setWeightModalSite] = useState<WeightChangeItem | null>(null)
   const [weightModalTab, setWeightModalTab] = useState<'weight' | 'ip' | 'index' | 'keywords' | 'rank' | 'unstable'>('weight')
   const [weightModalExtra, setWeightModalExtra] = useState<WeightModalExtra | null>(null)
@@ -259,32 +258,6 @@ export default function DashboardPage() {
     for (const r of weightRecs) map.set(r.site_id, { pc: r.pc_weight, mobile: r.mobile_weight })
     return map
   }, [weightRecs])
-
-  // Sorted site list for current category
-  const sortedCatSites = useMemo(() => {
-    const list = catSites[activeCategory]
-    return [...list].sort((a, b) => {
-      if (sortOrder === 'a-m') {
-        // A→M first (a-m range), then N→Z
-        const aFirst = /^[a-mA-M]/.test(a.domain)
-        const bFirst = /^[a-mA-M]/.test(b.domain)
-        if (aFirst !== bFirst) return aFirst ? -1 : 1
-        return a.domain.localeCompare(b.domain)
-      }
-      if (sortOrder === 'm-z') {
-        // M→Z first, then A→L
-        const aFirst = /^[m-zM-Z]/.test(a.domain)
-        const bFirst = /^[m-zM-Z]/.test(b.domain)
-        if (aFirst !== bFirst) return aFirst ? -1 : 1
-        return a.domain.localeCompare(b.domain)
-      }
-      // 0-9: numeric-prefix first, then alpha
-      const aNum = /^\d/.test(a.domain)
-      const bNum = /^\d/.test(b.domain)
-      if (aNum !== bNum) return aNum ? -1 : 1
-      return a.domain.localeCompare(b.domain)
-    })
-  }, [catSites, activeCategory, sortOrder])
 
   // Color index by site within category
   function siteColor(cat: Category, siteId: string): string {
@@ -573,68 +546,71 @@ export default function DashboardPage() {
 
         <div className="p-5 space-y-4">
 
-          {/* Site toggle pills */}
-          <div className="flex flex-wrap items-center gap-2">
-            {catSites[activeCategory].length === 0 ? (
-              <p className="text-sm text-gray-400">该分类暂无站点，请在网站管理中设置分类</p>
-            ) : (
-              <>
-                {/* Sort buttons */}
-                <div className="flex items-center gap-1 mr-1">
-                  {(['a-m', 'm-z', '0-9'] as const).map(order => (
-                    <button
-                      key={order}
-                      onClick={() => setSortOrder(order)}
-                      className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors font-mono"
-                    >
-                      {order}
-                    </button>
-                  ))}
-                </div>
-                <div className="w-px h-5 bg-gray-200 self-center" />
-                {activeSelected.length > 0 && (
-                  <button
-                    onClick={() => setSelected(prev => ({ ...prev, [activeCategory]: [] }))}
-                    className="text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600 transition-colors"
-                  >
-                    全部
-                  </button>
-                )}
-                {sortedCatSites.map(s => {
-                  const color = siteColor(activeCategory, s.id)
-                  const isActive = activeSelected.length === 0 || activeSelected.includes(s.id)
-                  const w = latestWeightMap.get(s.id)
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => toggleSite(s.id)}
-                      className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                        activeSelected.includes(s.id)
-                          ? 'border-transparent text-white font-medium'
-                          : activeSelected.length > 0
-                            ? 'border-gray-200 text-gray-400 hover:text-gray-600'
-                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                      style={activeSelected.includes(s.id) ? { backgroundColor: color } : {}}
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: isActive ? color : '#d1d5db' }}
-                      />
-                      <span className="flex flex-col items-start leading-tight">
-                        <span>{s.domain}</span>
-                        {w && (
-                          <span className={`text-[10px] ${activeSelected.includes(s.id) ? 'text-white/70' : 'text-gray-400'}`}>
-                            PC{w.pc} · M{w.mobile}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  )
-                })}
-              </>
-            )}
-          </div>
+          {/* Site grouped pills */}
+          {catSites[activeCategory].length === 0 ? (
+            <p className="text-sm text-gray-400">该分类暂无站点，请在网站管理中设置分类</p>
+          ) : (
+            <div className="space-y-2">
+              {activeSelected.length > 0 && (
+                <button
+                  onClick={() => setSelected(prev => ({ ...prev, [activeCategory]: [] }))}
+                  className="text-xs px-2 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600 transition-colors mb-1"
+                >
+                  全部
+                </button>
+              )}
+              {([
+                { label: 'a–m', test: (d: string) => /^[a-m]/i.test(d) },
+                { label: 'm–z', test: (d: string) => /^[m-z]/i.test(d) },
+                { label: '0–9', test: (d: string) => /^\d/.test(d) },
+              ]).map(g => {
+                const groupSites = catSites[activeCategory]
+                  .filter(s => g.test(s.domain))
+                  .sort((a, b) => a.domain.localeCompare(b.domain))
+                if (groupSites.length === 0) return null
+                return (
+                  <div key={g.label} className="flex items-start gap-3">
+                    <span className="text-xs text-gray-400 font-mono w-8 flex-shrink-0 pt-1.5">{g.label}</span>
+                    <div className="w-px self-stretch bg-gray-200 flex-shrink-0" />
+                    <div className="flex flex-wrap gap-2">
+                      {groupSites.map(s => {
+                        const color = siteColor(activeCategory, s.id)
+                        const isActive = activeSelected.length === 0 || activeSelected.includes(s.id)
+                        const w = latestWeightMap.get(s.id)
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => toggleSite(s.id)}
+                            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                              activeSelected.includes(s.id)
+                                ? 'border-transparent text-white font-medium'
+                                : activeSelected.length > 0
+                                  ? 'border-gray-200 text-gray-400 hover:text-gray-600'
+                                  : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                            }`}
+                            style={activeSelected.includes(s.id) ? { backgroundColor: color } : {}}
+                          >
+                            <span
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: isActive ? color : '#d1d5db' }}
+                            />
+                            <span className="flex flex-col items-start leading-tight">
+                              <span>{s.domain}</span>
+                              {w && (
+                                <span className={`text-[10px] ${activeSelected.includes(s.id) ? 'text-white/70' : 'text-gray-400'}`}>
+                                  PC{w.pc} · M{w.mobile}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Two comparison charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
