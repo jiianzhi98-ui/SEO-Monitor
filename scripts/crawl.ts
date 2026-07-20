@@ -31,6 +31,11 @@ function parseContentDate(dateStr: string | undefined): string | null {
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
   const m2 = dateStr.match(/^(\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
   if (m2) return `20${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`
+  // Relative times (MYT UTC+8)
+  if (/^\d+(?:分钟|小时)前$/.test(dateStr)) return getMalaysiaDate(0)
+  if (dateStr === '昨天' || dateStr === '一天前') return getMalaysiaDate(-1)
+  const daysAgo = dateStr.match(/^(\d+)天前$/)
+  if (daysAgo) return getMalaysiaDate(-parseInt(daysAgo[1]))
   try {
     const d = new Date(dateStr)
     if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)

@@ -133,7 +133,7 @@ function findNextPageUrl($: ReturnType<typeof cheerio.load>, currentUrl: string)
   return null
 }
 
-// Parse a date string like "2026-06-09 17:04", "2026/06/09", or "26-07-01" to YYYY-MM-DD
+// Parse a date string like "2026-06-09 17:04", "2026/06/09", "26-07-01", or Chinese relative times to YYYY-MM-DD
 function parseEntryDateStr(dateStr: string | undefined): string | null {
   if (!dateStr) return null
   // 4-digit year: 2026-07-01
@@ -142,6 +142,12 @@ function parseEntryDateStr(dateStr: string | undefined): string | null {
   // 2-digit year: 26-07-01 → 2026-07-01
   const m2 = dateStr.match(/^(\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
   if (m2) return `20${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`
+  // Relative times (MYT UTC+8)
+  const myt = (offsetDays: number) => new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
+  if (/^\d+(?:分钟|小时)前$/.test(dateStr)) return myt(0)
+  if (dateStr === '昨天' || dateStr === '一天前') return myt(-1)
+  const daysAgo = dateStr.match(/^(\d+)天前$/)
+  if (daysAgo) return myt(-parseInt(daysAgo[1]))
   return null
 }
 
