@@ -561,7 +561,7 @@ export default function DashboardPage() {
               )}
               {([
                 { label: 'a–m', test: (d: string) => /^[a-m]/i.test(d) },
-                { label: 'm–z', test: (d: string) => /^[m-z]/i.test(d) },
+                { label: 'n–z', test: (d: string) => /^[n-z]/i.test(d) },
                 { label: '0–9', test: (d: string) => /^\d/.test(d) },
               ]).map(g => {
                 const groupSites = catSites[activeCategory]
