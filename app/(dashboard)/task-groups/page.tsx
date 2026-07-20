@@ -1728,13 +1728,11 @@ export default function TaskGroupsPage() {
           {/* Date picker */}
           <div className="flex items-center gap-3 mb-4">
             <span className="text-xs text-gray-400 flex-shrink-0">日期</span>
-            <select value={selectedDate}
+            <input type="date" value={selectedDate}
+              min={availableDates[availableDates.length - 1] || ''}
+              max={availableDates[0] || today}
               onChange={e => { setRankdownDate(e.target.value); setTabPage(prev => ({ ...prev, rankdown: 0 })) }}
-              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-400 text-gray-700">
-              {availableDates.map(d => (
-                <option key={d} value={d}>{d.slice(5).replace('-', '/')}</option>
-              ))}
-            </select>
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-400 text-gray-700 cursor-pointer" />
             {dateRows.length > 0 && (
               <span className="text-[10px] text-gray-300">m端下跌词 {dateRows.length} 条</span>
             )}
