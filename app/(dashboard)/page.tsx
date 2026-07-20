@@ -1082,7 +1082,7 @@ function KeywordSearchCard() {
           </button>
         </div>
 
-        <div className={`${searched && total > 50 ? 'max-h-20' : 'max-h-28'} overflow-y-auto`}>
+        <div className="max-h-44 overflow-y-auto">
           {!searched ? (
             <p className="text-xs text-gray-400">输入关键词后搜索</p>
           ) : rows.length === 0 ? (
