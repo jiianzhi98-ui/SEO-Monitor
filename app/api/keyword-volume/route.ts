@@ -38,12 +38,15 @@ export async function GET(req: Request) {
 
     const { data: volData } = await supabase
       .from('keyword_volume')
-      .select('keyword, volume')
+      .select('keyword, volume, latest_trend')
       .in('keyword', keywords)
 
-    const volMap = new Map((volData || []).map((r: { keyword: string; volume: number }) => [r.keyword, r.volume]))
+    const volMap = new Map((volData || []).map((r: { keyword: string; volume: number; latest_trend: string | null }) => [r.keyword, r]))
     const result = keywords
-      .map(kw => ({ keyword: kw, volume: volMap.get(kw) ?? 0 }))
+      .map(kw => {
+        const row = volMap.get(kw)
+        return { keyword: kw, volume: row?.volume ?? 0, latest_trend: row?.latest_trend ?? null }
+      })
       .sort((a, b) => b.volume - a.volume)
 
     await log(supabase, 'kw-export-today', result.length, `今日新词导出 ${result.length} 个`, t0)
@@ -57,7 +60,7 @@ export async function GET(req: Request) {
     while (true) {
       const { data, error } = await supabase
         .from('keyword_volume')
-        .select('keyword, volume')
+        .select('keyword, volume, latest_trend')
         .order('volume', { ascending: false })
         .range(offset, offset + batchSize - 1)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -79,7 +82,7 @@ export async function GET(req: Request) {
 
   let dataQuery = supabase
     .from('keyword_volume')
-    .select('keyword, volume')
+    .select('keyword, volume, latest_trend')
     .order('volume', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
   if (q) dataQuery = dataQuery.ilike('keyword', `%${q}%`)

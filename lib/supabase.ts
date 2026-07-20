@@ -74,6 +74,7 @@ export type Database = {
         Row: {
           keyword: string
           volume: number
+          latest_trend: string | null
         }
         Insert: Database['public']['Tables']['keyword_volume']['Row']
         Update: Partial<Database['public']['Tables']['keyword_volume']['Insert']>

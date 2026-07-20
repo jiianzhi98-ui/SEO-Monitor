@@ -304,8 +304,14 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
         }
       })
     }
-    const kwWithVol = up.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
-    const kwNoVol = up.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: today }))
+    // Merge up and down into one map (rankup wins if same keyword in both, shouldn't happen per site)
+    const kwMap = new Map<string, { volume: number; latest_trend: string }>()
+    for (const e of down) kwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankdown' })
+    for (const e of up) kwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankup' })
+    const kwWithVol = [...kwMap.entries()].filter(([, v]) => v.volume > 0)
+      .map(([keyword, v]) => ({ keyword, volume: v.volume, latest_trend: v.latest_trend, stat_date: today }))
+    const kwNoVol = [...kwMap.entries()].filter(([, v]) => v.volume <= 0)
+      .map(([keyword, v]) => ({ keyword, volume: 0, latest_trend: v.latest_trend, stat_date: today }))
     for (const chunk of chunkArray(kwWithVol, 500)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
@@ -313,6 +319,17 @@ async function runRank(sites: SiteRecord[], today: string, activityId: string | 
     for (const chunk of chunkArray(kwNoVol, 500)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
+    }
+    // Update latest_trend for zero-volume keywords (ignoreDuplicates skips existing rows, so trend needs a separate update)
+    const rankupNoVol = kwNoVol.filter(r => r.latest_trend === 'rankup').map(r => r.keyword)
+    const rankdownNoVol = kwNoVol.filter(r => r.latest_trend === 'rankdown').map(r => r.keyword)
+    for (const chunk of chunkArray(rankupNoVol, 500)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankup' }).in('keyword', chunk)
+    }
+    for (const chunk of chunkArray(rankdownNoVol, 500)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankdown' }).in('keyword', chunk)
     }
   }
 

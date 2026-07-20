@@ -314,8 +314,13 @@ export async function GET(request: Request) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase.from('sites') as any).update({ has_rank_data: true }).eq('id', site.id)
           }
-          const kwWithVol = rankupEntries.filter((e) => e.volume > 0).map((e) => ({ keyword: e.keyword, volume: e.volume, stat_date: rankDate }))
-          const kwNoVol = rankupEntries.filter((e) => e.volume <= 0).map((e) => ({ keyword: e.keyword, volume: 0, stat_date: rankDate }))
+          const kwMap = new Map<string, { volume: number; latest_trend: string }>()
+          for (const e of rankdownEntries) kwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankdown' })
+          for (const e of rankupEntries) kwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankup' })
+          const kwWithVol = [...kwMap.entries()].filter(([, v]) => v.volume > 0)
+            .map(([keyword, v]) => ({ keyword, volume: v.volume, latest_trend: v.latest_trend, stat_date: rankDate }))
+          const kwNoVol = [...kwMap.entries()].filter(([, v]) => v.volume <= 0)
+            .map(([keyword, v]) => ({ keyword, volume: 0, latest_trend: v.latest_trend, stat_date: rankDate }))
           for (const chunk of chunkArray(kwWithVol, 500)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
@@ -323,6 +328,14 @@ export async function GET(request: Request) {
           for (const chunk of chunkArray(kwNoVol, 500)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
+          }
+          for (const chunk of chunkArray(kwNoVol.filter(r => r.latest_trend === 'rankup').map(r => r.keyword), 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankup' }).in('keyword', chunk)
+          }
+          for (const chunk of chunkArray(kwNoVol.filter(r => r.latest_trend === 'rankdown').map(r => r.keyword), 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankdown' }).in('keyword', chunk)
           }
 
           if (rankRows.length > 0) {
@@ -503,10 +516,28 @@ export async function GET(request: Request) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase.from('site_keyword_ranks') as any).upsert(chunk, { onConflict: 'site_id,keyword,stat_date,type,platform' })
           }
-          const kwVol = upEntries.filter(e => e.volume > 0).map(e => ({ keyword: e.keyword, volume: e.volume, stat_date: today }))
-          for (const chunk of chunkArray(kwVol, 500)) {
+          const rtKwMap = new Map<string, { volume: number; latest_trend: string }>()
+          for (const e of downEntries) rtKwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankdown' })
+          for (const e of upEntries) rtKwMap.set(e.keyword, { volume: e.volume, latest_trend: 'rankup' })
+          const rtKwWithVol = [...rtKwMap.entries()].filter(([, v]) => v.volume > 0)
+            .map(([keyword, v]) => ({ keyword, volume: v.volume, latest_trend: v.latest_trend, stat_date: today }))
+          const rtKwNoVol = [...rtKwMap.entries()].filter(([, v]) => v.volume <= 0)
+            .map(([keyword, v]) => ({ keyword, volume: 0, latest_trend: v.latest_trend, stat_date: today }))
+          for (const chunk of chunkArray(rtKwWithVol, 500)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
+          }
+          for (const chunk of chunkArray(rtKwNoVol, 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
+          }
+          for (const chunk of chunkArray(rtKwNoVol.filter(r => r.latest_trend === 'rankup').map(r => r.keyword), 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankup' }).in('keyword', chunk)
+          }
+          for (const chunk of chunkArray(rtKwNoVol.filter(r => r.latest_trend === 'rankdown').map(r => r.keyword), 500)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankdown' }).in('keyword', chunk)
           }
           if (rtAid) await activityEnd(supabase, rtAid, { status: rows.length > 0 ? 'done' : 'warn', ok: rows.length > 0 ? 1 : 0, empty: rows.length === 0 ? 1 : 0, fail: 0, rowsWritten: rows.length, durationMs: Date.now() - rtStart })
           results.push({ site: site.domain, count: rows.length })

@@ -958,7 +958,7 @@ export default function DashboardPage() {
 
 // ─── KeywordSearchCard ────────────────────────────────────────────────────────
 
-interface KwVolRow { keyword: string; volume: number }
+interface KwVolRow { keyword: string; volume: number; latest_trend?: string | null }
 
 function KeywordSearchCard() {
   const { role } = useUser()
@@ -1092,8 +1092,10 @@ function KeywordSearchCard() {
               {rows.map(r => (
                 <div key={r.keyword} className="flex items-center justify-between py-0.5">
                   <span className="text-xs text-gray-700 truncate mr-2">{r.keyword}</span>
-                  <span className="text-xs font-medium text-gray-500 flex-shrink-0 tabular-nums">
+                  <span className="text-xs font-medium text-gray-500 flex-shrink-0 tabular-nums flex items-center gap-0.5">
                     {r.volume > 0 ? r.volume.toLocaleString() : '—'}
+                    {r.latest_trend === 'rankup' && <span className="text-green-500 leading-none">↑</span>}
+                    {r.latest_trend === 'rankdown' && <span className="text-red-400 leading-none">↓</span>}
                   </span>
                 </div>
               ))}

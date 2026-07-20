@@ -479,7 +479,7 @@ export default function TaskGroupsPage() {
 
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<{ keyword: string; volume: number }[]>([])
+  const [searchResults, setSearchResults] = useState<{ keyword: string; volume: number; latest_trend?: string | null }[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchTotal, setSearchTotal] = useState(0)
   const [searchPage, setSearchPage] = useState(0)
@@ -1460,7 +1460,13 @@ export default function TaskGroupsPage() {
                           >{r.keyword.length > 26 ? r.keyword.slice(0, 26) + '…' : r.keyword}</span>
                           {claimed && <span className="ml-1.5 text-[10px] text-green-500">✓</span>}
                         </td>
-                        <td className="px-2 py-2 text-right text-xs text-gray-500 whitespace-nowrap">{r.volume > 0 ? r.volume.toLocaleString() : '—'}</td>
+                        <td className="px-2 py-2 text-right text-xs text-gray-500 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-0.5">
+                            {r.volume > 0 ? r.volume.toLocaleString() : '—'}
+                            {r.latest_trend === 'rankup' && <span className="text-green-500 leading-none">↑</span>}
+                            {r.latest_trend === 'rankdown' && <span className="text-red-400 leading-none">↓</span>}
+                          </span>
+                        </td>
                       </tr>
                     )
                   })}

@@ -130,8 +130,8 @@ async function main() {
     await supabase.from('site_keyword_ranks').delete()
       .eq('site_id', siteId).eq('stat_date', today)
 
-    // keyword_volume: collect best volume per keyword from mobile rankup only
-    const kwVolumeMap = new Map<string, number>()
+    // keyword_volume: collect from mobile rankup + rankdown; rankup takes priority if same keyword
+    const kwVolumeMap = new Map<string, { volume: number; latest_trend: string }>()
 
     let siteSaved = 0
     let siteAnyData = false
@@ -178,13 +178,17 @@ async function main() {
           siteDetails.push(`${label}=${rows.length}`)
           console.log(`    ${label.padEnd(16)} ✓  ${rows.length} 条`)
 
-          // Collect keyword_volume from mobile rankup, volume > 0 only
-          if (platform === 'mobile' && type === 'rankup') {
+          // Collect keyword_volume from mobile (rankup + rankdown); rankup takes priority
+          if (platform === 'mobile') {
             for (const e of entries) {
-              if (e.volume > 0) {
-                const cur = kwVolumeMap.get(e.keyword) ?? 0
-                if (e.volume > cur) kwVolumeMap.set(e.keyword, e.volume)
+              const existing = kwVolumeMap.get(e.keyword)
+              if (!existing) {
+                kwVolumeMap.set(e.keyword, { volume: e.volume, latest_trend: type })
+              } else if (type === 'rankup') {
+                // rankup always wins; take higher volume
+                kwVolumeMap.set(e.keyword, { volume: Math.max(e.volume, existing.volume), latest_trend: 'rankup' })
               }
+              // If rankdown and keyword already set from rankup: skip (keep rankup priority)
             }
           }
         } catch (e) {
@@ -198,17 +202,34 @@ async function main() {
       }
     }
 
-    // Upsert keyword_volume (mobile rankup only, volume > 0)
+    // Upsert keyword_volume (mobile rankup + rankdown)
     if (kwVolumeMap.size > 0) {
-      const volRows = Array.from(kwVolumeMap.entries()).map(([keyword, volume]) => ({
-        keyword, volume, stat_date: today,
-      }))
-      for (const chunk of chunkArray(volRows, 500)) {
+      const allEntries = Array.from(kwVolumeMap.entries())
+      const withVol = allEntries.filter(([, v]) => v.volume > 0)
+        .map(([keyword, v]) => ({ keyword, volume: v.volume, latest_trend: v.latest_trend, stat_date: today }))
+      const noVol = allEntries.filter(([, v]) => v.volume <= 0)
+        .map(([keyword, v]) => ({ keyword, volume: 0, latest_trend: v.latest_trend, stat_date: today }))
+      for (const chunk of chunkArray(withVol, 500)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from('keyword_volume') as any)
-          .upsert(chunk, { onConflict: 'keyword' })
+        await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword' })
       }
-      console.log(`    keyword_volume   ✓  更新 ${kwVolumeMap.size} 条`)
+      for (const chunk of chunkArray(noVol, 500)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('keyword_volume') as any).upsert(chunk, { onConflict: 'keyword', ignoreDuplicates: true })
+      }
+      const rankupNoVol = noVol.filter(r => r.latest_trend === 'rankup').map(r => r.keyword)
+      const rankdownNoVol = noVol.filter(r => r.latest_trend === 'rankdown').map(r => r.keyword)
+      for (const chunk of chunkArray(rankupNoVol, 500)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankup' }).in('keyword', chunk)
+      }
+      for (const chunk of chunkArray(rankdownNoVol, 500)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('keyword_volume') as any).update({ latest_trend: 'rankdown' }).in('keyword', chunk)
+      }
+      const up = allEntries.filter(([, v]) => v.latest_trend === 'rankup').length
+      const dn = allEntries.filter(([, v]) => v.latest_trend === 'rankdown').length
+      console.log(`    keyword_volume   ✓  更新 ${kwVolumeMap.size} 条（涨=${up} 跌=${dn}）`)
     }
 
     // Per-site log
