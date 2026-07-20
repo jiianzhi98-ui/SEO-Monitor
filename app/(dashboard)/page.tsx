@@ -979,7 +979,6 @@ function KeywordSearchCard() {
   const [verifying, setVerifying] = useState(false)
 
   async function handleSearch(pg = 0) {
-    // admin cannot empty-search
     if (isAdmin && !query.trim()) return
     setLoading(true)
     try {
@@ -1039,8 +1038,8 @@ function KeywordSearchCard() {
 
   return (
     <>
-      <div className="rounded-xl border border-green-300 bg-white p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="rounded-xl border border-green-300 bg-white p-4 flex flex-col">
+        <div className="flex items-center justify-between mb-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green-400" />
             <span className="text-sm font-medium text-gray-600">搜索量查询</span>
@@ -1064,7 +1063,7 @@ function KeywordSearchCard() {
           )}
         </div>
 
-        <div className="flex gap-1.5 mb-3">
+        <div className="flex gap-1.5 mb-3 flex-shrink-0">
           <input
             type="text"
             value={query}
@@ -1082,7 +1081,7 @@ function KeywordSearchCard() {
           </button>
         </div>
 
-        <div className="max-h-44 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {!searched ? (
             <p className="text-xs text-gray-400">输入关键词后搜索</p>
           ) : rows.length === 0 ? (
@@ -1103,8 +1102,8 @@ function KeywordSearchCard() {
           )}
         </div>
 
-        {searched && total > 50 && (
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+        {searched && total > 0 && (
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 flex-shrink-0">
             <button
               onClick={() => handleSearch(page - 1)}
               disabled={page === 0 || loading}
@@ -1113,7 +1112,7 @@ function KeywordSearchCard() {
               ← 上一页
             </button>
             <span className="text-xs text-gray-400 tabular-nums">
-              第 {page + 1} / {Math.ceil(total / 50)} 页 · 共 {total} 个
+              {page + 1} / {Math.ceil(total / 50)} 页 · 共 {total} 个
             </span>
             <button
               onClick={() => handleSearch(page + 1)}
