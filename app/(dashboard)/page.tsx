@@ -68,7 +68,7 @@ function niceMax(rawMax: number): number {
   if (rawMax <= 0) return 100
   const exp = Math.pow(10, Math.floor(Math.log10(rawMax)))
   const n = rawMax / exp
-  const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10
+  const nice = n <= 1 ? 1 : n <= 1.5 ? 1.5 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 3 ? 3 : n <= 4 ? 4 : n <= 5 ? 5 : n <= 7.5 ? 7.5 : 10
   return nice * exp
 }
 
