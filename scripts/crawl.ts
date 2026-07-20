@@ -1071,11 +1071,14 @@ async function main() {
     if (rawCookie) {
       try {
         const pool = JSON.parse(rawCookie)
-        baiduCookie = Array.isArray(pool) && pool.length > 0
-          ? pool[Math.floor(Math.random() * pool.length)]
-          : rawCookie
+        if (Array.isArray(pool) && pool.length > 0) {
+          const item = pool[Math.floor(Math.random() * pool.length)]
+          baiduCookie = typeof item === 'string' ? item : (item as { value: string }).value
+        } else {
+          baiduCookie = rawCookie
+        }
       } catch {
-        baiduCookie = rawCookie  // 兼容旧格式：单个 cookie 字符串
+        baiduCookie = rawCookie
       }
     }
     const supplementDomain = process.env.SUPPLEMENT_DOMAIN

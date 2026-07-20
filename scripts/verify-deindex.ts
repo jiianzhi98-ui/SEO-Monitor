@@ -207,7 +207,15 @@ async function main() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: cookieSetting } = await (supabase.from('app_settings') as any)
     .select('value').eq('key', 'baidu_index_cookie').maybeSingle()
-  const baiduCookie: string = (cookieSetting as { value: string } | null)?.value ?? process.env.BAIDU_COOKIE ?? ''
+  const rawCookieVal: string = (cookieSetting as { value: string } | null)?.value ?? process.env.BAIDU_COOKIE ?? ''
+  let baiduCookie = rawCookieVal
+  try {
+    const pool = JSON.parse(rawCookieVal)
+    if (Array.isArray(pool) && pool.length > 0) {
+      const item = pool[Math.floor(Math.random() * pool.length)]
+      baiduCookie = typeof item === 'string' ? item : (item as { value: string }).value
+    }
+  } catch { /* plain string fallback */ }
   console.log(`  cookie=${baiduCookie ? `已加载（${baiduCookie.length} chars）` : '⚠ 无 cookie'}`)
   console.log(`${'▶'.repeat(60)}\n`)
 
