@@ -122,7 +122,7 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Record<Category, string[]>>({
     large: [], medium: [], small: [],
   })
-  const [sortOrder, setSortOrder] = useState<'a-m' | 'm-z' | '0-9' | null>(null)
+  const [sortOrder, setSortOrder] = useState<'a-m' | 'm-z' | '0-9'>('a-m')
   const [weightModalSite, setWeightModalSite] = useState<WeightChangeItem | null>(null)
   const [weightModalTab, setWeightModalTab] = useState<'weight' | 'ip' | 'index' | 'keywords' | 'rank' | 'unstable'>('weight')
   const [weightModalExtra, setWeightModalExtra] = useState<WeightModalExtra | null>(null)
@@ -263,11 +263,22 @@ export default function DashboardPage() {
   // Sorted site list for current category
   const sortedCatSites = useMemo(() => {
     const list = catSites[activeCategory]
-    if (!sortOrder) return list
     return [...list].sort((a, b) => {
-      if (sortOrder === 'a-m') return a.domain.localeCompare(b.domain)
-      if (sortOrder === 'm-z') return b.domain.localeCompare(a.domain)
-      // 0-9: numeric-prefix domains first, then alpha
+      if (sortOrder === 'a-m') {
+        // A→M first (a-m range), then N→Z
+        const aFirst = /^[a-mA-M]/.test(a.domain)
+        const bFirst = /^[a-mA-M]/.test(b.domain)
+        if (aFirst !== bFirst) return aFirst ? -1 : 1
+        return a.domain.localeCompare(b.domain)
+      }
+      if (sortOrder === 'm-z') {
+        // M→Z first, then A→L
+        const aFirst = /^[m-zM-Z]/.test(a.domain)
+        const bFirst = /^[m-zM-Z]/.test(b.domain)
+        if (aFirst !== bFirst) return aFirst ? -1 : 1
+        return a.domain.localeCompare(b.domain)
+      }
+      // 0-9: numeric-prefix first, then alpha
       const aNum = /^\d/.test(a.domain)
       const bNum = /^\d/.test(b.domain)
       if (aNum !== bNum) return aNum ? -1 : 1
@@ -573,12 +584,8 @@ export default function DashboardPage() {
                   {(['a-m', 'm-z', '0-9'] as const).map(order => (
                     <button
                       key={order}
-                      onClick={() => setSortOrder(prev => prev === order ? null : order)}
-                      className={`text-[11px] px-1.5 py-0.5 rounded border transition-colors font-mono ${
-                        sortOrder === order
-                          ? 'border-gray-400 text-gray-700 bg-gray-100'
-                          : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300'
-                      }`}
+                      onClick={() => setSortOrder(order)}
+                      className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors font-mono"
                     >
                       {order}
                     </button>
