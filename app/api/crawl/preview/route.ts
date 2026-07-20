@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { fetchHtmlList, cleanTitle } from '@/lib/crawler'
+import { fetchHtmlList, fetchJsonHtmlPages, cleanTitle } from '@/lib/crawler'
 
 interface PreviewBody {
   url: string
@@ -19,7 +19,13 @@ export async function POST(request: Request) {
     if (!firstUrl) return NextResponse.json({ error: '缺少 URL' }, { status: 400 })
     if (!titleSelector) return NextResponse.json({ error: '缺少标题CSS选择器' }, { status: 400 })
 
-    const entries = await fetchHtmlList(firstUrl, titleSelector, dateSelector)
+    let entries
+    if (firstUrl.includes('{page}')) {
+      // JSON-HTML API mode: fetch only page 1 for preview
+      entries = await fetchJsonHtmlPages(firstUrl, titleSelector, dateSelector, undefined, '1970-01-01', 1)
+    } else {
+      entries = await fetchHtmlList(firstUrl, titleSelector, dateSelector)
+    }
     const titles = entries.slice(0, 10).map((e) => e.title)
 
     const items = titles.map((original) => ({
