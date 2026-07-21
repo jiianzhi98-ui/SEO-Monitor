@@ -148,6 +148,14 @@ function parseEntryDateStr(dateStr: string | undefined): string | null {
   if (dateStr === '昨天' || dateStr === '一天前') return myt(-1)
   const daysAgo = dateStr.match(/^(\d+)天前$/)
   if (daysAgo) return myt(-parseInt(daysAgo[1]))
+  // MM-DD only (e.g. "07-20"): assume current year; use previous year if date would be in the future
+  const md = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})$/)
+  if (md) {
+    const todayMYT = myt(0)
+    const year = todayMYT.slice(0, 4)
+    const candidate = `${year}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`
+    return candidate <= todayMYT ? candidate : `${parseInt(year) - 1}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`
+  }
   return null
 }
 
