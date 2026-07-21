@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { fetchAizhanData } from '@/lib/crawler'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { activityStart, activityEnd } from '@/lib/activity-log'
 
 export async function GET(req: Request) {
+  const { data: { user } } = await createClient().auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const domain = searchParams.get('domain')?.trim()
   if (!domain) return NextResponse.json({ error: '缺少域名' }, { status: 400 })
