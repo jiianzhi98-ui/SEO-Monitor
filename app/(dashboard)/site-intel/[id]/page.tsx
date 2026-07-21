@@ -420,7 +420,7 @@ export default function SiteIntelDetailPage() {
           />
           <MetricCard
             label="百度收录"
-            value={data.indexCount > 0 ? fmt(data.indexCount) : '-'}
+            value={data.indexCount > 0 ? data.indexCount.toLocaleString() : '-'}
             change={data.indexChange}
           />
         </div>
