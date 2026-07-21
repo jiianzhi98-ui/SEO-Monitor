@@ -62,6 +62,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
+  const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single()
+  if ((profile?.role ?? 'normal') === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { id } = await params
 
   const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)

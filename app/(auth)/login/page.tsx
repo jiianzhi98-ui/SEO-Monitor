@@ -131,23 +131,15 @@ export default function LoginPage() {
     const resolveRes = await fetch('/api/auth/resolve-username', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: username.trim() }),
+      body: JSON.stringify({ username: username.trim(), password }),
     })
     if (!resolveRes.ok) {
       const d = await resolveRes.json()
-      setError(d.error ?? '用户不存在')
+      setError(d.error ?? '用户名或密码错误')
       setLoading(false); refreshCaptcha(); return
     }
-    const { email } = await resolveRes.json()
-
-    const supabase = getBrowserClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) {
-      setError('密码错误')
-      setLoading(false); refreshCaptcha()
-    } else {
-      window.location.href = '/'
-    }
+    // Session established server-side via cookie
+    window.location.href = '/'
   }
 
   // Glass input style

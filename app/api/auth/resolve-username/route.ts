@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 export async function POST(req: Request) {
-  const { username } = await req.json() as { username: string }
+  const { username, password } = await req.json() as { username: string; password: string }
 
-  if (!username?.trim()) {
-    return NextResponse.json({ error: '请输入用户名' }, { status: 400 })
+  if (!username?.trim() || !password) {
+    return NextResponse.json({ error: '请输入用户名和密码' }, { status: 400 })
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,13 +18,23 @@ export async function POST(req: Request) {
     .single()
 
   if (!profile?.id) {
-    return NextResponse.json({ error: '用户不存在' }, { status: 404 })
+    return NextResponse.json({ error: '用户名或密码错误' }, { status: 401 })
   }
 
-  const { data: { user }, error } = await service.auth.admin.getUserById(profile.id)
-  if (error || !user?.email) {
-    return NextResponse.json({ error: '账号异常' }, { status: 500 })
+  const { data: { user }, error: userError } = await service.auth.admin.getUserById(profile.id)
+  if (userError || !user?.email) {
+    return NextResponse.json({ error: '用户名或密码错误' }, { status: 401 })
   }
 
-  return NextResponse.json({ email: user.email })
+  // Sign in server-side — session set via cookie, email never reaches client
+  const { error: signInError } = await createClient().auth.signInWithPassword({
+    email: user.email,
+    password,
+  })
+
+  if (signInError) {
+    return NextResponse.json({ error: '用户名或密码错误' }, { status: 401 })
+  }
+
+  return NextResponse.json({ ok: true })
 }

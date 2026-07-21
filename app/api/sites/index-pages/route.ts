@@ -11,6 +11,9 @@ export async function GET(req: Request) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
+  const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single()
+  if ((profile?.role ?? 'normal') === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { searchParams } = new URL(req.url)
   const siteId = searchParams.get('siteId')
   const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10))

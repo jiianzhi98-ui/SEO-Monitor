@@ -77,6 +77,16 @@ export async function POST(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
+
+  // Verify caller is a member of this group
+  const { data: membership } = await service
+    .from('task_group_members')
+    .select('user_id')
+    .eq('group_id', groupId)
+    .eq('user_id', callerId)
+    .single()
+  if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const claimedDate = getMY()
 
   // Check if already claimed today (non-dismissed)

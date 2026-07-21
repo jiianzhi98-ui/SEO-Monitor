@@ -11,6 +11,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = createServiceClient() as any
   const { id } = await params
+
+  // Only members or admins may read a group's rules
+  const { data: membership } = await service
+    .from('task_group_members').select('user_id').eq('group_id', id).eq('user_id', user.id).single()
+  if (!membership) {
+    const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single()
+    const role = profile?.role ?? 'normal'
+    if (role === 'normal') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const isCompetitor = new URL(req.url).searchParams.get('competitor') === '1'
 
   // Get the group

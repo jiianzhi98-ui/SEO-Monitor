@@ -19,9 +19,11 @@ export async function POST(req: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) return NextResponse.json({ error: '服务未配置' }, { status: 500 })
 
-  const host = req.headers.get('host') || ''
-  const protocol = host.startsWith('localhost') ? 'http' : 'https'
-  const url = `${protocol}://${host}/api/cron?site=${encodeURIComponent(site)}&step=${encodeURIComponent(step)}`
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  ).replace(/\/$/, '')
+  const url = `${appUrl}/api/cron?site=${encodeURIComponent(site)}&step=${encodeURIComponent(step)}`
 
   try {
     const res = await fetch(url, {
