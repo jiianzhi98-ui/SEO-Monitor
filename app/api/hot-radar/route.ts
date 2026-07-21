@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 300  // cache 5 min; hot-radar data only updates twice a day
 export const maxDuration = 30
 
 function getMY(offsetDays = 0) {

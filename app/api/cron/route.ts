@@ -214,10 +214,18 @@ export async function GET(request: Request) {
                   .eq('site_id', site.id)
                   .in('keyword', Array.from(urlMap.keys()).slice(0, 500))
                   .is('source_url', null)
+                // Group by source_url and batch-update instead of N individual UPDATEs
+                const byUrl = new Map<string, string[]>()
                 for (const row of (needBackfill || []) as { id: string; keyword: string }[]) {
                   const srcUrl = urlMap.get(row.keyword)
+                  if (srcUrl) {
+                    if (!byUrl.has(srcUrl)) byUrl.set(srcUrl, [])
+                    byUrl.get(srcUrl)!.push(row.id)
+                  }
+                }
+                for (const [srcUrl, ids] of byUrl) {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  if (srcUrl) await (supabase.from('raw_keywords') as any).update({ source_url: srcUrl }).eq('id', row.id)
+                  await (supabase.from('raw_keywords') as any).update({ source_url: srcUrl }).in('id', ids)
                 }
               }
             }

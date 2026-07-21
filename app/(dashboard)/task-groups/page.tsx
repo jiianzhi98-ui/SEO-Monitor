@@ -996,7 +996,7 @@ export default function TaskGroupsPage() {
           const { data: raw } = await (supabase.from('raw_keywords') as any)
             .select('site_id, keyword')
             .in('site_id', siteIds)
-            .ilike('keyword', `${keyword}%`)
+            .like('keyword', `${keyword}%`)
             .gte('discovered_at', since)
           const bySite = new Map<string, Set<string>>()
           for (const r of (raw || [])) {
@@ -1084,9 +1084,8 @@ export default function TaskGroupsPage() {
   useEffect(() => {
     if (rightTab !== 'wordLib' || wordLibLoaded || wordLibLoading) return
     setWordLibLoading(true)
-    const supabase = getBrowserClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(supabase as any).rpc('get_wordlib_words')
+    fetch('/api/wordlib')
+      .then(r => r.json())
       .then(({ data }: { data: Array<{keyword: string; long_tail_count: number; site_count: number; sites: string[]; last_date: string}> | null }) => {
         const t = today
         setWordLibData((data || []).map(r => {
@@ -1147,7 +1146,7 @@ export default function TaskGroupsPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [sitesRes, weightRes] = await Promise.all([
       (supabase.from('sites') as any).select('id, domain, friend_links'),
-      (supabase.from('weight_history') as any).select('site_id, pc_weight, mobile_weight').order('record_date'),
+      (supabase.from('weight_history') as any).select('site_id, pc_weight, mobile_weight').gte('record_date', getMYDate(-30)).order('record_date'),
     ])
     const sites: { id: string; domain: string; friend_links?: string[] | null }[] = sitesRes.data || []
     const idToDomain = new Map<string, string>(sites.map((s: { id: string; domain: string }) => [s.id, s.domain]))
