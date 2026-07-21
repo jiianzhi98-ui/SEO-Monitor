@@ -138,8 +138,15 @@ export default function LoginPage() {
       setError(d.error ?? '用户名或密码错误')
       setLoading(false); refreshCaptcha(); return
     }
-    // Session established server-side via cookie
-    window.location.href = '/'
+    const { access_token, refresh_token } = await resolveRes.json()
+    const supabase = getBrowserClient()
+    const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token })
+    if (sessionError) {
+      setError('登录失败，请重试')
+      setLoading(false); refreshCaptcha()
+    } else {
+      window.location.href = '/'
+    }
   }
 
   // Glass input style

@@ -223,7 +223,7 @@ export async function GET(request: Request) {
                     byUrl.get(srcUrl)!.push(row.id)
                   }
                 }
-                for (const [srcUrl, ids] of byUrl) {
+                for (const [srcUrl, ids] of Array.from(byUrl.entries())) {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   await (supabase.from('raw_keywords') as any).update({ source_url: srcUrl }).in('id', ids)
                 }
