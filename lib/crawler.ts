@@ -148,13 +148,16 @@ function parseEntryDateStr(dateStr: string | undefined): string | null {
   if (dateStr === '昨天' || dateStr === '一天前') return myt(-1)
   const daysAgo = dateStr.match(/^(\d+)天前$/)
   if (daysAgo) return myt(-parseInt(daysAgo[1]))
-  // MM-DD only (e.g. "07-20"): assume current year; use previous year if date would be in the future
-  const md = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})$/)
+  // MM-DD anywhere in the string (e.g. "07-20", "更新：06-28")
+  const md = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})/)
   if (md) {
-    const todayMYT = myt(0)
-    const year = todayMYT.slice(0, 4)
-    const candidate = `${year}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`
-    return candidate <= todayMYT ? candidate : `${parseInt(year) - 1}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`
+    const mm = parseInt(md[1]); const dd = parseInt(md[2])
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+      const todayMYT = myt(0)
+      const year = todayMYT.slice(0, 4)
+      const candidate = `${year}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+      return candidate <= todayMYT ? candidate : `${parseInt(year) - 1}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+    }
   }
   return null
 }
