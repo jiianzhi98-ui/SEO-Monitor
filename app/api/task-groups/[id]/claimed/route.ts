@@ -149,13 +149,18 @@ export async function PATCH(
   if (operation_type !== undefined) updateData.operation_type = operation_type || null
   if (experiment_group !== undefined) updateData.experiment_group = experiment_group ?? null
 
-  const { error } = await service
+  // Admin/super can edit any member's claim; normal users can only edit their own
+  const callerRole = await getCallerRole(callerId)
+  const canEditOthers = callerRole === 'super' || callerRole === 'admin'
+
+  let query = service
     .from('member_claimed_keywords')
     .update(updateData)
     .eq('id', claimId)
     .eq('group_id', groupId)
-    .eq('user_id', callerId)
+  if (!canEditOthers) query = query.eq('user_id', callerId)
 
+  const { error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }

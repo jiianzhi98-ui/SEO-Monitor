@@ -59,7 +59,7 @@ interface ReportData {
 }
 
 interface DetailKw {
-  keyword: string; source: string; search_volume: number
+  id: string; keyword: string; source: string; search_volume: number
   operation_type: string | null; final_keyword: string | null; page_url: string | null
 }
 
@@ -162,7 +162,7 @@ function ReportCard({ title, memberType, total, bySource, isTotal }: {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function GroupReportPage() {
-  const { role } = useUser()
+  const { role, id: currentUserId } = useUser()
   const canSeeAll = role === 'super' || role === 'admin'
 
   const [groups, setGroups] = useState<Group[]>([])
@@ -919,11 +919,32 @@ export default function GroupReportPage() {
                             : <SourceTag source={kw.source} />}
                         </div>
                         <div className="min-w-0">
-                          {kw.page_url
-                            ? <a href={kw.page_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={kw.page_url}>
-                                {kw.page_url.replace(/^https?:\/\//, '').slice(0, 30)}{kw.page_url.replace(/^https?:\/\//, '').length > 30 ? '…' : ''}
-                              </a>
-                            : <span className="text-xs text-gray-300">—</span>}
+                          {(canSeeAll || detailModal?.userId === currentUserId) ? (
+                            <input
+                              type="text"
+                              defaultValue={kw.page_url ?? ''}
+                              placeholder="https://…"
+                              title={kw.page_url ?? ''}
+                              className="w-full text-xs text-blue-500 font-mono bg-transparent border-b border-transparent hover:border-gray-200 focus:border-green-400 focus:outline-none placeholder-gray-300 truncate"
+                              onBlur={async e => {
+                                const val = e.target.value.trim()
+                                if (val === (kw.page_url ?? '')) return
+                                await fetch(`/api/task-groups/${activeTabId}/claimed`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ claimId: kw.id, page_url: val }),
+                                })
+                                setDetailKws(prev => prev.map((k, j) => j === i ? { ...k, page_url: val || null } : k))
+                              }}
+                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                            />
+                          ) : kw.page_url ? (
+                            <a href={kw.page_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline font-mono truncate block" title={kw.page_url}>
+                              {kw.page_url.replace(/^https?:\/\//, '').slice(0, 30)}{kw.page_url.replace(/^https?:\/\//, '').length > 30 ? '…' : ''}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
                         </div>
                       </div>
                     ))}

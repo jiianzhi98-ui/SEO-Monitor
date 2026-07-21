@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 
 interface RawKw {
-  keyword: string; source: string; search_volume: number | null
+  id: string; keyword: string; source: string; search_volume: number | null
   operation_type: string | null; final_keyword: string | null; page_url: string | null
 }
 
@@ -33,7 +33,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const { data: rows, error, count } = await service
     .from('member_claimed_keywords')
-    .select('keyword, source, search_volume, operation_type, final_keyword, page_url', { count: 'exact' })
+    .select('id, keyword, source, search_volume, operation_type, final_keyword, page_url', { count: 'exact' })
     .eq('group_id', groupId)
     .eq('user_id', memberId)
     .eq('status', 'submitted')
@@ -45,6 +45,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   return NextResponse.json({
     keywords: (rows ?? []).map((r: RawKw) => ({
+      id: r.id,
       keyword: r.keyword,
       source: r.source,
       search_volume: Number(r.search_volume) || 0,
