@@ -43,6 +43,7 @@ interface WeightModalExtra {
   appCount: number; gameCount: number; kwDate: string
   rankupAll: { keyword: string; volume: number }[]
   rankdownAll: { keyword: string; volume: number }[]
+  rankupCount: number; rankdownCount: number
   rankDate: string
   unstableAll: { keyword: string; volume: number; upDays: number; downDays: number }[]
   loading: boolean
@@ -309,7 +310,7 @@ export default function DashboardPage() {
   }
 
   async function fetchWeightModalExtra(siteId: string) {
-    setWeightModalExtra({ appKw: [], gameKw: [], appCount: 0, gameCount: 0, kwDate: '', rankupAll: [], rankdownAll: [], rankDate: '', unstableAll: [], loading: true })
+    setWeightModalExtra({ appKw: [], gameKw: [], appCount: 0, gameCount: 0, kwDate: '', rankupAll: [], rankdownAll: [], rankupCount: 0, rankdownCount: 0, rankDate: '', unstableAll: [], loading: true })
     const db = getBrowserClient()
     const d30ago = getMY(-30)
     const [{ data: appRaw }, { data: gameRaw }, { data: rdRaw }] = await Promise.all([
@@ -364,6 +365,7 @@ export default function DashboardPage() {
       appKw: appAll.slice(0, 12), gameKw: gameAll.slice(0, 12),
       appCount: appAll.length, gameCount: gameAll.length, kwDate: latestKwDate,
       rankupAll: rankupAll.slice(0, 12), rankdownAll: rankdownAll.slice(0, 12),
+      rankupCount: rankupAll.length, rankdownCount: rankdownAll.length,
       rankDate: latestRankDate, unstableAll: unstableAll.slice(0, 12), loading: false,
     })
   }
@@ -803,11 +805,11 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-1.5 mb-3">
                       <button onClick={() => setWeightModalRankTab('up')}
                         className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${weightModalRankTab === 'up' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                        涨入{weightModalRankTab === 'up' && weightModalExtra ? ` (${weightModalExtra.rankupAll.length})` : ''}
+                        涨入{weightModalExtra ? ` (${weightModalExtra.rankupCount})` : ''}
                       </button>
                       <button onClick={() => setWeightModalRankTab('down')}
                         className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${weightModalRankTab === 'down' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                        跌出{weightModalRankTab === 'down' && weightModalExtra ? ` (${weightModalExtra.rankdownAll.length})` : ''}
+                        跌出{weightModalExtra ? ` (${weightModalExtra.rankdownCount})` : ''}
                       </button>
                       {weightModalExtra?.rankDate && <span className="ml-auto text-xs text-gray-400">{weightModalExtra.rankDate}</span>}
                     </div>
