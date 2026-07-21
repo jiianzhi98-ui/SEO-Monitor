@@ -666,7 +666,7 @@ export default function DashboardPage() {
         { label: '移动权重', value: String(latest?.mobile_weight ?? 0),                                            chg: weightModalSite.mobileChange },
         { label: 'PC日均IP', value: latest ? `${fmt(latest.pc_ip)}~${fmt(latest.pc_ip_max)}` : '-',               chg: pcAvgChange },
         { label: '移动IP',   value: latest ? `${fmt(latest.mobile_ip)}~${fmt(latest.mobile_ip_max)}` : '-',       chg: mobileAvgChange },
-        { label: '收录量',   value: latestSnap ? fmt(latestSnap.index_count) : '-',                                chg: indexChange },
+        { label: '收录量',   value: latestSnap ? latestSnap.index_count.toLocaleString() : '-',                   chg: indexChange },
       ]
       const TAB_LABELS: Record<string, string> = { weight: '权重趋势', ip: 'IP趋势', index: '收录趋势', keywords: '最近新增', rank: '排名波动', unstable: '不稳定词' }
       const noData = <div className="flex items-center justify-center h-44 text-gray-400 text-sm">暂无足够趋势数据</div>
