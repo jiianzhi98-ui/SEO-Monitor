@@ -192,7 +192,7 @@ async function runKeywords(sites: SiteRecord[], today: string, yesterday: string
       const seenInBatch = new Set<string>()
       const cleanedEntries = rawEntries
         .map((e) => ({
-          keyword: cleanTitle(e.title, site.enable_version_clean, site.version_suffixes || []),
+          keyword: cleanTitle(e.title, site.enable_version_clean),
           content_date: e.content_date,
           content_type: e.content_type || 'app',
           source_url: e.source_url,

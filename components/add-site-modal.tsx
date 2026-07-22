@@ -106,7 +106,6 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
   const [htmlSources, setHtmlSources] = useState<HtmlSource[]>(() => sitToSources(site ?? null))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [newSuffix, setNewSuffix] = useState('')
   const [newFriendLink, setNewFriendLink] = useState('')
   const [previewing, setPreviewing] = useState(false)
   const [previewData, setPreviewData] = useState<PreviewRow[] | null>(null)
@@ -155,17 +154,6 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  function addSuffix() {
-    const s = newSuffix.trim()
-    if (!s || form.version_suffixes.includes(s)) return
-    update('version_suffixes', [...form.version_suffixes, s])
-    setNewSuffix('')
-  }
-
-  function removeSuffix(s: string) {
-    update('version_suffixes', form.version_suffixes.filter((x) => x !== s))
-  }
-
   function addFriendLink() {
     const s = newFriendLink.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '')
     if (!s || form.friend_links.includes(s)) return
@@ -193,7 +181,6 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
           titleSelector: src.titleSelector,
           dateSelector: src.dateSelector,
           enableVersionClean: form.enable_version_clean,
-          suffixes: form.version_suffixes,
         }),
       })
       const data = await res.json()
@@ -419,42 +406,6 @@ export default function AddSiteModal({ site, onClose, onSaved }: AddSiteModalPro
               <span className="text-sm font-medium text-gray-700">启用版本号清洗</span>
             </label>
 
-            {form.enable_version_clean && (
-              <div className="mt-3 p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500 mb-2">版本号后缀词（清洗时连同版本号一起删除）</p>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {form.version_suffixes.map((s) => (
-                    <span
-                      key={s}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-700"
-                    >
-                      {s}
-                      <button
-                        onClick={() => removeSuffix(s)}
-                        className="text-gray-400 hover:text-red-500 ml-0.5"
-                      >×</button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newSuffix}
-                    onChange={(e) => setNewSuffix(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addSuffix()}
-                    placeholder="输入后缀词，如：破解版"
-                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={addSuffix}
-                    className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                  >
-                    添加
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Preview Button */}

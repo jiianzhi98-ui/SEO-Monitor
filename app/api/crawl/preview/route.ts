@@ -26,7 +26,6 @@ interface PreviewBody {
   titleSelector?: string
   dateSelector?: string
   enableVersionClean?: boolean
-  suffixes?: string[]
 }
 
 export async function POST(request: Request) {
@@ -36,7 +35,7 @@ export async function POST(request: Request) {
 
   try {
     const body: PreviewBody = await request.json()
-    const { url, titleSelector = '', dateSelector = '', enableVersionClean = false, suffixes = [] } = body
+    const { url, titleSelector = '', dateSelector = '', enableVersionClean = false } = body
 
     const firstUrl = url.split('\n').map((u) => u.trim()).filter(Boolean)[0] || url
     if (!firstUrl) return NextResponse.json({ error: '缺少 URL' }, { status: 400 })
@@ -54,7 +53,7 @@ export async function POST(request: Request) {
 
     const items = titles.map((original) => ({
       original,
-      cleaned: cleanTitle(original, enableVersionClean, suffixes),
+      cleaned: cleanTitle(original, enableVersionClean),
     }))
 
     return NextResponse.json({ items })

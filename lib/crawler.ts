@@ -326,30 +326,13 @@ export async function fetchJsonHtmlPages(
   })
 }
 
-// Clean title by removing version numbers and optional suffixes
-export function cleanTitle(
-  title: string,
-  enableVersionClean: boolean,
-  suffixes: string[]
-): string {
+// Clean title by removing v-prefixed version numbers and everything after them.
+// e.g. "使命召唤v2.3.1安卓版" → "使命召唤"
+//      "我的世界1.20.4中文版v1.20.4" → "我的世界1.20.4中文版"
+//      "守护者最新版" → unchanged (no v prefix)
+export function cleanTitle(title: string, enableVersionClean: boolean): string {
   if (!enableVersionClean) return title
-
-  let cleaned = title
-
-  // Step 1: Remove explicit suffixes from manual list
-  if (suffixes && suffixes.length > 0) {
-    const suffixPattern = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-    cleaned = cleaned.replace(new RegExp(`\\s*(?:${suffixPattern})`, 'g'), '').trim()
-  }
-
-  // Step 2: If a v-prefixed version number is found, remove it and everything after it.
-  // "使命召唤v2.3.1安卓版" → "使命召唤"
-  // "我的世界1.20.4中文版v1.20.4" → "我的世界1.20.4中文版"
-  // "守护者最新版" → unchanged (no v prefix)
-  // "我的世界1.20.4中文版" → unchanged (no v prefix)
-  cleaned = cleaned.replace(/\s*[vV]\d+(?:\.\d+)*.*/g, '').trim()
-
-  return cleaned.replace(/\s{2,}/g, ' ').trim()
+  return title.replace(/\s*[vV]\d+(?:\.\d+)*.*/g, '').replace(/\s{2,}/g, ' ').trim()
 }
 
 // Filter keywords that contain download-related attributes
