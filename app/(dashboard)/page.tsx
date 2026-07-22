@@ -435,7 +435,7 @@ export default function DashboardPage() {
         </AlertCard>
 
         <AlertCard
-          title="收录异常"
+          title="收录变动"
           count={indexAlerts.length}
           color="orange"
           empty="各站收录正常"
@@ -473,7 +473,7 @@ export default function DashboardPage() {
         </AlertCard>
 
         <AlertCard
-          title="新增异常"
+          title="新增变动"
           count={kwAlerts.length}
           color="yellow"
           empty="各站新增正常"
