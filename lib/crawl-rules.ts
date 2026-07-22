@@ -26,7 +26,7 @@ export const CRAWL_RULES: RuleSection[] = [
       { label: '频率规则', text: '所有站点均为 daily（每天）' },
       { label: '翻页策略', text: '最多3页；正式 GitHub Actions 抓取每页间隔随机等待10~15秒；单站手动重试跳过等待直接顺序翻页' },
       { label: '去重', text: '与数据库同日期已有词对比去重，批次内也去重；新词写入 raw_keywords' },
-      { label: '版本号清洗', text: '启用版本号清洗时：① 去除手动填写的后缀词；② 自动去除所有以"版"结尾的尾部词组（含前置版本号，如"v1.2中文版"、"1.20.4汉化版"、"最新版"等），循环执行直到无更多"版"后缀；③ 去除剩余裸版本号如 v1.2.3；手动列表仅需填写不含"版"字的特殊后缀' },
+      { label: '版本号清洗', text: '启用版本号清洗时：① 去除手动填写的后缀词；② 发现 v/V 前缀版本号（如 v2.3.1）时，从该版本号起连同其后所有内容一并删除（如"使命召唤v2.3.1安卓版"→"使命召唤"，"世界1.20.4中文版v1.20.4"→"世界1.20.4中文版"）；不含 v 前缀的纯数字版本号（如1.20.4）和独立"xxx版"词组不自动处理，需手动加入后缀列表' },
       { label: '写入表', text: 'raw_keywords（新词）/ competitor_kw_stats（app/game分类计数）' },
       { label: '清理', text: '每日关键词步骤结束后由 group0 执行：raw_keywords 30天，rank_changes 30天，competitor_kw_stats 10天' },
       { label: '静默失败风险', text: 'HTML fetch 返回空时不报错，只在 activity_log 标记 empty；选择器配置错误会导致持续为空' },

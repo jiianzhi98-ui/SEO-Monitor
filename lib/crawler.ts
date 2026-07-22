@@ -336,22 +336,18 @@ export function cleanTitle(
 
   let cleaned = title
 
-  // Step 1: Remove explicit suffixes from manual list (for non-版 patterns)
+  // Step 1: Remove explicit suffixes from manual list
   if (suffixes && suffixes.length > 0) {
     const suffixPattern = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
     cleaned = cleaned.replace(new RegExp(`\\s*(?:${suffixPattern})`, 'g'), '').trim()
   }
 
-  // Step 2: Auto-remove trailing "xxx版" patterns — catches 最新版/安卓版/v1.2中文版/1.20.4汉化版 etc.
-  // Runs repeatedly to handle chained suffixes like "最新版安卓版"
-  let prev = ''
-  while (prev !== cleaned) {
-    prev = cleaned
-    cleaned = cleaned.replace(/\s*(?:[vV][\d.]*|[\d]+(?:\.[\d]+)*)?\s*[一-龥]+版$/g, '').trim()
-  }
-
-  // Step 3: Remove remaining bare version numbers like v1.2.3
-  cleaned = cleaned.replace(/\s*[vV]\d+(?:\.\d+)*/g, '').trim()
+  // Step 2: If a v-prefixed version number is found, remove it and everything after it.
+  // "使命召唤v2.3.1安卓版" → "使命召唤"
+  // "我的世界1.20.4中文版v1.20.4" → "我的世界1.20.4中文版"
+  // "守护者最新版" → unchanged (no v prefix)
+  // "我的世界1.20.4中文版" → unchanged (no v prefix)
+  cleaned = cleaned.replace(/\s*[vV]\d+(?:\.\d+)*.*/g, '').trim()
 
   return cleaned.replace(/\s{2,}/g, ' ').trim()
 }
