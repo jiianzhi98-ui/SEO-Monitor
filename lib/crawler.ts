@@ -336,18 +336,24 @@ export function cleanTitle(
 
   let cleaned = title
 
+  // Step 1: Remove explicit suffixes from manual list (for non-版 patterns)
   if (suffixes && suffixes.length > 0) {
-    // Remove version + any of the suffixes
     const suffixPattern = suffixes.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-    const pattern = new RegExp(`[vV]\\d+(?:\\.\\d+)*(?:\\s*(?:${suffixPattern}))*`, 'gi')
-    cleaned = cleaned.replace(pattern, '').trim()
-  } else {
-    // Remove version numbers only
-    cleaned = cleaned.replace(/[vV]\d+(?:\.\d+)*/g, '').trim()
+    cleaned = cleaned.replace(new RegExp(`\\s*(?:${suffixPattern})`, 'g'), '').trim()
   }
 
-  cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()
-  return cleaned
+  // Step 2: Auto-remove trailing "xxx版" patterns — catches 最新版/安卓版/v1.2中文版/1.20.4汉化版 etc.
+  // Runs repeatedly to handle chained suffixes like "最新版安卓版"
+  let prev = ''
+  while (prev !== cleaned) {
+    prev = cleaned
+    cleaned = cleaned.replace(/\s*(?:[vV][\d.]*|[\d]+(?:\.[\d]+)*)?\s*[一-龥]+版$/g, '').trim()
+  }
+
+  // Step 3: Remove remaining bare version numbers like v1.2.3
+  cleaned = cleaned.replace(/\s*[vV]\d+(?:\.\d+)*/g, '').trim()
+
+  return cleaned.replace(/\s{2,}/g, ' ').trim()
 }
 
 // Filter keywords that contain download-related attributes
